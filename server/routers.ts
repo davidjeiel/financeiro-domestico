@@ -16,7 +16,11 @@ import {
   getTypologiesByUserAndType,
   updateTypology,
   deleteTypology,
+  updateUserGoogleSheets,
+  getUserGoogleSheetsConfig,
+  disconnectGoogleSheets,
 } from "./db";
+import { GoogleSheetsManager } from "./googleSheetsIntegration";
 
 export const appRouter = router({
   system: systemRouter,
@@ -98,6 +102,31 @@ export const appRouter = router({
       .query(({ input }) =>
         getCompetencyInvoices(input.competencyId)
       ),
+  }),
+
+  googleSheets: router({
+    config: protectedProcedure.query(({ ctx }) =>
+      getUserGoogleSheetsConfig(ctx.user.id)
+    ),
+    connect: protectedProcedure
+      .input(
+        z.object({
+          googleSheetsId: z.string().min(1),
+          accessToken: z.string().min(1),
+          refreshToken: z.string().optional(),
+        })
+      )
+      .mutation(({ ctx, input }) =>
+        updateUserGoogleSheets(
+          ctx.user.id,
+          input.googleSheetsId,
+          input.accessToken,
+          input.refreshToken
+        )
+      ),
+    disconnect: protectedProcedure.mutation(({ ctx }) =>
+      disconnectGoogleSheets(ctx.user.id)
+    ),
   }),
 
   typology: router({

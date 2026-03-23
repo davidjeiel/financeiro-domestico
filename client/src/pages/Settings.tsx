@@ -311,20 +311,29 @@ export default function Settings() {
               Integração com Google Sheets
             </h2>
             <div className="space-y-4">
+              <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                <p className="text-sm text-blue-600 font-medium mb-2">Como conectar:</p>
+                <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+                  <li>Crie uma nova planilha no Google Sheets</li>
+                  <li>Copie o ID da URL (entre /d/ e /edit)</li>
+                  <li>Cole o ID abaixo e clique em Conectar</li>
+                  <li>Autorize o acesso quando solicitado</li>
+                </ol>
+              </div>
               <div>
                 <label className="text-sm font-medium text-foreground mb-2 block">
                   ID da Planilha Google
                 </label>
                 <input
                   type="text"
-                  placeholder="Cole o ID da sua planilha aqui"
+                  placeholder="Ex: 1BxiMVs0XRA5nFMKUVfIvWJlsvaTreeqrZIHbSzOqVQ"
                   className="input-elegant w-full"
                 />
                 <p className="text-xs text-muted-foreground mt-2">
-                  Encontre o ID na URL da sua planilha: https://docs.google.com/spreadsheets/d/{'{ID}'}
+                  Encontre o ID na URL: https://docs.google.com/spreadsheets/d/{'{ID}'}/edit
                 </p>
               </div>
-              <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+              <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
                 Conectar Google Sheets
               </Button>
             </div>

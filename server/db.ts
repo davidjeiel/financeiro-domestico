@@ -240,3 +240,48 @@ export async function deleteTypology(id: number) {
 
   return db.delete(typologies).where(eq(typologies.id, id));
 }
+
+
+// Google Sheets Integration
+export async function updateUserGoogleSheets(
+  userId: number,
+  googleSheetsId: string,
+  accessToken: string,
+  refreshToken?: string
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.update(users).set({
+    googleSheetsId,
+    googleSheetsAccessToken: accessToken,
+    googleSheetsRefreshToken: refreshToken,
+    googleSheetsConnected: 1,
+  }).where(eq(users.id, userId));
+}
+
+export async function getUserGoogleSheetsConfig(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const user = await db.select({
+    googleSheetsId: users.googleSheetsId,
+    googleSheetsAccessToken: users.googleSheetsAccessToken,
+    googleSheetsRefreshToken: users.googleSheetsRefreshToken,
+    googleSheetsConnected: users.googleSheetsConnected,
+  }).from(users).where(eq(users.id, userId)).limit(1);
+
+  return user.length > 0 ? user[0] : null;
+}
+
+export async function disconnectGoogleSheets(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.update(users).set({
+    googleSheetsId: null,
+    googleSheetsAccessToken: null,
+    googleSheetsRefreshToken: null,
+    googleSheetsConnected: 0,
+  }).where(eq(users.id, userId));
+}

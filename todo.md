@@ -76,3 +76,18 @@
 - [ ] Testar fluxos de integração
 - [ ] Refinar UI/UX
 - [x] Criar checkpoint final
+
+
+## Fase 13: Integração Real com Google Sheets
+- [x] Implementar OAuth com Google Sheets API (GoogleSheetsManager)
+- [x] Criar sincronização de tipologias com Google Sheets
+- [x] Criar sincronização de transações com Google Sheets
+- [x] Adicionar campos de autenticação ao schema
+- [x] Criar procedures tRPC para Google Sheets
+
+## Fase 14: Exportação de Dados
+- [x] Implementar exportação para XLSX
+- [x] Implementar exportação para CSV
+- [x] Criar página de exportação
+- [x] Adicionar testes de exportação
+- [x] Integrar com sidebar de navegação

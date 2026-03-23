@@ -74,6 +74,7 @@ export default function DashboardLayoutCustom({
           <NavLink href="/invoices" icon="📄" label="Faturas" open={sidebarOpen} />
           <NavLink href="/calendar" icon="📅" label="Calendário" open={sidebarOpen} />
           <NavLink href="/reports" icon="📈" label="Relatórios" open={sidebarOpen} />
+          <NavLink href="/export" icon="⬇️" label="Exportar" open={sidebarOpen} />
         </nav>
 
         {/* User Profile */}
