@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, users, competencies, creditCards, transactions, invoices, InsertCreditCard, InsertTransaction } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +89,116 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get user: database not available");
+    return undefined;
+  }
+
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
+// Competências
+export async function getOrCreateCurrentCompetency(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const name = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(now);
+
+  // Capitalize first letter
+  const capitalizedName = name.charAt(0).toUpperCase() + name.slice(1);
+
+  const existing = await db
+    .select()
+    .from(competencies)
+    .where(
+      and(
+        eq(competencies.userId, userId),
+        eq(competencies.year, year),
+        eq(competencies.month, month)
+      )
+    )
+    .limit(1);
+
+  if (existing.length > 0) return existing[0];
+
+  // Create new competency
+  await db.insert(competencies).values({
+    userId,
+    year,
+    month,
+    name: capitalizedName,
+  });
+
+  // Fetch and return the created competency
+  const created = await db
+    .select()
+    .from(competencies)
+    .where(
+      and(
+        eq(competencies.userId, userId),
+        eq(competencies.year, year),
+        eq(competencies.month, month)
+      )
+    )
+    .limit(1);
+
+  return created[0]!;
+}
+
+export async function getUserCompetencies(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.select().from(competencies).where(eq(competencies.userId, userId)).orderBy(desc(competencies.year), desc(competencies.month));
+}
+
+// Cartões de Crédito
+export async function getUserCreditCards(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.select().from(creditCards).where(and(eq(creditCards.userId, userId), eq(creditCards.isActive, 1)));
+}
+
+export async function createCreditCard(data: InsertCreditCard) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.insert(creditCards).values(data);
+  // Return the created card by querying it back
+  const created = await db.select().from(creditCards).where(eq(creditCards.userId, data.userId!)).orderBy(desc(creditCards.createdAt)).limit(1);
+  return created[0]!;
+}
+
+// Transações
+export async function getCompetencyTransactions(competencyId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.select().from(transactions).where(eq(transactions.competencyId, competencyId)).orderBy(desc(transactions.transactionDate));
+}
+
+export async function createTransaction(data: InsertTransaction) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.insert(transactions).values(data);
+  // Return the created transaction by querying it back
+  const created = await db.select().from(transactions).where(eq(transactions.userId, data.userId)).orderBy(desc(transactions.createdAt)).limit(1);
+  return created[0]!;
+}
+
+// Faturas
+export async function getCompetencyInvoices(competencyId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.select().from(invoices).where(eq(invoices.competencyId, competencyId)).orderBy(desc(invoices.dueDate));
+}

@@ -1,10 +1,19 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { z } from "zod";
+import {
+  getOrCreateCurrentCompetency,
+  getUserCompetencies,
+  getUserCreditCards,
+  createCreditCard,
+  getCompetencyTransactions,
+  createTransaction,
+  getCompetencyInvoices,
+} from "./db";
 
 export const appRouter = router({
-    // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
@@ -17,12 +26,74 @@ export const appRouter = router({
     }),
   }),
 
-  // TODO: add feature routers here, e.g.
-  // todo: router({
-  //   list: protectedProcedure.query(({ ctx }) =>
-  //     db.getUserTodos(ctx.user.id)
-  //   ),
-  // }),
+  competency: router({
+    current: protectedProcedure.query(({ ctx }) =>
+      getOrCreateCurrentCompetency(ctx.user.id)
+    ),
+    list: protectedProcedure.query(({ ctx }) =>
+      getUserCompetencies(ctx.user.id)
+    ),
+  }),
+
+  creditCard: router({
+    list: protectedProcedure.query(({ ctx }) =>
+      getUserCreditCards(ctx.user.id)
+    ),
+    create: protectedProcedure
+      .input(
+        z.object({
+          name: z.string().min(1),
+          lastDigits: z.string().optional(),
+          cutoffDay: z.number().min(1).max(31),
+          dueDay: z.number().min(1).max(31),
+          limit: z.string().optional(),
+          color: z.string().optional(),
+        })
+      )
+      .mutation(({ ctx, input }) =>
+        createCreditCard({
+          userId: ctx.user.id,
+          ...input,
+        })
+      ),
+  }),
+
+  transaction: router({
+    list: protectedProcedure
+      .input(z.object({ competencyId: z.number() }))
+      .query(({ input }) =>
+        getCompetencyTransactions(input.competencyId)
+      ),
+    create: protectedProcedure
+      .input(
+        z.object({
+          competencyId: z.number(),
+          creditCardId: z.number().optional(),
+          type: z.enum(["income", "expense", "credit_card"]),
+          category: z.string().min(1),
+          description: z.string().optional(),
+          amount: z.string(),
+          transactionDate: z.date(),
+          dueDate: z.date().optional(),
+          installments: z.number().optional(),
+          notes: z.string().optional(),
+        })
+      )
+      .mutation(({ ctx, input }) =>
+        createTransaction({
+          userId: ctx.user.id,
+          ...input,
+        })
+      ),
+  }),
+
+  invoice: router({
+    list: protectedProcedure
+      .input(z.object({ competencyId: z.number() }))
+      .query(({ input }) =>
+        getCompetencyInvoices(input.competencyId)
+      ),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
