@@ -131,3 +131,36 @@ export const invoicesRelations = relations(invoices, ({ one }) => ({
   creditCard: one(creditCards, { fields: [invoices.creditCardId], references: [creditCards.id] }),
   competency: one(competencies, { fields: [invoices.competencyId], references: [competencies.id] }),
 }));
+
+
+// Tipologias de movimentações (categorias customizáveis)
+export const typologies = mysqlTable("typologies", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 100 }).notNull(),
+  type: mysqlEnum("type", ["income", "expense", "credit_card"]).notNull(),
+  description: text("description"),
+  icon: varchar("icon", { length: 50 }), // emoji ou nome do ícone
+  color: varchar("color", { length: 7 }).default("#3B82F6"),
+  isActive: int("isActive").default(1).notNull(),
+  order: int("order").default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Typology = typeof typologies.$inferSelect;
+export type InsertTypology = typeof typologies.$inferInsert;
+
+// Relação de tipologias
+export const typologiesRelations = relations(typologies, ({ one }) => ({
+  user: one(users, { fields: [typologies.userId], references: [users.id] }),
+}));
+
+// Atualizar relação de usuários
+export const usersRelationsUpdated = relations(users, ({ many }) => ({
+  competencies: many(competencies),
+  creditCards: many(creditCards),
+  transactions: many(transactions),
+  invoices: many(invoices),
+  typologies: many(typologies),
+}));

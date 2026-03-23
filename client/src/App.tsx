@@ -6,6 +6,8 @@ import Transactions from "@/pages/Transactions";
 import CreditCards from "@/pages/CreditCards";
 import Invoices from "@/pages/Invoices";
 import Reports from "@/pages/Reports";
+import Calendar from "@/pages/Calendar";
+import Settings from "@/pages/Settings";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -19,7 +21,9 @@ function Router() {
       <Route path={"/transactions"} component={Transactions} />
       <Route path={"/cards"} component={CreditCards} />
       <Route path={"/invoices"} component={Invoices} />
+      <Route path={"/calendar"} component={Calendar} />
       <Route path={"/reports"} component={Reports} />
+      <Route path={"/settings"} component={Settings} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

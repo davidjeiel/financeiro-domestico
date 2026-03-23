@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE `typologies` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`userId` int NOT NULL,\n\t`name` varchar(100) NOT NULL,\n\t`type` enum('income','expense','credit_card') NOT NULL,\n\t`description` text,\n\t`icon` varchar(50),\n\t`color` varchar(7) DEFAULT '#3B82F6',\n\t`isActive` int NOT NULL DEFAULT 1,\n\t`order` int DEFAULT 0,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `typologies_id` PRIMARY KEY(`id`)\n);\nALTER TABLE `invoices` MODIFY COLUMN `paidAmount` decimal(12,2) DEFAULT '0';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3ghNE92SvtkbN45.root --database BUxiUPRg3VkPf7G5XYiqVt --execute CREATE TABLE `typologies` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`userId` int NOT NULL,\n\t`name` varchar(100) NOT NULL,\n\t`type` enum('income','expense','credit_card') NOT NULL,\n\t`description` text,\n\t`icon` varchar(50),\n\t`color` varchar(7) DEFAULT '#3B82F6',\n\t`isActive` int NOT NULL DEFAULT 1,\n\t`order` int DEFAULT 0,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `typologies_id` PRIMARY KEY(`id`)\n);\nALTER TABLE `invoices` MODIFY COLUMN `paidAmount` decimal(12,2) DEFAULT '0';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 404
+}

@@ -1,6 +1,6 @@
 import { eq, and, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, competencies, creditCards, transactions, invoices, InsertCreditCard, InsertTransaction } from "../drizzle/schema";
+import { InsertUser, users, competencies, creditCards, transactions, invoices, typologies, InsertCreditCard, InsertTransaction, InsertTypology } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -201,4 +201,42 @@ export async function getCompetencyInvoices(competencyId: number) {
   if (!db) throw new Error("Database not available");
 
   return db.select().from(invoices).where(eq(invoices.competencyId, competencyId)).orderBy(desc(invoices.dueDate));
+}
+
+
+// Tipologias
+export async function createTypology(typology: InsertTypology) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(typologies).values(typology);
+  return result;
+}
+
+export async function getTypologiesByUser(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.select().from(typologies).where(and(eq(typologies.userId, userId), eq(typologies.isActive, 1))).orderBy(typologies.order);
+}
+
+export async function getTypologiesByUserAndType(userId: number, type: "income" | "expense" | "credit_card") {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.select().from(typologies).where(and(eq(typologies.userId, userId), eq(typologies.type, type), eq(typologies.isActive, 1))).orderBy(typologies.order);
+}
+
+export async function updateTypology(id: number, updates: Partial<InsertTypology>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.update(typologies).set(updates).where(eq(typologies.id, id));
+}
+
+export async function deleteTypology(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.delete(typologies).where(eq(typologies.id, id));
 }

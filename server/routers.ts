@@ -11,6 +11,11 @@ import {
   getCompetencyTransactions,
   createTransaction,
   getCompetencyInvoices,
+  createTypology,
+  getTypologiesByUser,
+  getTypologiesByUserAndType,
+  updateTypology,
+  deleteTypology,
 } from "./db";
 
 export const appRouter = router({
@@ -92,6 +97,60 @@ export const appRouter = router({
       .input(z.object({ competencyId: z.number() }))
       .query(({ input }) =>
         getCompetencyInvoices(input.competencyId)
+      ),
+  }),
+
+  typology: router({
+    list: protectedProcedure.query(({ ctx }) =>
+      getTypologiesByUser(ctx.user.id)
+    ),
+    listByType: protectedProcedure
+      .input(z.object({ type: z.enum(["income", "expense", "credit_card"]) }))
+      .query(({ ctx, input }) =>
+        getTypologiesByUserAndType(ctx.user.id, input.type)
+      ),
+    create: protectedProcedure
+      .input(
+        z.object({
+          name: z.string().min(1),
+          type: z.enum(["income", "expense", "credit_card"]),
+          description: z.string().optional(),
+          icon: z.string().optional(),
+          color: z.string().optional(),
+        })
+      )
+      .mutation(({ ctx, input }) =>
+        createTypology({
+          userId: ctx.user.id,
+          name: input.name,
+          type: input.type,
+          description: input.description,
+          icon: input.icon,
+          color: input.color,
+        })
+      ),
+    update: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          name: z.string().optional(),
+          description: z.string().optional(),
+          icon: z.string().optional(),
+          color: z.string().optional(),
+        })
+      )
+      .mutation(({ input }) =>
+        updateTypology(input.id, {
+          name: input.name,
+          description: input.description,
+          icon: input.icon,
+          color: input.color,
+        })
+      ),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ input }) =>
+        deleteTypology(input.id)
       ),
   }),
 });

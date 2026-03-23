@@ -42,3 +42,37 @@
 - [x] Refinar UI/UX
 - [ ] Validar integração Google Sheets (requer setup do usuário)
 - [x] Criar checkpoint final
+
+## Fase 8: Tema Escuro Vercel-like
+- [x] Implementar tema escuro com paleta Vercel (cinzas, gradientes)
+- [x] Atualizar CSS variables para tema escuro
+- [x] Aplicar tema em todos os componentes
+- [x] Tema escuro OKLCH aplicado globalmente
+
+## Fase 9: Calendário de Datas
+- [x] Integrar biblioteca de calendário (react-calendar)
+- [x] Criar visualização de datas de vencimento
+- [x] Criar visualização de datas de recebimento
+- [x] Adicionar filtros por período no calendário
+
+## Fase 10: Sistema de Tipologias Customizáveis
+- [x] Criar schema para tipologias de movimentações
+- [x] Implementar CRUD de tipologias
+- [x] Criar helpers de banco de dados para tipologias
+- [x] Implementar procedures tRPC para tipologias
+- [ ] Sincronizar tipologias com Google Sheets
+- [ ] Permitir uso de tipologias customizadas nos lançamentos
+
+## Fase 11: Configuração Google Sheets e GitHub
+- [x] Criar página de configurações com abas
+- [x] Interface para Google Sheets (placeholder)
+- [x] Interface para GitHub (placeholder)
+- [ ] Implementar sincronização com Google Sheets
+- [ ] Implementar sincronização com GitHub
+
+## Fase 12: Testes e Refinamento Final
+- [x] Testes unitários passando (15 testes)
+- [x] TypeScript compilando sem erros
+- [ ] Testar fluxos de integração
+- [ ] Refinar UI/UX
+- [x] Criar checkpoint final
