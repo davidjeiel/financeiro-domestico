@@ -1,6 +1,6 @@
 import { eq, and, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, competencies, creditCards, transactions, invoices, typologies, InsertCreditCard, InsertTransaction, InsertTypology } from "../drizzle/schema";
+import { InsertUser, users, competencies, creditCards, transactions, invoices, typologies, savedFilters, InsertCreditCard, InsertTransaction, InsertTypology } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -284,4 +284,113 @@ export async function disconnectGoogleSheets(userId: number) {
     googleSheetsRefreshToken: null,
     googleSheetsConnected: 0,
   }).where(eq(users.id, userId));
+}
+
+
+// Filtros Salvos
+export async function createSavedFilter(
+  userId: number,
+  filter: {
+    name: string;
+    startDate?: Date;
+    endDate?: Date;
+    categories?: string[];
+    types?: string[];
+    minAmount?: number;
+    maxAmount?: number;
+    isDefault?: boolean;
+  }
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.insert(savedFilters).values({
+    userId,
+    name: filter.name,
+    startDate: filter.startDate,
+    endDate: filter.endDate,
+    categories: filter.categories ? JSON.stringify(filter.categories) : null,
+    types: filter.types ? JSON.stringify(filter.types) : null,
+    minAmount: filter.minAmount ? filter.minAmount.toString() : null,
+    maxAmount: filter.maxAmount ? filter.maxAmount.toString() : null,
+    isDefault: filter.isDefault ? 1 : 0,
+  });
+}
+
+export async function getSavedFilters(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.select().from(savedFilters).where(eq(savedFilters.userId, userId));
+}
+
+export async function getSavedFilter(filterId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.select().from(savedFilters).where(eq(savedFilters.id, filterId)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function updateSavedFilter(
+  filterId: number,
+  filter: {
+    name?: string;
+    startDate?: Date;
+    endDate?: Date;
+    categories?: string[];
+    types?: string[];
+    minAmount?: number;
+    maxAmount?: number;
+    isDefault?: boolean;
+  }
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const updateData: any = {};
+  if (filter.name) updateData.name = filter.name;
+  if (filter.startDate) updateData.startDate = filter.startDate;
+  if (filter.endDate) updateData.endDate = filter.endDate;
+  if (filter.categories) updateData.categories = JSON.stringify(filter.categories);
+  if (filter.types) updateData.types = JSON.stringify(filter.types);
+  if (filter.minAmount !== undefined) updateData.minAmount = filter.minAmount.toString();
+  if (filter.maxAmount !== undefined) updateData.maxAmount = filter.maxAmount.toString();
+  if (filter.isDefault !== undefined) updateData.isDefault = filter.isDefault ? 1 : 0;
+
+  return db.update(savedFilters).set(updateData).where(eq(savedFilters.id, filterId));
+}
+
+export async function deleteSavedFilter(filterId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.delete(savedFilters).where(eq(savedFilters.id, filterId));
+}
+
+// Configuração de Competência Padrão
+export async function updateUserCompetencyConfig(
+  userId: number,
+  startDay: number,
+  endDay: number
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.update(users).set({
+    competencyStartDay: startDay,
+    competencyEndDay: endDay,
+  }).where(eq(users.id, userId));
+}
+
+export async function getUserCompetencyConfig(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const user = await db.select({
+    competencyStartDay: users.competencyStartDay,
+    competencyEndDay: users.competencyEndDay,
+  }).from(users).where(eq(users.id, userId)).limit(1);
+
+  return user.length > 0 ? user[0] : null;
 }

@@ -91,3 +91,23 @@
 - [x] Criar página de exportação
 - [x] Adicionar testes de exportação
 - [x] Integrar com sidebar de navegação
+
+
+## Fase 15: Filtros por Data com Salvamento
+- [x] Criar schema para salvar filtros
+- [x] Implementar UI de filtros por data
+- [x] Adicionar funcionalidade de salvar/carregar filtros
+- [x] Integrar filtros nas páginas de listagem
+
+## Fase 16: Competência Padrão Customizável
+- [x] Adicionar campos de configuração de período ao schema
+- [x] Criar UI para configurar período padrão (21 a 20)
+- [x] Implementar lógica de cálculo automático de competência
+- [x] Testar com diferentes períodos
+
+## Fase 17: Corrigir Integração Google Sheets
+- [x] Criar classe GoogleSheetsManager com métodos de sincronização
+- [x] Implementar procedures tRPC para Google Sheets
+- [ ] Implementar OAuth flow correto (requer configuração de credenciais)
+- [ ] Testar sincronização de dados
+- [ ] Adicionar tratamento de erros

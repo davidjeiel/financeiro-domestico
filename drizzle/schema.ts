@@ -1,4 +1,4 @@
-import { decimal, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, date, decimal } from "drizzle-orm/mysql-core";
 import { relations } from "drizzle-orm";
 
 /**
@@ -22,6 +22,9 @@ export const users = mysqlTable("users", {
   googleSheetsAccessToken: text("googleSheetsAccessToken"),
   googleSheetsRefreshToken: text("googleSheetsRefreshToken"),
   googleSheetsConnected: int("googleSheetsConnected").default(0).notNull(),
+  // Configurações de competência padrão
+  competencyStartDay: int("competencyStartDay").default(1).notNull(), // Dia de início (1-31)
+  competencyEndDay: int("competencyEndDay").default(0).notNull(), // Dia de fim (0 = último dia do mês)
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -166,4 +169,29 @@ export const usersRelationsUpdated = relations(users, ({ many }) => ({
   transactions: many(transactions),
   invoices: many(invoices),
   typologies: many(typologies),
+}));
+
+
+// Filtros salvos por usuário
+export const savedFilters = mysqlTable("savedFilters", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 100 }).notNull(), // Nome do filtro (ex: "Últimos 30 dias")
+  startDate: date("startDate"),
+  endDate: date("endDate"),
+  categories: text("categories"), // JSON array de categorias
+  types: text("types"), // JSON array de tipos (income, expense, credit_card)
+  minAmount: decimal("minAmount", { precision: 12, scale: 2 }),
+  maxAmount: decimal("maxAmount", { precision: 12, scale: 2 }),
+  isDefault: int("isDefault").default(0).notNull(), // Filtro padrão
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SavedFilter = typeof savedFilters.$inferSelect;
+export type InsertSavedFilter = typeof savedFilters.$inferInsert;
+
+// Relação de filtros salvos
+export const savedFiltersRelations = relations(savedFilters, ({ one }) => ({
+  user: one(users, { fields: [savedFilters.userId], references: [users.id] }),
 }));

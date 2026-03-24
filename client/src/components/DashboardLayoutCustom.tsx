@@ -75,6 +75,8 @@ export default function DashboardLayoutCustom({
           <NavLink href="/calendar" icon="📅" label="Calendário" open={sidebarOpen} />
           <NavLink href="/reports" icon="📈" label="Relatórios" open={sidebarOpen} />
           <NavLink href="/export" icon="⬇️" label="Exportar" open={sidebarOpen} />
+          <NavLink href="/filters" icon="🔍" label="Filtros" open={sidebarOpen} />
+          <NavLink href="/competency-config" icon="📋" label="Competência" open={sidebarOpen} />
         </nav>
 
         {/* User Profile */}
