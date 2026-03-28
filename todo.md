@@ -123,3 +123,13 @@
 - [x] Integrar com sidebar de navegação
 - [ ] Implementar OAuth real com Google Sheets (requer setup de credenciais)
 - [ ] Corrigir sincronização de dados com Google Sheets
+
+
+## Fase 19: Modais de Erro e Loaders
+- [x] Criar componente de modal de erro para Google Sheets (ErrorModal.tsx)
+- [x] Implementar loaders/spinners para operações assíncronas (LoadingOverlay.tsx, LoadingCard.tsx)
+- [x] Adicionar tratamento de erros detalhado com tipos de erro
+- [x] Criar mensagens de erro específicas com soluções sugeridas
+- [x] Implementar feedback visual de processamento em Settings e Transactions
+- [x] Adicionar toasts de sucesso/erro
+- [x] Integrar modais e loaders na página de Configurações

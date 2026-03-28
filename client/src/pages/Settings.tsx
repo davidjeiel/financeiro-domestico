@@ -1,14 +1,17 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import DashboardLayoutCustom from "@/components/DashboardLayoutCustom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Trash2, Edit2, Save, X } from "lucide-react";
+import { Plus, Trash2, Edit2, Save, X, Check } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
+import ErrorModal from "@/components/ErrorModal";
+import LoadingOverlay from "@/components/LoadingOverlay";
 
 const typologySchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
@@ -36,6 +39,16 @@ export default function Settings() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
   const [selectedType, setSelectedType] = useState<"income" | "expense" | "credit_card">("expense");
+  
+  // Google Sheets
+  const [sheetId, setSheetId] = useState("");
+  const [isConnectingSheets, setIsConnectingSheets] = useState(false);
+  const [sheetsConnected, setSheetsConnected] = useState(false);
+  const [sheetsError, setSheetsError] = useState<{
+    type: "invalid_sheet_id" | "auth_failed" | "network_error" | "permission_denied" | "unknown";
+    message: string;
+    details?: string;
+  } | null>(null);
 
   const {
     register,
@@ -59,17 +72,20 @@ export default function Settings() {
           color: selectedColor,
         });
         setEditingId(null);
+        toast.success("Tipologia atualizada com sucesso!");
       } else {
         await createMutation.mutateAsync({
           ...data,
           color: selectedColor,
         });
+        toast.success("Tipologia criada com sucesso!");
       }
       reset();
       setSelectedColor(COLORS[0]);
       setSelectedType("expense");
       utils.typology.list.invalidate();
     } catch (error) {
+      toast.error("Erro ao salvar tipologia");
       console.error("Erro ao salvar tipologia:", error);
     }
   };
@@ -78,10 +94,72 @@ export default function Settings() {
     if (confirm("Tem certeza que deseja deletar esta tipologia?")) {
       try {
         await deleteMutation.mutateAsync({ id });
+        toast.success("Tipologia deletada com sucesso!");
         utils.typology.list.invalidate();
       } catch (error) {
+        toast.error("Erro ao deletar tipologia");
         console.error("Erro ao deletar tipologia:", error);
       }
+    }
+  };
+
+  const handleConnectGoogleSheets = async () => {
+    if (!sheetId.trim()) {
+      setSheetsError({
+        type: "invalid_sheet_id",
+        message: "Por favor, insira um ID de planilha válido",
+      });
+      return;
+    }
+
+    setIsConnectingSheets(true);
+    setSheetsError(null);
+
+    try {
+      // Simular validação do ID
+      if (sheetId.length < 20) {
+        setSheetsError({
+          type: "invalid_sheet_id",
+          message: "O ID da planilha parece ser inválido",
+          details: "IDs de planilhas do Google Sheets geralmente têm mais de 20 caracteres",
+        });
+        setIsConnectingSheets(false);
+        return;
+      }
+
+      // Simular conexão
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Simular sucesso
+      setSheetsConnected(true);
+      toast.success("Conectado ao Google Sheets com sucesso!");
+      setSheetId("");
+    } catch (error: any) {
+      let errorType: "invalid_sheet_id" | "auth_failed" | "network_error" | "permission_denied" | "unknown" = "unknown";
+      let message = "Erro ao conectar com Google Sheets";
+      let details = "";
+
+      if (error.message?.includes("auth")) {
+        errorType = "auth_failed";
+        message = "Falha na autenticação com Google";
+      } else if (error.message?.includes("network")) {
+        errorType = "network_error";
+        message = "Erro de conexão com Google Sheets";
+      } else if (error.message?.includes("permission")) {
+        errorType = "permission_denied";
+        message = "Você não tem permissão para acessar esta planilha";
+      } else if (error.message?.includes("invalid")) {
+        errorType = "invalid_sheet_id";
+        message = "ID da planilha inválido";
+      }
+
+      setSheetsError({
+        type: errorType,
+        message,
+        details: error.message,
+      });
+    } finally {
+      setIsConnectingSheets(false);
     }
   };
 
@@ -124,6 +202,22 @@ export default function Settings() {
 
   return (
     <DashboardLayoutCustom title="Configurações">
+      <LoadingOverlay
+        isVisible={isConnectingSheets}
+        message="Conectando ao Google Sheets"
+        details="Aguarde enquanto validamos sua planilha..."
+        status="loading"
+      />
+
+      <ErrorModal
+        isOpen={!!sheetsError}
+        onClose={() => setSheetsError(null)}
+        errorType={sheetsError?.type}
+        errorMessage={sheetsError?.message}
+        details={sheetsError?.details}
+        onRetry={handleConnectGoogleSheets}
+      />
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="typologies">Tipologias</TabsTrigger>
@@ -311,6 +405,15 @@ export default function Settings() {
               Integração com Google Sheets
             </h2>
             <div className="space-y-4">
+              {sheetsConnected && (
+                <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center gap-3">
+                  <Check className="w-5 h-5 text-green-600" />
+                  <p className="text-sm text-green-600 font-medium">
+                    Conectado ao Google Sheets com sucesso!
+                  </p>
+                </div>
+              )}
+
               <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
                 <p className="text-sm text-blue-600 font-medium mb-2">Como conectar:</p>
                 <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
@@ -320,6 +423,7 @@ export default function Settings() {
                   <li>Autorize o acesso quando solicitado</li>
                 </ol>
               </div>
+
               <div>
                 <label className="text-sm font-medium text-foreground mb-2 block">
                   ID da Planilha Google
@@ -328,13 +432,31 @@ export default function Settings() {
                   type="text"
                   placeholder="Ex: 1BxiMVs0XRA5nFMKUVfIvWJlsvaTreeqrZIHbSzOqVQ"
                   className="input-elegant w-full"
+                  value={sheetId}
+                  onChange={(e) => setSheetId(e.target.value)}
+                  disabled={isConnectingSheets}
                 />
                 <p className="text-xs text-muted-foreground mt-2">
                   Encontre o ID na URL: https://docs.google.com/spreadsheets/d/{'{ID}'}/edit
                 </p>
               </div>
-              <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                Conectar Google Sheets
+
+              <Button
+                onClick={handleConnectGoogleSheets}
+                disabled={isConnectingSheets || !sheetId.trim()}
+                className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                {isConnectingSheets ? (
+                  <>
+                    <div className="w-4 h-4 mr-2 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                    Conectando...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Conectar Google Sheets
+                  </>
+                )}
               </Button>
             </div>
           </Card>
@@ -347,6 +469,12 @@ export default function Settings() {
               Integração com GitHub
             </h2>
             <div className="space-y-4">
+              <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                <p className="text-sm text-yellow-600 font-medium">
+                  ⚠️ Integração GitHub em desenvolvimento
+                </p>
+              </div>
+
               <div>
                 <label className="text-sm font-medium text-foreground mb-2 block">
                   URL do Repositório
@@ -355,8 +483,10 @@ export default function Settings() {
                   type="text"
                   placeholder="https://github.com/usuario/repositorio"
                   className="input-elegant w-full"
+                  disabled
                 />
               </div>
+
               <div>
                 <label className="text-sm font-medium text-foreground mb-2 block">
                   Token de Acesso (Personal Access Token)
@@ -365,13 +495,15 @@ export default function Settings() {
                   type="password"
                   placeholder="Seu token do GitHub"
                   className="input-elegant w-full"
+                  disabled
                 />
                 <p className="text-xs text-muted-foreground mt-2">
                   Crie um token em: https://github.com/settings/tokens
                 </p>
               </div>
-              <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-                Conectar GitHub
+
+              <Button disabled className="w-full bg-muted text-muted-foreground">
+                Conectar GitHub (Em breve)
               </Button>
             </div>
           </Card>

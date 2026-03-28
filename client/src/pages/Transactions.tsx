@@ -8,7 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/formatting";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import LoadingOverlay from "@/components/LoadingOverlay";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -75,10 +77,12 @@ export default function Transactions() {
         notes: data.notes,
       });
 
+      toast.success("Lançamento criado com sucesso!");
       reset();
       setOpen(false);
       utils.transaction.list.invalidate({ competencyId: currentCompetency.id });
     } catch (error) {
+      toast.error("Erro ao criar lançamento");
       console.error("Erro ao criar lançamento:", error);
     }
   };
@@ -96,6 +100,12 @@ export default function Transactions() {
 
   return (
     <DashboardLayoutCustom title="Lançamentos">
+      <LoadingOverlay
+        isVisible={createMutation.isPending}
+        message="Salvando lançamento"
+        details="Aguarde enquanto processamos sua transação..."
+        status="loading"
+      />
       <div className="space-y-6">
         {/* Add Transaction Dialog */}
         <div className="flex justify-end">
@@ -238,7 +248,14 @@ export default function Transactions() {
                     className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
                     disabled={createMutation.isPending}
                   >
-                    {createMutation.isPending ? "Salvando..." : "Salvar"}
+                    {createMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Salvando...
+                      </>
+                    ) : (
+                      "Salvar"
+                    )}
                   </Button>
                 </div>
               </form>
