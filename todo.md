@@ -111,3 +111,15 @@
 - [ ] Implementar OAuth flow correto (requer configuração de credenciais)
 - [ ] Testar sincronização de dados
 - [ ] Adicionar tratamento de erros
+
+
+## Fase 18: Correções Críticas
+- [x] Corrigir CSS dos modais para tema escuro
+- [x] Corrigir seletores com fundo claro em modais
+- [x] Adicionar estilos para inputs em modais
+- [x] Criar sistema de débitos/créditos fixos (recurringTransactions)
+- [x] Criar sistema de parcelamentos (installments)
+- [x] Criar página de Fixos/Parcelados
+- [x] Integrar com sidebar de navegação
+- [ ] Implementar OAuth real com Google Sheets (requer setup de credenciais)
+- [ ] Corrigir sincronização de dados com Google Sheets

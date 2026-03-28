@@ -1,6 +1,6 @@
 import { eq, and, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, competencies, creditCards, transactions, invoices, typologies, savedFilters, InsertCreditCard, InsertTransaction, InsertTypology } from "../drizzle/schema";
+import { InsertUser, users, competencies, creditCards, transactions, invoices, typologies, savedFilters, recurringTransactions, installments, installmentTransactions, InsertCreditCard, InsertTransaction, InsertTypology, InsertRecurringTransaction, InsertInstallment, InsertInstallmentTransaction } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -393,4 +393,79 @@ export async function getUserCompetencyConfig(userId: number) {
   }).from(users).where(eq(users.id, userId)).limit(1);
 
   return user.length > 0 ? user[0] : null;
+}
+
+
+// Transações Recorrentes
+export async function createRecurringTransaction(data: InsertRecurringTransaction) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(recurringTransactions).values(data);
+}
+
+export async function getRecurringTransactions(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.select().from(recurringTransactions).where(
+    and(eq(recurringTransactions.userId, userId), eq(recurringTransactions.isActive, 1))
+  );
+}
+
+export async function updateRecurringTransaction(id: number, data: Partial<InsertRecurringTransaction>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(recurringTransactions).set(data).where(eq(recurringTransactions.id, id));
+}
+
+export async function deleteRecurringTransaction(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(recurringTransactions).where(eq(recurringTransactions.id, id));
+}
+
+// Parcelamentos
+export async function createInstallment(data: InsertInstallment) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(installments).values(data);
+}
+
+export async function getInstallments(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.select().from(installments).where(
+    and(eq(installments.userId, userId), eq(installments.isActive, 1))
+  );
+}
+
+export async function getInstallmentById(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.select().from(installments).where(eq(installments.id, id)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function updateInstallment(id: number, data: Partial<InsertInstallment>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(installments).set(data).where(eq(installments.id, id));
+}
+
+// Transações de Parcelamento
+export async function createInstallmentTransaction(data: InsertInstallmentTransaction) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(installmentTransactions).values(data);
+}
+
+export async function getInstallmentTransactions(installmentId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.select().from(installmentTransactions).where(eq(installmentTransactions.installmentId, installmentId));
+}
+
+export async function updateInstallmentTransaction(id: number, data: Partial<InsertInstallmentTransaction>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(installmentTransactions).set(data).where(eq(installmentTransactions.id, id));
 }

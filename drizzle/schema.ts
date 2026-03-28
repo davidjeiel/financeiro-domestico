@@ -195,3 +195,82 @@ export type InsertSavedFilter = typeof savedFilters.$inferInsert;
 export const savedFiltersRelations = relations(savedFilters, ({ one }) => ({
   user: one(users, { fields: [savedFilters.userId], references: [users.id] }),
 }));
+
+
+// Débitos/Créditos Fixos (Receitas e Despesas Recorrentes)
+export const recurringTransactions = mysqlTable("recurringTransactions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  description: varchar("description", { length: 255 }).notNull(),
+  type: mysqlEnum("type", ["income", "expense"]).notNull(),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  category: varchar("category", { length: 100 }),
+  frequency: mysqlEnum("frequency", ["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"]).notNull(),
+  startDate: date("startDate").notNull(),
+  endDate: date("endDate"), // NULL = sem data de término
+  accountId: int("accountId"), // NULL = conta principal
+  creditCardId: int("creditCardId"), // NULL = não é cartão
+  isActive: int("isActive").default(1).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type RecurringTransaction = typeof recurringTransactions.$inferSelect;
+export type InsertRecurringTransaction = typeof recurringTransactions.$inferInsert;
+
+// Parcelamentos (Installments)
+export const installments = mysqlTable("installments", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  description: varchar("description", { length: 255 }).notNull(),
+  totalAmount: decimal("totalAmount", { precision: 12, scale: 2 }).notNull(),
+  installmentAmount: decimal("installmentAmount", { precision: 12, scale: 2 }).notNull(),
+  totalInstallments: int("totalInstallments").notNull(),
+  currentInstallment: int("currentInstallment").default(1).notNull(),
+  type: mysqlEnum("type", ["expense", "credit_card"]).notNull(),
+  category: varchar("category", { length: 100 }),
+  startDate: date("startDate").notNull(),
+  creditCardId: int("creditCardId"), // NULL = despesa normal
+  isActive: int("isActive").default(1).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Installment = typeof installments.$inferSelect;
+export type InsertInstallment = typeof installments.$inferInsert;
+
+// Parcelas Geradas (Installment Transactions)
+export const installmentTransactions = mysqlTable("installmentTransactions", {
+  id: int("id").autoincrement().primaryKey(),
+  installmentId: int("installmentId").notNull(),
+  transactionId: int("transactionId"),
+  installmentNumber: int("installmentNumber").notNull(),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  dueDate: date("dueDate").notNull(),
+  paidDate: date("paidDate"),
+  status: mysqlEnum("status", ["pending", "paid", "overdue"]).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type InstallmentTransaction = typeof installmentTransactions.$inferSelect;
+export type InsertInstallmentTransaction = typeof installmentTransactions.$inferInsert;
+
+// Relações
+export const recurringTransactionsRelations = relations(recurringTransactions, ({ one }) => ({
+  user: one(users, { fields: [recurringTransactions.userId], references: [users.id] }),
+  creditCard: one(creditCards, { fields: [recurringTransactions.creditCardId], references: [creditCards.id] }),
+}));
+
+export const installmentsRelations = relations(installments, ({ one, many }) => ({
+  user: one(users, { fields: [installments.userId], references: [users.id] }),
+  creditCard: one(creditCards, { fields: [installments.creditCardId], references: [creditCards.id] }),
+  transactions: many(installmentTransactions),
+}));
+
+export const installmentTransactionsRelations = relations(installmentTransactions, ({ one }) => ({
+  installment: one(installments, { fields: [installmentTransactions.installmentId], references: [installments.id] }),
+  transaction: one(transactions, { fields: [installmentTransactions.transactionId], references: [transactions.id] }),
+}));

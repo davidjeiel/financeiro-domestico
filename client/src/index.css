@@ -190,3 +190,60 @@
     }
   }
 }
+  /* Modal and Dialog Styles for Dark Theme */
+  [role="dialog"],
+  .radix-dialog-content,
+  .radix-popover-content,
+  .radix-select-content,
+  .radix-command-menu,
+  .cmdk-dialog {
+    @apply bg-card text-card-foreground;
+  }
+
+  /* Select and Dropdown Styles */
+  [role="option"],
+  .radix-select-item,
+  .radix-select-trigger,
+  .cmdk-item {
+    @apply bg-card text-card-foreground hover:bg-muted;
+  }
+
+  /* Input fields in modals */
+  [role="dialog"] input,
+  [role="dialog"] select,
+  [role="dialog"] textarea,
+  .radix-dialog-content input,
+  .radix-dialog-content select,
+  .radix-dialog-content textarea {
+    @apply bg-input text-foreground border-border;
+  }
+
+  /* Popover content */
+  .radix-popover-content {
+    @apply bg-popover text-popover-foreground border border-border;
+  }
+
+  /* Command/Search styles */
+  .cmdk-input {
+    @apply bg-input text-foreground;
+  }
+
+  .cmdk-item {
+    @apply text-foreground hover:bg-muted;
+  }
+
+  /* Ensure all text in modals is visible */
+  [role="dialog"] *,
+  .radix-dialog-content *,
+  .radix-popover-content * {
+    @apply text-foreground;
+  }
+
+  /* Input elegant style */
+  .input-elegant {
+    @apply bg-input text-foreground border-border placeholder:text-muted-foreground;
+  }
+
+  .input-elegant:focus {
+    @apply border-primary ring-primary/20;
+  }

@@ -77,6 +77,7 @@ export default function DashboardLayoutCustom({
           <NavLink href="/export" icon="⬇️" label="Exportar" open={sidebarOpen} />
           <NavLink href="/filters" icon="🔍" label="Filtros" open={sidebarOpen} />
           <NavLink href="/competency-config" icon="📋" label="Competência" open={sidebarOpen} />
+          <NavLink href="/recurring-installments" icon="🔄" label="Fixos/Parcelados" open={sidebarOpen} />
         </nav>
 
         {/* User Profile */}
