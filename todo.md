@@ -143,3 +143,10 @@
 - [x] Permitir seleção de tipo de transação (simples, fixa, parcelada)
 - [x] Adicionar validações e feedback visual
 - [x] Integrar com LoadingOverlay e toasts
+
+
+## Fase 21: Correção de Bug de Lançamentos
+- [x] Investigar bug no lançamento de transações
+- [x] Identificar causa raiz (react-hook-form + validação creditCardId)
+- [x] Implementar correção (handleTypeChange, validações, setValue)
+- [x] Testar e validar

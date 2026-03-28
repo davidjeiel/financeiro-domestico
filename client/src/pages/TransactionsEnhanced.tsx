@@ -3,11 +3,10 @@ import { trpc } from "@/lib/trpc";
 import DashboardLayoutCustom from "@/components/DashboardLayoutCustom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/formatting";
-import { Plus, Trash2, Loader2, Calendar } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -57,9 +56,7 @@ export default function TransactionsEnhanced() {
   const utils = trpc.useUtils();
 
   const [open, setOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("simple");
   const [selectedType, setSelectedType] = useState<"income" | "expense" | "credit_card">("expense");
-  const [categories, setCategories] = useState<{ name: string; color: string; icon?: string }[]>([]);
   const [dynamicCategories, setDynamicCategories] = useState<{ [key: string]: { name: string; color: string; icon?: string }[] }>({
     income: [],
     expense: [],
@@ -71,6 +68,7 @@ export default function TransactionsEnhanced() {
     handleSubmit,
     reset,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
@@ -98,28 +96,56 @@ export default function TransactionsEnhanced() {
     return [...baseCategories, ...dynamicCats.map(c => c.name)];
   };
 
+  const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newType = e.target.value as typeof selectedType;
+    setSelectedType(newType);
+    setValue("type", newType);
+  };
+
   const onSubmit = async (data: TransactionFormData) => {
-    if (!currentCompetency) return;
+    if (!currentCompetency) {
+      toast.error("Competência não carregada");
+      return;
+    }
+
+    // Validar se cartão foi selecionado quando tipo é credit_card
+    if (data.type === "credit_card" && !data.creditCardId) {
+      toast.error("Selecione um cartão de crédito");
+      return;
+    }
 
     try {
+      // Converter amount para número e validar
+      const amountNum = parseFloat(data.amount);
+      if (isNaN(amountNum) || amountNum <= 0) {
+        toast.error("Valor deve ser um número positivo");
+        return;
+      }
+
       await createMutation.mutateAsync({
         competencyId: currentCompetency.id,
         type: data.type,
         category: data.category,
-        description: data.description,
-        amount: data.amount,
+        description: data.description || "",
+        amount: amountNum.toString(),
         transactionDate: new Date(data.transactionDate),
         creditCardId: data.creditCardId ? parseInt(data.creditCardId) : undefined,
-        notes: data.notes,
+        notes: data.notes || "",
       });
 
       toast.success("Movimentação criada com sucesso!");
-      reset();
+      reset({
+        type: "expense",
+        transactionType: "simple",
+        transactionDate: new Date().toISOString().split("T")[0],
+      });
+      setSelectedType("expense");
       setOpen(false);
       utils.transaction.list.invalidate({ competencyId: currentCompetency.id });
-    } catch (error) {
-      toast.error("Erro ao criar movimentação");
-      console.error("Erro:", error);
+    } catch (error: any) {
+      console.error("Erro ao criar movimentação:", error);
+      const errorMessage = error?.message || "Erro ao criar movimentação";
+      toast.error(errorMessage);
     }
   };
 
@@ -167,16 +193,14 @@ export default function TransactionsEnhanced() {
                     </label>
                     <select
                       {...register("type")}
-                      onChange={(e) => {
-                        setSelectedType(e.target.value as typeof selectedType);
-                        register("type").onChange(e);
-                      }}
+                      onChange={handleTypeChange}
                       className="input-elegant w-full"
                     >
                       <option value="income">Receita</option>
                       <option value="expense">Despesa</option>
                       <option value="credit_card">Cartão de Crédito</option>
                     </select>
+                    {errors.type && <p className="text-red-600 text-sm mt-1">{errors.type.message}</p>}
                   </div>
 
                   <div>
@@ -191,6 +215,7 @@ export default function TransactionsEnhanced() {
                       <option value="recurring">Fixa/Recorrente</option>
                       <option value="installment">Parcelada</option>
                     </select>
+                    {errors.transactionType && <p className="text-red-600 text-sm mt-1">{errors.transactionType.message}</p>}
                   </div>
                 </div>
 
@@ -219,23 +244,30 @@ export default function TransactionsEnhanced() {
                   {errors.category && <p className="text-red-600 text-sm mt-1">{errors.category.message}</p>}
                 </div>
 
-                {/* Credit Card or Account Selection */}
-                {selectedType === "credit_card" && creditCards && creditCards.length > 0 && (
+                {/* Credit Card Selection - Required for credit_card type */}
+                {watchType === "credit_card" && (
                   <div>
                     <label className="text-sm font-medium text-foreground mb-2 block">
-                      Cartão de Crédito
+                      Cartão de Crédito <span className="text-red-600">*</span>
                     </label>
-                    <select
-                      {...register("creditCardId")}
-                      className="input-elegant w-full"
-                    >
-                      <option value="">Selecione um cartão</option>
-                      {creditCards.map((card) => (
-                        <option key={card.id} value={card.id.toString()}>
-                          {card.name}
-                        </option>
-                      ))}
-                    </select>
+                    {creditCards && creditCards.length > 0 ? (
+                      <select
+                        {...register("creditCardId")}
+                        className="input-elegant w-full"
+                      >
+                        <option value="">Selecione um cartão</option>
+                        {creditCards.map((card) => (
+                          <option key={card.id} value={card.id.toString()}>
+                            {card.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-sm text-yellow-600">
+                        Nenhum cartão cadastrado. Crie um cartão primeiro em "Cartões".
+                      </div>
+                    )}
+                    {errors.creditCardId && <p className="text-red-600 text-sm mt-1">{errors.creditCardId.message}</p>}
                   </div>
                 )}
 
@@ -255,12 +287,13 @@ export default function TransactionsEnhanced() {
                 {/* Amount */}
                 <div>
                   <label className="text-sm font-medium text-foreground mb-2 block">
-                    Valor
+                    Valor <span className="text-red-600">*</span>
                   </label>
                   <input
                     {...register("amount")}
                     type="number"
                     step="0.01"
+                    min="0.01"
                     placeholder="0.00"
                     className="input-elegant w-full"
                   />
@@ -271,7 +304,7 @@ export default function TransactionsEnhanced() {
                 {watchTransactionType === "recurring" && (
                   <div>
                     <label className="text-sm font-medium text-foreground mb-2 block">
-                      Frequência
+                      Frequência <span className="text-red-600">*</span>
                     </label>
                     <select
                       {...register("frequency")}
@@ -284,6 +317,7 @@ export default function TransactionsEnhanced() {
                         </option>
                       ))}
                     </select>
+                    {errors.frequency && <p className="text-red-600 text-sm mt-1">{errors.frequency.message}</p>}
                   </div>
                 )}
 
@@ -291,7 +325,7 @@ export default function TransactionsEnhanced() {
                 {watchTransactionType === "installment" && (
                   <div>
                     <label className="text-sm font-medium text-foreground mb-2 block">
-                      Número de Parcelas
+                      Número de Parcelas <span className="text-red-600">*</span>
                     </label>
                     <input
                       {...register("installments")}
@@ -301,13 +335,14 @@ export default function TransactionsEnhanced() {
                       placeholder="Ex: 3"
                       className="input-elegant w-full"
                     />
+                    {errors.installments && <p className="text-red-600 text-sm mt-1">{errors.installments.message}</p>}
                   </div>
                 )}
 
                 {/* Date */}
                 <div>
                   <label className="text-sm font-medium text-foreground mb-2 block">
-                    Data
+                    Data <span className="text-red-600">*</span>
                   </label>
                   <input
                     {...register("transactionDate")}
@@ -336,6 +371,7 @@ export default function TransactionsEnhanced() {
                     variant="outline"
                     onClick={() => setOpen(false)}
                     className="flex-1"
+                    disabled={createMutation.isPending}
                   >
                     Cancelar
                   </Button>
