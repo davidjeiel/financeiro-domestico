@@ -469,3 +469,23 @@ export async function updateInstallmentTransaction(id: number, data: Partial<Ins
   if (!db) throw new Error("Database not available");
   return db.update(installmentTransactions).set(data).where(eq(installmentTransactions.id, id));
 }
+
+
+export async function getTransactionById(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.select().from(transactions).where(eq(transactions.id, id)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function updateTransaction(id: number, updates: Partial<InsertTransaction>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(transactions).set(updates).where(eq(transactions.id, id));
+}
+
+export async function deleteTransaction(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(transactions).where(eq(transactions.id, id));
+}

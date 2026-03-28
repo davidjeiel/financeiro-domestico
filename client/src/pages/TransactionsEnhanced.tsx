@@ -6,13 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/formatting";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, Edit2, Trash2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import AddCategoryModal from "@/components/AddCategoryModal";
 import LoadingOverlay from "@/components/LoadingOverlay";
+import EditTransactionModal from "@/components/EditTransactionModal";
+import DeleteTransactionDialog from "@/components/DeleteTransactionDialog";
 
 const transactionSchema = z.object({
   type: z.enum(["income", "expense", "credit_card"]),
@@ -62,6 +64,9 @@ export default function TransactionsEnhanced() {
     expense: [],
     credit_card: [],
   });
+  const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
+  const [deletingTransactionId, setDeletingTransactionId] = useState<number | null>(null);
+  const [deletingTransactionDesc, setDeletingTransactionDesc] = useState<string>("");
 
   const {
     register,
@@ -410,6 +415,7 @@ export default function TransactionsEnhanced() {
                     <th className="text-left py-3 px-4 font-semibold text-foreground">Categoria</th>
                     <th className="text-left py-3 px-4 font-semibold text-foreground">Tipo</th>
                     <th className="text-right py-3 px-4 font-semibold text-foreground">Valor</th>
+                    <th className="text-center py-3 px-4 font-semibold text-foreground">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -440,6 +446,27 @@ export default function TransactionsEnhanced() {
                       }`}>
                         {transaction.type === "income" ? "+" : "-"}{formatCurrency(transaction.amount)}
                       </td>
+                      <td className="py-3 px-4 text-center">
+                        <div className="flex gap-2 justify-center">
+                          <button
+                            onClick={() => setEditingTransactionId(transaction.id)}
+                            className="p-2 hover:bg-muted rounded-lg transition-colors text-blue-600 hover:text-blue-700"
+                            title="Editar"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setDeletingTransactionId(transaction.id);
+                              setDeletingTransactionDesc(transaction.description || transaction.category);
+                            }}
+                            className="p-2 hover:bg-muted rounded-lg transition-colors text-red-600 hover:text-red-700"
+                            title="Deletar"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -451,6 +478,23 @@ export default function TransactionsEnhanced() {
             </p>
           )}
         </Card>
+
+        {/* Edit Transaction Modal */}
+        <EditTransactionModal
+          isOpen={editingTransactionId !== null}
+          transactionId={editingTransactionId}
+          onClose={() => setEditingTransactionId(null)}
+          onSuccess={() => setEditingTransactionId(null)}
+        />
+
+        {/* Delete Transaction Dialog */}
+        <DeleteTransactionDialog
+          isOpen={deletingTransactionId !== null}
+          transactionId={deletingTransactionId}
+          transactionDescription={deletingTransactionDesc}
+          onClose={() => setDeletingTransactionId(null)}
+          onSuccess={() => setDeletingTransactionId(null)}
+        />
       </div>
     </DashboardLayoutCustom>
   );

@@ -150,3 +150,12 @@
 - [x] Identificar causa raiz (react-hook-form + validação creditCardId)
 - [x] Implementar correção (handleTypeChange, validações, setValue)
 - [x] Testar e validar
+
+
+## Fase 22: Edição e Exclusão de Lançamentos
+- [x] Adicionar procedures tRPC para editar transações (transaction.update)
+- [x] Adicionar procedures tRPC para deletar transações (transaction.delete)
+- [x] Implementar UI de edição de lançamentos (EditTransactionModal.tsx)
+- [x] Implementar UI de exclusão com confirmação (DeleteTransactionDialog.tsx)
+- [x] Adicionar ícones de ação (editar/deletar) na listagem
+- [x] Testar fluxos de edição e exclusão

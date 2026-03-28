@@ -10,6 +10,9 @@ import {
   createCreditCard,
   getCompetencyTransactions,
   createTransaction,
+  getTransactionById,
+  updateTransaction,
+  deleteTransaction,
   getCompetencyInvoices,
   createTypology,
   getTypologiesByUser,
@@ -73,6 +76,11 @@ export const appRouter = router({
       .query(({ input }) =>
         getCompetencyTransactions(input.competencyId)
       ),
+    get: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(({ input }) =>
+        getTransactionById(input.id)
+      ),
     create: protectedProcedure
       .input(
         z.object({
@@ -93,6 +101,31 @@ export const appRouter = router({
           userId: ctx.user.id,
           ...input,
         })
+      ),
+    update: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          competencyId: z.number().optional(),
+          creditCardId: z.number().optional(),
+          type: z.enum(["income", "expense", "credit_card"]).optional(),
+          category: z.string().optional(),
+          description: z.string().optional(),
+          amount: z.string().optional(),
+          transactionDate: z.date().optional(),
+          dueDate: z.date().optional(),
+          installments: z.number().optional(),
+          notes: z.string().optional(),
+        })
+      )
+      .mutation(({ input }) => {
+        const { id, ...updates } = input;
+        return updateTransaction(id, updates);
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ input }) =>
+        deleteTransaction(input.id)
       ),
   }),
 
