@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import Dashboard from "@/pages/Dashboard";
-import Transactions from "@/pages/Transactions";
+import TransactionsEnhanced from "./pages/TransactionsEnhanced";
 import CreditCards from "@/pages/CreditCards";
 import Invoices from "@/pages/Invoices";
 import Reports from "@/pages/Reports";
@@ -22,7 +22,7 @@ function Router() {
     <Switch>
       <Route path={"/"} component={Home} />
       <Route path={"/dashboard"} component={Dashboard} />
-      <Route path={"/transactions"} component={Transactions} />
+      <Route path="/lancamentos" component={TransactionsEnhanced} />
       <Route path={"/cards"} component={CreditCards} />
       <Route path={"/invoices"} component={Invoices} />
       <Route path={"/calendar"} component={Calendar} />

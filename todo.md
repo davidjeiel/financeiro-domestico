@@ -133,3 +133,13 @@
 - [x] Implementar feedback visual de processamento em Settings e Transactions
 - [x] Adicionar toasts de sucesso/erro
 - [x] Integrar modais e loaders na página de Configurações
+
+
+## Fase 20: Melhoria de Interface de Movimentações
+- [x] Criar modal para adicionar categorias durante cadastro (AddCategoryModal.tsx)
+- [x] Integrar débitos/créditos fixos na interface de movimentações (TransactionsEnhanced.tsx)
+- [x] Integrar parcelamentos na interface de movimentações
+- [x] Melhorar seleção de conta/cartão
+- [x] Permitir seleção de tipo de transação (simples, fixa, parcelada)
+- [x] Adicionar validações e feedback visual
+- [x] Integrar com LoadingOverlay e toasts
