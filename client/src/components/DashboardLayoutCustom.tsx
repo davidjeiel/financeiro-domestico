@@ -69,7 +69,7 @@ export default function DashboardLayoutCustom({
         {/* Navigation */}
         <nav className="flex-1 p-4 space-y-2">
           <NavLink href="/" icon="📊" label="Dashboard" open={sidebarOpen} />
-          <NavLink href="/transactions" icon="💳" label="Lançamentos" open={sidebarOpen} />
+          <NavLink href="/lancamentos" icon="💳" label="Lançamentos" open={sidebarOpen} />
           <NavLink href="/cards" icon="🏦" label="Cartões" open={sidebarOpen} />
           <NavLink href="/invoices" icon="📄" label="Faturas" open={sidebarOpen} />
           <NavLink href="/calendar" icon="📅" label="Calendário" open={sidebarOpen} />
