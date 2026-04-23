@@ -160,6 +160,46 @@ export const appRouter = router({
     disconnect: protectedProcedure.mutation(({ ctx }) =>
       disconnectGoogleSheets(ctx.user.id)
     ),
+    syncTransactions: protectedProcedure
+      .input(
+        z.object({
+          googleSheetsId: z.string().min(1),
+          accessToken: z.string().min(1),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        try {
+          const competencies = await getUserCompetencies(ctx.user.id);
+          const allTransactions: any[] = [];
+          
+          for (const competency of competencies) {
+            const transactions = await getCompetencyTransactions(competency.id);
+            allTransactions.push(...transactions);
+          }
+
+          const manager = new GoogleSheetsManager(input.accessToken);
+          const headers = ['ID', 'Data', 'Descricao', 'Categoria', 'Tipo', 'Valor', 'Competencia'];
+          const data = [
+            headers,
+            ...allTransactions.map(t => [
+              t.id,
+              new Date(t.transactionDate).toLocaleDateString('pt-BR'),
+              t.description || '',
+              t.category,
+              t.type,
+              t.amount,
+              t.competencyId,
+            ]),
+          ];
+
+          await manager.writeSheetData(input.googleSheetsId, 'Transacoes!A1', data);
+          
+          return { success: true, message: 'Transacoes sincronizadas com sucesso!' };
+        } catch (error: any) {
+          console.error('Erro ao sincronizar transacoes:', error);
+          throw new Error(`Erro ao sincronizar: ${error.message}`);
+        }
+      }),
   }),
 
   typology: router({

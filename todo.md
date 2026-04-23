@@ -159,3 +159,27 @@
 - [x] Implementar UI de exclusão com confirmação (DeleteTransactionDialog.tsx)
 - [x] Adicionar ícones de ação (editar/deletar) na listagem
 - [x] Testar fluxos de edição e exclusão
+
+
+## Fase 23: Filtros por Período e Totalizador
+- [ ] Adicionar filtros por data de início e fim na tela de lançamentos
+- [ ] Implementar totalizador de receitas filtradas
+- [ ] Implementar totalizador de despesas filtradas
+- [ ] Implementar totalizador de cartão de crédito filtrado
+- [ ] Exibir totalizadores na interface
+
+## Fase 24: Correção de Bug de Edição
+- [ ] Investigar bug de edição de lançamentos
+- [ ] Corrigir carregamento de dados do lançamento
+- [ ] Corrigir atualização de dados no formulário
+- [ ] Testar fluxo de edição
+
+## Fase 25: Permitir até 180 Parcelas
+- [ ] Atualizar validação de parcelas (máximo 180)
+- [ ] Atualizar UI para aceitar até 180 parcelas
+- [ ] Testar criação de parcelamentos com 180 parcelas
+
+## Fase 26: Correções Críticas de Bugs
+- [x] Corrigir bug de timezone nas datas (20/04 salvando como 19/04) - Usando Date.UTC
+- [x] Remover opção de GitHub das configurações - Removido da aba de configurações
+- [x] Corrigir sincronização com Google Sheets para salvar dados realmente - Adicionado procedure syncTransactions

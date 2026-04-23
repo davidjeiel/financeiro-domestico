@@ -67,6 +67,8 @@ export default function TransactionsEnhanced() {
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
   const [deletingTransactionId, setDeletingTransactionId] = useState<number | null>(null);
   const [deletingTransactionDesc, setDeletingTransactionDesc] = useState<string>("");
+  const [filterStartDate, setFilterStartDate] = useState<string>("");
+  const [filterEndDate, setFilterEndDate] = useState<string>("");
 
   const {
     register,
@@ -127,13 +129,18 @@ export default function TransactionsEnhanced() {
         return;
       }
 
+      // Corrigir timezone: data.transactionDate eh uma string YYYY-MM-DD
+      // Criar data no formato UTC para evitar problemas de timezone
+      const [year, month, day] = data.transactionDate.split('-').map(Number);
+      const transactionDate = new Date(Date.UTC(year, month - 1, day));
+
       await createMutation.mutateAsync({
         competencyId: currentCompetency.id,
         type: data.type,
         category: data.category,
         description: data.description || "",
         amount: amountNum.toString(),
-        transactionDate: new Date(data.transactionDate),
+        transactionDate: transactionDate,
         creditCardId: data.creditCardId ? parseInt(data.creditCardId) : undefined,
         notes: data.notes || "",
       });
@@ -405,21 +412,96 @@ export default function TransactionsEnhanced() {
           <h2 className="text-xl font-semibold text-foreground mb-4">
             Movimentações - {currentCompetency?.name}
           </h2>
-          {transactions && transactions.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="border-b border-border">
-                  <tr>
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">Data</th>
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">Descrição</th>
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">Categoria</th>
-                    <th className="text-left py-3 px-4 font-semibold text-foreground">Tipo</th>
-                    <th className="text-right py-3 px-4 font-semibold text-foreground">Valor</th>
-                    <th className="text-center py-3 px-4 font-semibold text-foreground">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.map((transaction) => (
+          
+          {/* Filters */}
+          <div className="mb-6 p-4 bg-muted rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Data Inicial</label>
+                <input
+                  type="date"
+                  value={filterStartDate}
+                  onChange={(e) => setFilterStartDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Data Final</label>
+                <input
+                  type="date"
+                  value={filterEndDate}
+                  onChange={(e) => setFilterEndDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground"
+                />
+              </div>
+              <div className="flex items-end gap-2">
+                <Button
+                  onClick={() => {
+                    setFilterStartDate("");
+                    setFilterEndDate("");
+                  }}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Limpar Filtros
+                </Button>
+              </div>
+            </div>
+          </div>
+          {transactions && transactions.length > 0 ? (() => {
+            const filteredTransactions = transactions.filter(t => {
+              const txDate = new Date(t.transactionDate).toISOString().split('T')[0];
+              if (filterStartDate && txDate < filterStartDate) return false;
+              if (filterEndDate && txDate > filterEndDate) return false;
+              return true;
+            });
+
+            const totals = filteredTransactions.reduce((acc, t) => {
+              if (t.type === 'income') acc.income += parseFloat(t.amount);
+              else if (t.type === 'expense') acc.expense += parseFloat(t.amount);
+              else if (t.type === 'credit_card') acc.creditCard += parseFloat(t.amount);
+              return acc;
+            }, { income: 0, expense: 0, creditCard: 0 });
+
+            return (
+              <>
+                {/* Totals */}
+                <div className="mb-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="p-3 bg-green-500/10 rounded-lg">
+                    <p className="text-sm text-muted-foreground">Total Receitas</p>
+                    <p className="text-lg font-semibold text-green-600">+{formatCurrency(totals.income)}</p>
+                  </div>
+                  <div className="p-3 bg-red-500/10 rounded-lg">
+                    <p className="text-sm text-muted-foreground">Total Despesas</p>
+                    <p className="text-lg font-semibold text-red-600">-{formatCurrency(totals.expense)}</p>
+                  </div>
+                  <div className="p-3 bg-blue-500/10 rounded-lg">
+                    <p className="text-sm text-muted-foreground">Total Cartão</p>
+                    <p className="text-lg font-semibold text-blue-600">-{formatCurrency(totals.creditCard)}</p>
+                  </div>
+                  <div className="p-3 bg-purple-500/10 rounded-lg">
+                    <p className="text-sm text-muted-foreground">Saldo</p>
+                    <p className={`text-lg font-semibold ${totals.income - totals.expense - totals.creditCard >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(totals.income - totals.expense - totals.creditCard)}
+                    </p>
+                  </div>
+                </div>
+
+                {filteredTransactions.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="border-b border-border">
+                        <tr>
+                          <th className="text-left py-3 px-4 font-semibold text-foreground">Data</th>
+                          <th className="text-left py-3 px-4 font-semibold text-foreground">Descrição</th>
+                          <th className="text-left py-3 px-4 font-semibold text-foreground">Categoria</th>
+                          <th className="text-left py-3 px-4 font-semibold text-foreground">Tipo</th>
+                          <th className="text-right py-3 px-4 font-semibold text-foreground">Valor</th>
+                          <th className="text-center py-3 px-4 font-semibold text-foreground">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredTransactions.map((transaction) => (
                     <tr key={transaction.id} className="border-b border-border hover:bg-muted">
                       <td className="py-3 px-4 text-foreground">
                         {formatDate(transaction.transactionDate)}
@@ -466,13 +548,20 @@ export default function TransactionsEnhanced() {
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
-                      </td>
+                                </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
+                  ))}  
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-center py-8">
+                    Nenhuma movimentação no período selecionado
+                  </p>
+                )}
+              </>
+            );
+          })() : (
             <p className="text-muted-foreground text-center py-8">
               Nenhuma movimentação nesta competência
             </p>

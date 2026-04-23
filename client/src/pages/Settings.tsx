@@ -219,10 +219,9 @@ export default function Settings() {
       />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="typologies">Tipologias</TabsTrigger>
           <TabsTrigger value="sheets">Google Sheets</TabsTrigger>
-          <TabsTrigger value="github">GitHub</TabsTrigger>
         </TabsList>
 
         {/* Tipologias Tab */}
@@ -457,53 +456,6 @@ export default function Settings() {
                     Conectar Google Sheets
                   </>
                 )}
-              </Button>
-            </div>
-          </Card>
-        </TabsContent>
-
-        {/* GitHub Tab */}
-        <TabsContent value="github" className="space-y-6">
-          <Card className="p-6">
-            <h2 className="text-xl font-semibold text-foreground mb-6">
-              Integração com GitHub
-            </h2>
-            <div className="space-y-4">
-              <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                <p className="text-sm text-yellow-600 font-medium">
-                  ⚠️ Integração GitHub em desenvolvimento
-                </p>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
-                  URL do Repositório
-                </label>
-                <input
-                  type="text"
-                  placeholder="https://github.com/usuario/repositorio"
-                  className="input-elegant w-full"
-                  disabled
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
-                  Token de Acesso (Personal Access Token)
-                </label>
-                <input
-                  type="password"
-                  placeholder="Seu token do GitHub"
-                  className="input-elegant w-full"
-                  disabled
-                />
-                <p className="text-xs text-muted-foreground mt-2">
-                  Crie um token em: https://github.com/settings/tokens
-                </p>
-              </div>
-
-              <Button disabled className="w-full bg-muted text-muted-foreground">
-                Conectar GitHub (Em breve)
               </Button>
             </div>
           </Card>
