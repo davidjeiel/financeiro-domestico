@@ -183,3 +183,20 @@
 - [x] Corrigir bug de timezone nas datas (20/04 salvando como 19/04) - Usando Date.UTC
 - [x] Remover opção de GitHub das configurações - Removido da aba de configurações
 - [x] Corrigir sincronização com Google Sheets para salvar dados realmente - Adicionado procedure syncTransactions
+
+
+## Fase 27: Seletor de Categorias e Edição em Lote
+- [x] Atualizar modal de edição com seletor de categorias (EditTransactionModal.tsx)
+- [x] Adicionar opção de criar novas categorias no modal de edição
+- [x] Implementar checkbox para seleção em lote de transações (TransactionsEnhanced.tsx)
+- [x] Criar UI para edição em lote (categoria, datas, notas) (BulkTransactionActions.tsx)
+- [x] Implementar exclusão em lote de transações
+- [x] Adicionar confirmação de operações em lote
+- [x] Integrar com sidebar de navegação
+
+## Fase 28: Testes de Ações em Lote
+- [x] Criar testes para seleção em lote (bulkActions.test.ts)
+- [x] Implementar testes de filtros de transações
+- [x] Implementar testes de agrupamento por categoria
+- [x] Implementar testes de cálculo de totais
+- [x] Todos os 25 testes passando (10 novos + 14 competência + 1 logout)

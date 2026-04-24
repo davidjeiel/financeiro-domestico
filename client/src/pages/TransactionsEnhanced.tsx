@@ -15,6 +15,7 @@ import AddCategoryModal from "@/components/AddCategoryModal";
 import LoadingOverlay from "@/components/LoadingOverlay";
 import EditTransactionModal from "@/components/EditTransactionModal";
 import DeleteTransactionDialog from "@/components/DeleteTransactionDialog";
+import BulkTransactionActions from "@/components/BulkTransactionActions";
 
 const transactionSchema = z.object({
   type: z.enum(["income", "expense", "credit_card"]),
@@ -69,6 +70,8 @@ export default function TransactionsEnhanced() {
   const [deletingTransactionDesc, setDeletingTransactionDesc] = useState<string>("");
   const [filterStartDate, setFilterStartDate] = useState<string>("");
   const [filterEndDate, setFilterEndDate] = useState<string>("");
+  const [selectedTransactionIds, setSelectedTransactionIds] = useState<number[]>([]);
+  const [showBulkActions, setShowBulkActions] = useState(false);
 
   const {
     register,
@@ -492,6 +495,20 @@ export default function TransactionsEnhanced() {
                     <table className="w-full">
                       <thead className="border-b border-border">
                         <tr>
+                          <th className="text-left py-3 px-4 font-semibold text-foreground">
+                            <input
+                              type="checkbox"
+                              checked={selectedTransactionIds.length === filteredTransactions.length && filteredTransactions.length > 0}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedTransactionIds(filteredTransactions.map(t => t.id));
+                                } else {
+                                  setSelectedTransactionIds([]);
+                                }
+                              }}
+                              className="w-4 h-4 cursor-pointer"
+                            />
+                          </th>
                           <th className="text-left py-3 px-4 font-semibold text-foreground">Data</th>
                           <th className="text-left py-3 px-4 font-semibold text-foreground">Descrição</th>
                           <th className="text-left py-3 px-4 font-semibold text-foreground">Categoria</th>
@@ -503,6 +520,20 @@ export default function TransactionsEnhanced() {
                       <tbody>
                         {filteredTransactions.map((transaction) => (
                     <tr key={transaction.id} className="border-b border-border hover:bg-muted">
+                      <td className="py-3 px-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedTransactionIds.includes(transaction.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedTransactionIds([...selectedTransactionIds, transaction.id]);
+                            } else {
+                              setSelectedTransactionIds(selectedTransactionIds.filter(id => id !== transaction.id));
+                            }
+                          }}
+                          className="w-4 h-4 cursor-pointer"
+                        />
+                      </td>
                       <td className="py-3 px-4 text-foreground">
                         {formatDate(transaction.transactionDate)}
                       </td>
@@ -583,6 +614,16 @@ export default function TransactionsEnhanced() {
           transactionDescription={deletingTransactionDesc}
           onClose={() => setDeletingTransactionId(null)}
           onSuccess={() => setDeletingTransactionId(null)}
+        />
+
+        {/* Bulk Actions */}
+        <BulkTransactionActions
+          selectedIds={selectedTransactionIds}
+          onClose={() => setSelectedTransactionIds([])}
+          onSuccess={() => {
+            setSelectedTransactionIds([]);
+            utils.transaction.list.invalidate();
+          }}
         />
       </div>
     </DashboardLayoutCustom>

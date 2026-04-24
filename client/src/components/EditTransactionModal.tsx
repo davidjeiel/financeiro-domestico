@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import AddCategoryModal from "./AddCategoryModal";
 
 interface EditTransactionModalProps {
   isOpen: boolean;
@@ -37,8 +38,10 @@ export default function EditTransactionModal({
     { enabled: isOpen && transactionId !== null }
   );
 
+  const { data: typologies } = trpc.typology.list.useQuery();
   const updateMutation = trpc.transaction.update.useMutation();
   const utils = trpc.useUtils();
+  const [showAddCategory, setShowAddCategory] = useState(false);
 
   useEffect(() => {
     if (transaction) {
@@ -116,13 +119,29 @@ export default function EditTransactionModal({
 
             <div>
               <Label htmlFor="category">Categoria</Label>
-              <Input
-                id="category"
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="bg-background border-border text-foreground"
-                placeholder="Ex: Alimentação"
-              />
+              <div className="flex gap-2">
+                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                  <SelectTrigger id="category" className="bg-background border-border text-foreground flex-1">
+                    <SelectValue placeholder="Selecione uma categoria" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card border-border text-card-foreground">
+                    {typologies?.map((typology) => (
+                      <SelectItem key={typology.id} value={typology.name}>
+                        {typology.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowAddCategory(true)}
+                  className="border-border"
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
 
             <div>
@@ -194,6 +213,15 @@ export default function EditTransactionModal({
           </form>
         )}
       </DialogContent>
+      {showAddCategory && (
+        <AddCategoryModal
+          transactionType={formData.type as "income" | "expense" | "credit_card"}
+          onCategoryAdded={() => {
+            setShowAddCategory(false);
+            utils.typology.list.invalidate();
+          }}
+        />
+      )}
     </Dialog>
   );
 }
