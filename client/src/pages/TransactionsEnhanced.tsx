@@ -6,16 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/formatting";
-import { Plus, Loader2, Edit2, Trash2 } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import AddCategoryModal from "@/components/AddCategoryModal";
 import LoadingOverlay from "@/components/LoadingOverlay";
-import EditTransactionModal from "@/components/EditTransactionModal";
-import DeleteTransactionDialog from "@/components/DeleteTransactionDialog";
 import BulkTransactionActions from "@/components/BulkTransactionActions";
+import BulkActionsFAB from "@/components/BulkActionsFAB";
+import BulkEditModal from "@/components/BulkEditModal";
+import BulkDeleteModal from "@/components/BulkDeleteModal";
 
 const transactionSchema = z.object({
   type: z.enum(["income", "expense", "credit_card"]),
@@ -65,13 +66,13 @@ export default function TransactionsEnhanced() {
     expense: [],
     credit_card: [],
   });
-  const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
-  const [deletingTransactionId, setDeletingTransactionId] = useState<number | null>(null);
-  const [deletingTransactionDesc, setDeletingTransactionDesc] = useState<string>("");
+  // Ações individuais removidas - usar seleção em lote com botões flutuantes
   const [filterStartDate, setFilterStartDate] = useState<string>("");
   const [filterEndDate, setFilterEndDate] = useState<string>("");
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<number[]>([]);
   const [showBulkActions, setShowBulkActions] = useState(false);
+  const [showBulkEdit, setShowBulkEdit] = useState(false);
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
 
   const {
     register,
@@ -560,26 +561,8 @@ export default function TransactionsEnhanced() {
                         {transaction.type === "income" ? "+" : "-"}{formatCurrency(transaction.amount)}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <div className="flex gap-2 justify-center">
-                          <button
-                            onClick={() => setEditingTransactionId(transaction.id)}
-                            className="p-2 hover:bg-muted rounded-lg transition-colors text-blue-600 hover:text-blue-700"
-                            title="Editar"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              setDeletingTransactionId(transaction.id);
-                              setDeletingTransactionDesc(transaction.description || transaction.category);
-                            }}
-                            className="p-2 hover:bg-muted rounded-lg transition-colors text-red-600 hover:text-red-700"
-                            title="Deletar"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                                </td>
+                        {/* Ações removidas - usar seleção em lote com botões flutuantes */}
+                      </td>
                     </tr>
                   ))}  
                       </tbody>
@@ -599,27 +582,41 @@ export default function TransactionsEnhanced() {
           )}
         </Card>
 
-        {/* Edit Transaction Modal */}
-        <EditTransactionModal
-          isOpen={editingTransactionId !== null}
-          transactionId={editingTransactionId}
-          onClose={() => setEditingTransactionId(null)}
-          onSuccess={() => setEditingTransactionId(null)}
-        />
-
-        {/* Delete Transaction Dialog */}
-        <DeleteTransactionDialog
-          isOpen={deletingTransactionId !== null}
-          transactionId={deletingTransactionId}
-          transactionDescription={deletingTransactionDesc}
-          onClose={() => setDeletingTransactionId(null)}
-          onSuccess={() => setDeletingTransactionId(null)}
-        />
+        {/* Componentes de edição/exclusão individual removidos - usar seleção em lote */}
 
         {/* Bulk Actions */}
         <BulkTransactionActions
           selectedIds={selectedTransactionIds}
           onClose={() => setSelectedTransactionIds([])}
+          onSuccess={() => {
+            setSelectedTransactionIds([]);
+            utils.transaction.list.invalidate();
+          }}
+        />
+
+        {/* Floating Action Buttons */}
+        <BulkActionsFAB
+          selectedCount={selectedTransactionIds.length}
+          onEdit={() => setShowBulkEdit(true)}
+          onDelete={() => setShowBulkDelete(true)}
+        />
+
+        {/* Bulk Edit Modal */}
+        <BulkEditModal
+          isOpen={showBulkEdit}
+          selectedIds={selectedTransactionIds}
+          onClose={() => setShowBulkEdit(false)}
+          onSuccess={() => {
+            setSelectedTransactionIds([]);
+            utils.transaction.list.invalidate();
+          }}
+        />
+
+        {/* Bulk Delete Modal */}
+        <BulkDeleteModal
+          isOpen={showBulkDelete}
+          selectedIds={selectedTransactionIds}
+          onClose={() => setShowBulkDelete(false)}
           onSuccess={() => {
             setSelectedTransactionIds([]);
             utils.transaction.list.invalidate();

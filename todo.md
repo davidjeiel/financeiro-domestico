@@ -200,3 +200,13 @@
 - [x] Implementar testes de agrupamento por categoria
 - [x] Implementar testes de cálculo de totais
 - [x] Todos os 25 testes passando (10 novos + 14 competência + 1 logout)
+
+## Fase 29: Correção de Fluxo de Seleção em Lote
+- [x] Remover abertura automática do modal ao clicar em transação
+- [x] Implementar botões flutuantes (FAB) para ações em lote
+- [x] Criar modal de edição em lote com campos vazios (BulkEditModal.tsx)
+- [x] Criar modal de exclusão em lote com confirmação (BulkDeleteModal.tsx)
+- [x] Corrigir seletor de categorias no modal de edição
+- [x] Integrar BulkEditModal e BulkDeleteModal no TransactionsEnhanced
+- [x] Remover componentes EditTransactionModal e DeleteTransactionDialog não utilizados
+- [x] Todos os 25 testes passando

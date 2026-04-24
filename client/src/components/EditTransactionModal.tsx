@@ -125,11 +125,17 @@ export default function EditTransactionModal({
                     <SelectValue placeholder="Selecione uma categoria" />
                   </SelectTrigger>
                   <SelectContent className="bg-card border-border text-card-foreground">
-                    {typologies?.map((typology) => (
-                      <SelectItem key={typology.id} value={typology.name}>
-                        {typology.name}
+                    {typologies && typologies.length > 0 ? (
+                      typologies.map((typology) => (
+                        <SelectItem key={typology.id} value={typology.name}>
+                          {typology.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="" disabled>
+                        Nenhuma categoria disponível
                       </SelectItem>
-                    ))}
+                    )}
                   </SelectContent>
                 </Select>
                 <Button
