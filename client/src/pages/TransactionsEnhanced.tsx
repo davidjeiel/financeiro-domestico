@@ -560,8 +560,31 @@ export default function TransactionsEnhanced() {
                       }`}>
                         {transaction.type === "income" ? "+" : "-"}{formatCurrency(transaction.amount)}
                       </td>
-                      <td className="py-3 px-4 text-center">
-                        {/* Ações removidas - usar seleção em lote com botões flutuantes */}
+                      <td className="py-3 px-4 text-center flex gap-2 justify-center">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            // Abrir modal de edição individual
+                            setSelectedTransactionIds([transaction.id]);
+                            setShowBulkEdit(true);
+                          }}
+                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        >
+                          Editar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            // Abrir modal de exclusão individual
+                            setSelectedTransactionIds([transaction.id]);
+                            setShowBulkDelete(true);
+                          }}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          Deletar
+                        </Button>
                       </td>
                     </tr>
                   ))}  

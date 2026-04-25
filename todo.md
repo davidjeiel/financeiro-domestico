@@ -246,3 +246,12 @@
 - [x] Categorias agora aparecem no seletor do modal
 - [x] Todos os 25 testes passando
 - [x] TypeScript compilando sem erros
+
+## Fase 34: Restauracao de Botoes Individuais de Edicao e Exclusao
+- [x] Adicionar botao "Editar" em cada linha da tabela
+- [x] Adicionar botao "Deletar" em cada linha da tabela
+- [x] Botoes abrem modais de edicao/exclusao em lote com apenas 1 registro selecionado
+- [x] Usuarios podem editar ou deletar registros individuais sem selecionar em lote
+- [x] Botoes com cores apropriadas (azul para editar, vermelho para deletar)
+- [x] Todos os 25 testes passando
+- [x] TypeScript compilando sem erros
