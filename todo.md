@@ -220,3 +220,11 @@
 - [x] Modal de edição em lote com interface clara e intuitiva
 - [x] Todos os 25 testes passando
 - [x] TypeScript compilando sem erros
+
+## Fase 31: Correcao de Erro no Seletor de Categorias
+- [x] Corrigir erro "Select.Item must have a value prop that is not an empty string"
+- [x] Usar placeholder especial (__placeholder__) em vez de string vazia
+- [x] Adicionar validacao para nao enviar placeholder como valor
+- [x] Resetar formulario apos sucesso na atualizacao
+- [x] Todos os 25 testes passando
+- [x] Sem erros de compilacao

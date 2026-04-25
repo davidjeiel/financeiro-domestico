@@ -26,7 +26,7 @@ export default function BulkEditModal({
 
   // Estados para cada campo com checkbox de ativação
   const [updateCategory, setUpdateCategory] = useState(false);
-  const [category, setCategory] = useState("");
+  const [category, setCategory] = useState("__placeholder__");
 
   const [updateTransactionDate, setUpdateTransactionDate] = useState(false);
   const [transactionDate, setTransactionDate] = useState("");
@@ -45,7 +45,7 @@ export default function BulkEditModal({
   useEffect(() => {
     if (!isOpen) {
       setUpdateCategory(false);
-      setCategory("");
+      setCategory("__placeholder__");
       setUpdateTransactionDate(false);
       setTransactionDate("");
       setUpdateDueDate(false);
@@ -85,7 +85,7 @@ export default function BulkEditModal({
       for (const id of selectedIds) {
         const updateData: any = { id };
 
-        if (updateCategory) updateData.category = category;
+        if (updateCategory && category !== "__placeholder__") updateData.category = category;
         if (updateTransactionDate) updateData.transactionDate = new Date(transactionDate);
         if (updateDueDate) updateData.dueDate = new Date(dueDate);
         if (updateNotes) updateData.notes = notes;
@@ -95,6 +95,16 @@ export default function BulkEditModal({
 
       toast.success(`${selectedIds.length} transação(ões) atualizada(s)`);
       await utils.transaction.list.invalidate();
+
+      // Resetar formulário
+      setUpdateCategory(false);
+      setCategory("__placeholder__");
+      setUpdateTransactionDate(false);
+      setTransactionDate("");
+      setUpdateDueDate(false);
+      setDueDate("");
+      setUpdateNotes(false);
+      setNotes("");
 
       onSuccess();
       onClose();
@@ -139,6 +149,9 @@ export default function BulkEditModal({
                     <SelectValue placeholder="Selecione uma categoria" />
                   </SelectTrigger>
                   <SelectContent className="bg-card border-border text-card-foreground">
+                    <SelectItem value="__placeholder__" disabled>
+                      Selecione uma categoria
+                    </SelectItem>
                     {typologies && typologies.length > 0 ? (
                       typologies.map((typology) => (
                         <SelectItem key={typology.id} value={typology.name}>
@@ -146,7 +159,7 @@ export default function BulkEditModal({
                         </SelectItem>
                       ))
                     ) : (
-                      <SelectItem value="" disabled>
+                      <SelectItem value="__no-categories__" disabled>
                         Nenhuma categoria disponível
                       </SelectItem>
                     )}
