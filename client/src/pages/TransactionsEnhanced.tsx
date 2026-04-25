@@ -13,7 +13,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import AddCategoryModal from "@/components/AddCategoryModal";
 import LoadingOverlay from "@/components/LoadingOverlay";
-import BulkTransactionActions from "@/components/BulkTransactionActions";
+// BulkTransactionActions removido - usando BulkEditModal e BulkDeleteModal
 import BulkActionsFAB from "@/components/BulkActionsFAB";
 import BulkEditModal from "@/components/BulkEditModal";
 import BulkDeleteModal from "@/components/BulkDeleteModal";
@@ -584,15 +584,7 @@ export default function TransactionsEnhanced() {
 
         {/* Componentes de edição/exclusão individual removidos - usar seleção em lote */}
 
-        {/* Bulk Actions */}
-        <BulkTransactionActions
-          selectedIds={selectedTransactionIds}
-          onClose={() => setSelectedTransactionIds([])}
-          onSuccess={() => {
-            setSelectedTransactionIds([]);
-            utils.transaction.list.invalidate();
-          }}
-        />
+        {/* BulkTransactionActions removido - usando BulkEditModal e BulkDeleteModal no lugar */}
 
         {/* Floating Action Buttons */}
         <BulkActionsFAB

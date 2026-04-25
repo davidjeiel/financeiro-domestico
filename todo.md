@@ -210,3 +210,13 @@
 - [x] Integrar BulkEditModal e BulkDeleteModal no TransactionsEnhanced
 - [x] Remover componentes EditTransactionModal e DeleteTransactionDialog não utilizados
 - [x] Todos os 25 testes passando
+
+## Fase 30: Correção Final do Fluxo de Seleção em Lote
+- [x] Remover BulkTransactionActions que abria automaticamente ao selecionar
+- [x] Recriar BulkEditModal com todos os campos visíveis simultaneamente
+- [x] Adicionar checkboxes para ativar/desativar cada campo de edição
+- [x] Validação de campos selecionados antes de atualizar
+- [x] FAB agora aparece apenas com checkboxes, sem abertura automática de modal
+- [x] Modal de edição em lote com interface clara e intuitiva
+- [x] Todos os 25 testes passando
+- [x] TypeScript compilando sem erros
