@@ -238,3 +238,11 @@
 - [x] Validacao de nome de categoria
 - [x] Todos os 25 testes passando
 - [x] TypeScript compilando sem erros
+
+## Fase 33: Correcao de Query de Categorias
+- [x] Remover filtro isActive=1 de getTypologiesByUser
+- [x] Remover filtro isActive=1 de getTypologiesByUserAndType
+- [x] Retornar todas as categorias do usuario
+- [x] Categorias agora aparecem no seletor do modal
+- [x] Todos os 25 testes passando
+- [x] TypeScript compilando sem erros

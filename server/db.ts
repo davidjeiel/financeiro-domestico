@@ -217,14 +217,16 @@ export async function getTypologiesByUser(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  return db.select().from(typologies).where(and(eq(typologies.userId, userId), eq(typologies.isActive, 1))).orderBy(typologies.order);
+  // Retornar todas as tipologias do usuário, ativas ou não
+  return db.select().from(typologies).where(eq(typologies.userId, userId)).orderBy(typologies.order);
 }
 
 export async function getTypologiesByUserAndType(userId: number, type: "income" | "expense" | "credit_card") {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  return db.select().from(typologies).where(and(eq(typologies.userId, userId), eq(typologies.type, type), eq(typologies.isActive, 1))).orderBy(typologies.order);
+  // Retornar todas as tipologias do usuário por tipo, ativas ou não
+  return db.select().from(typologies).where(and(eq(typologies.userId, userId), eq(typologies.type, type))).orderBy(typologies.order);
 }
 
 export async function updateTypology(id: number, updates: Partial<InsertTypology>) {
