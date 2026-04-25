@@ -40,10 +40,16 @@ export default function BulkEditModal({
   const [updateNotes, setUpdateNotes] = useState(false);
   const [notes, setNotes] = useState("");
 
-  const { data: typologies, refetch: refetchTypologies } = trpc.typology.list.useQuery();
+  // Usar query sem parâmetros para buscar todas as tipologias do usuário
+  const { data: typologies = [], isLoading: isLoadingTypologies, refetch: refetchTypologies } = trpc.typology.list.useQuery();
   const updateMutation = trpc.transaction.update.useMutation();
   const createTypologyMutation = trpc.typology.create.useMutation();
   const utils = trpc.useUtils();
+
+  // Debug: log das categorias
+  useEffect(() => {
+    console.log("Tipologias carregadas:", typologies);
+  }, [typologies]);
 
   // Resetar formulário quando o modal fecha
   useEffect(() => {
@@ -81,7 +87,8 @@ export default function BulkEditModal({
       setNewCategoryColor("#3B82F6");
       setShowAddCategory(false);
       
-      // Recarregar tipologias
+      // Recarregar tipologias e invalidar cache
+      await utils.typology.list.invalidate();
       await refetchTypologies();
     } catch (error) {
       console.error("Erro ao criar categoria:", error);
@@ -97,8 +104,8 @@ export default function BulkEditModal({
     }
 
     // Validar se os campos selecionados foram preenchidos
-    if (updateCategory && !category) {
-      toast.error("Preencha a categoria");
+    if (updateCategory && category === "__placeholder__") {
+      toast.error("Selecione uma categoria");
       return;
     }
     if (updateTransactionDate && !transactionDate) {
@@ -109,7 +116,7 @@ export default function BulkEditModal({
       toast.error("Preencha a data de vencimento");
       return;
     }
-    if (updateNotes && !notes) {
+    if (updateNotes && !notes.trim()) {
       toast.error("Preencha as notas");
       return;
     }
@@ -183,6 +190,9 @@ export default function BulkEditModal({
 
             {updateCategory && (
               <div className="ml-8 space-y-3">
+                <div className="text-xs text-muted-foreground mb-2">
+                  {isLoadingTypologies ? "Carregando categorias..." : `${typologies?.length || 0} categoria(s) disponível(is)`}
+                </div>
                 <Select value={category} onValueChange={setCategory}>
                   <SelectTrigger className="bg-background border-border text-foreground">
                     <SelectValue placeholder="Selecione uma categoria" />
@@ -191,10 +201,20 @@ export default function BulkEditModal({
                     <SelectItem value="__placeholder__" disabled>
                       Selecione uma categoria
                     </SelectItem>
-                    {typologies && typologies.length > 0 ? (
+                    {isLoadingTypologies ? (
+                      <SelectItem value="__loading__" disabled>
+                        Carregando...
+                      </SelectItem>
+                    ) : typologies && typologies.length > 0 ? (
                       typologies.map((typology) => (
                         <SelectItem key={typology.id} value={typology.name}>
-                          {typology.name}
+                          <div className="flex items-center gap-2">
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: typology.color || "#3B82F6" }}
+                            />
+                            {typology.name}
+                          </div>
                         </SelectItem>
                       ))
                     ) : (

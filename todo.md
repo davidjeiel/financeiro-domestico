@@ -255,3 +255,13 @@
 - [x] Botoes com cores apropriadas (azul para editar, vermelho para deletar)
 - [x] Todos os 25 testes passando
 - [x] TypeScript compilando sem erros
+
+## Fase 35: Correcao Final do Seletor de Categorias
+- [x] Adicionar debug logging para categorias
+- [x] Melhorar tratamento de loading de categorias
+- [x] Adicionar contador de categorias disponíveis
+- [x] Adicionar cores das categorias no seletor
+- [x] Invalidar cache após criar categoria
+- [x] Melhorar validação de categoria selecionada
+- [x] Todos os 25 testes passando
+- [x] TypeScript compilando sem erros
