@@ -228,3 +228,13 @@
 - [x] Resetar formulario apos sucesso na atualizacao
 - [x] Todos os 25 testes passando
 - [x] Sem erros de compilacao
+
+## Fase 32: Adicionar Opcoes de Categoria no Modal de Edicao em Lote
+- [x] Exibir categorias disponíveis no seletor do BulkEditModal
+- [x] Adicionar botao "Criar Nova Categoria" dentro do modal
+- [x] Implementar interface para criar categoria inline
+- [x] Seletor de cores para nova categoria
+- [x] Recarregar lista de categorias apos criacao
+- [x] Validacao de nome de categoria
+- [x] Todos os 25 testes passando
+- [x] TypeScript compilando sem erros

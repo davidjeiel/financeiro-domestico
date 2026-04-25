@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 
@@ -23,6 +23,9 @@ export default function BulkEditModal({
   onSuccess,
 }: BulkEditModalProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryColor, setNewCategoryColor] = useState("#3B82F6");
 
   // Estados para cada campo com checkbox de ativação
   const [updateCategory, setUpdateCategory] = useState(false);
@@ -37,8 +40,9 @@ export default function BulkEditModal({
   const [updateNotes, setUpdateNotes] = useState(false);
   const [notes, setNotes] = useState("");
 
-  const { data: typologies } = trpc.typology.list.useQuery();
+  const { data: typologies, refetch: refetchTypologies } = trpc.typology.list.useQuery();
   const updateMutation = trpc.transaction.update.useMutation();
+  const createTypologyMutation = trpc.typology.create.useMutation();
   const utils = trpc.useUtils();
 
   // Resetar formulário quando o modal fecha
@@ -52,8 +56,38 @@ export default function BulkEditModal({
       setDueDate("");
       setUpdateNotes(false);
       setNotes("");
+      setShowAddCategory(false);
+      setNewCategoryName("");
+      setNewCategoryColor("#3B82F6");
     }
   }, [isOpen]);
+
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) {
+      toast.error("Digite um nome para a categoria");
+      return;
+    }
+
+    try {
+      await createTypologyMutation.mutateAsync({
+        name: newCategoryName,
+        type: "expense", // Padrão para despesa
+        color: newCategoryColor,
+        icon: "📌",
+      });
+
+      toast.success("Categoria criada com sucesso!");
+      setNewCategoryName("");
+      setNewCategoryColor("#3B82F6");
+      setShowAddCategory(false);
+      
+      // Recarregar tipologias
+      await refetchTypologies();
+    } catch (error) {
+      console.error("Erro ao criar categoria:", error);
+      toast.error("Erro ao criar categoria");
+    }
+  };
 
   const handleSubmit = async () => {
     // Validar se pelo menos um campo foi selecionado para atualização
@@ -116,6 +150,11 @@ export default function BulkEditModal({
     }
   };
 
+  const COLORS = [
+    "#3B82F6", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6",
+    "#EC4899", "#06B6D4", "#6366F1", "#14B8A6", "#F97316",
+  ];
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="bg-card border-border text-card-foreground max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -143,7 +182,7 @@ export default function BulkEditModal({
             </div>
 
             {updateCategory && (
-              <div className="ml-8">
+              <div className="ml-8 space-y-3">
                 <Select value={category} onValueChange={setCategory}>
                   <SelectTrigger className="bg-background border-border text-foreground">
                     <SelectValue placeholder="Selecione uma categoria" />
@@ -165,6 +204,71 @@ export default function BulkEditModal({
                     )}
                   </SelectContent>
                 </Select>
+
+                {!showAddCategory && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAddCategory(true)}
+                    className="w-full border-border"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Criar Nova Categoria
+                  </Button>
+                )}
+
+                {showAddCategory && (
+                  <div className="space-y-3 p-3 rounded border border-border bg-background">
+                    <Input
+                      placeholder="Nome da categoria"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      className="bg-background border-border text-foreground"
+                    />
+
+                    <div className="flex gap-2 flex-wrap">
+                      {COLORS.map((color) => (
+                        <button
+                          key={color}
+                          onClick={() => setNewCategoryColor(color)}
+                          className={`w-8 h-8 rounded-full border-2 transition-all ${
+                            newCategoryColor === color
+                              ? "border-foreground scale-110"
+                              : "border-transparent"
+                          }`}
+                          style={{ backgroundColor: color }}
+                        />
+                      ))}
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setShowAddCategory(false);
+                          setNewCategoryName("");
+                          setNewCategoryColor("#3B82F6");
+                        }}
+                        className="flex-1 border-border"
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleAddCategory}
+                        disabled={!newCategoryName.trim() || createTypologyMutation.isPending}
+                        className="flex-1 bg-green-600 hover:bg-green-700"
+                      >
+                        {createTypologyMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                        Criar
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
