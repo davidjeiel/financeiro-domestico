@@ -17,6 +17,7 @@ import LoadingOverlay from "@/components/LoadingOverlay";
 import BulkActionsFAB from "@/components/BulkActionsFAB";
 import BulkEditModal from "@/components/BulkEditModal";
 import BulkDeleteModal from "@/components/BulkDeleteModal";
+import EditTransactionModal from "@/components/EditTransactionModal";
 
 const transactionSchema = z.object({
   type: z.enum(["income", "expense", "credit_card"]),
@@ -73,6 +74,10 @@ export default function TransactionsEnhanced() {
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [showEditIndividual, setShowEditIndividual] = useState(false);
+  const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
+  const [showDeleteIndividual, setShowDeleteIndividual] = useState(false);
+  const [deletingTransactionId, setDeletingTransactionId] = useState<number | null>(null);
 
   const {
     register,
@@ -565,9 +570,8 @@ export default function TransactionsEnhanced() {
                           size="sm"
                           variant="ghost"
                           onClick={() => {
-                            // Abrir modal de edição individual
-                            setSelectedTransactionIds([transaction.id]);
-                            setShowBulkEdit(true);
+                            setEditingTransactionId(transaction.id);
+                            setShowEditIndividual(true);
                           }}
                           className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                         >
@@ -577,9 +581,8 @@ export default function TransactionsEnhanced() {
                           size="sm"
                           variant="ghost"
                           onClick={() => {
-                            // Abrir modal de exclusão individual
-                            setSelectedTransactionIds([transaction.id]);
-                            setShowBulkDelete(true);
+                            setDeletingTransactionId(transaction.id);
+                            setShowDeleteIndividual(true);
                           }}
                           className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
@@ -634,6 +637,32 @@ export default function TransactionsEnhanced() {
           onClose={() => setShowBulkDelete(false)}
           onSuccess={() => {
             setSelectedTransactionIds([]);
+            utils.transaction.list.invalidate();
+          }}
+        />
+
+        {/* Individual Edit Modal */}
+        <EditTransactionModal
+          isOpen={showEditIndividual}
+          transactionId={editingTransactionId}
+          onClose={() => {
+            setShowEditIndividual(false);
+            setEditingTransactionId(null);
+          }}
+          onSuccess={() => {
+            utils.transaction.list.invalidate();
+          }}
+        />
+
+        {/* Individual Delete Modal */}
+        <BulkDeleteModal
+          isOpen={showDeleteIndividual}
+          selectedIds={deletingTransactionId ? [deletingTransactionId] : []}
+          onClose={() => {
+            setShowDeleteIndividual(false);
+            setDeletingTransactionId(null);
+          }}
+          onSuccess={() => {
             utils.transaction.list.invalidate();
           }}
         />

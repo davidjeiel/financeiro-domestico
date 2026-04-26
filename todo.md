@@ -275,3 +275,15 @@
 - [x] Contador de categorias encontradas
 - [x] Todos os 25 testes passando
 - [x] TypeScript compilando sem erros
+
+## Fase 37: Separacao de Modais de Edicao Individual e em Lote
+- [x] Criar novo EditTransactionModal para edição de um único registro
+- [x] Exibir todos os campos de edição simultaneamente (sem checkboxes)
+- [x] Adicionar filtro por tipo de categoria no modal individual
+- [x] Implementar busca rápida de categorias no modal individual
+- [x] Permitir criar nova categoria dentro do modal individual
+- [x] Manter BulkEditModal apenas para edição em lote (com checkboxes)
+- [x] Adicionar botões "Editar" e "Deletar" individuais em cada linha
+- [x] Integrar EditTransactionModal no TransactionsEnhanced
+- [x] Todos os 25 testes passando
+- [x] TypeScript compilando sem erros
