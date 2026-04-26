@@ -287,3 +287,14 @@
 - [x] Integrar EditTransactionModal no TransactionsEnhanced
 - [x] Todos os 25 testes passando
 - [x] TypeScript compilando sem erros
+
+## Fase 38: Simplificacao de Seletor de Categorias
+- [x] Remover filtro por tipo de categoria (Receita/Despesa/Cartão)
+- [x] Remover busca rápida complexa com ícone de lupa
+- [x] Criar seletor simples que exibe todas as categorias
+- [x] Adicionar opção "Criar nova categoria" no final da lista
+- [x] Simplificar EditTransactionModal com seletor simples
+- [x] Simplificar BulkEditModal com seletor simples
+- [x] Testar fluxo completo - 25 testes passando
+- [x] TypeScript compilando sem erros
+- [x] Servidor rodando normalmente
