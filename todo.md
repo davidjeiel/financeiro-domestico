@@ -265,3 +265,13 @@
 - [x] Melhorar validação de categoria selecionada
 - [x] Todos os 25 testes passando
 - [x] TypeScript compilando sem erros
+
+## Fase 36: Filtro por Tipo e Busca Rapida de Categorias
+- [x] Adicionar filtro por tipo de categoria (Receita/Despesa/Cartão/Todas)
+- [x] Implementar busca rápida com ícone de lupa
+- [x] Filtrar categorias em tempo real conforme digitação
+- [x] Exibir tipo de categoria no seletor
+- [x] Permitir criar categoria com tipo selecionado
+- [x] Contador de categorias encontradas
+- [x] Todos os 25 testes passando
+- [x] TypeScript compilando sem erros

@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 
@@ -26,6 +26,9 @@ export default function BulkEditModal({
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryColor, setNewCategoryColor] = useState("#3B82F6");
+  const [newCategoryType, setNewCategoryType] = useState<"income" | "expense" | "credit_card">("expense");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [categoryTypeFilter, setCategoryTypeFilter] = useState<"income" | "expense" | "credit_card" | "all">("all");
 
   // Estados para cada campo com checkbox de ativação
   const [updateCategory, setUpdateCategory] = useState(false);
@@ -51,6 +54,24 @@ export default function BulkEditModal({
     console.log("Tipologias carregadas:", typologies);
   }, [typologies]);
 
+  // Filtrar e buscar categorias
+  const filteredTypologies = useMemo(() => {
+    let filtered = typologies || [];
+
+    // Filtrar por tipo se não for "all"
+    if (categoryTypeFilter !== "all") {
+      filtered = filtered.filter(t => t.type === categoryTypeFilter);
+    }
+
+    // Filtrar por busca
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(t => t.name.toLowerCase().includes(query));
+    }
+
+    return filtered;
+  }, [typologies, categoryTypeFilter, searchQuery]);
+
   // Resetar formulário quando o modal fecha
   useEffect(() => {
     if (!isOpen) {
@@ -65,6 +86,9 @@ export default function BulkEditModal({
       setShowAddCategory(false);
       setNewCategoryName("");
       setNewCategoryColor("#3B82F6");
+      setNewCategoryType("expense");
+      setSearchQuery("");
+      setCategoryTypeFilter("all");
     }
   }, [isOpen]);
 
@@ -77,7 +101,7 @@ export default function BulkEditModal({
     try {
       await createTypologyMutation.mutateAsync({
         name: newCategoryName,
-        type: "expense", // Padrão para despesa
+        type: newCategoryType,
         color: newCategoryColor,
         icon: "📌",
       });
@@ -85,6 +109,7 @@ export default function BulkEditModal({
       toast.success("Categoria criada com sucesso!");
       setNewCategoryName("");
       setNewCategoryColor("#3B82F6");
+      setNewCategoryType("expense");
       setShowAddCategory(false);
       
       // Recarregar tipologias e invalidar cache
@@ -162,6 +187,12 @@ export default function BulkEditModal({
     "#EC4899", "#06B6D4", "#6366F1", "#14B8A6", "#F97316",
   ];
 
+  const TYPE_LABELS = {
+    income: "Receita",
+    expense: "Despesa",
+    credit_card: "Cartão de Crédito",
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="bg-card border-border text-card-foreground max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -189,41 +220,81 @@ export default function BulkEditModal({
             </div>
 
             {updateCategory && (
-              <div className="ml-8 space-y-3">
-                <div className="text-xs text-muted-foreground mb-2">
-                  {isLoadingTypologies ? "Carregando categorias..." : `${typologies?.length || 0} categoria(s) disponível(is)`}
+              <div className="ml-8 space-y-4">
+                {/* Filtro por tipo */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Filtrar por Tipo:</Label>
+                  <div className="flex gap-2 flex-wrap">
+                    {["all", "income", "expense", "credit_card"].map((type) => (
+                      <Button
+                        key={type}
+                        type="button"
+                        variant={categoryTypeFilter === type ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCategoryTypeFilter(type as any)}
+                        className={categoryTypeFilter === type ? "bg-blue-600 hover:bg-blue-700" : "border-border"}
+                      >
+                        {type === "all" ? "Todas" : TYPE_LABELS[type as keyof typeof TYPE_LABELS]}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
-                <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger className="bg-background border-border text-foreground">
-                    <SelectValue placeholder="Selecione uma categoria" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-card border-border text-card-foreground">
-                    <SelectItem value="__placeholder__" disabled>
-                      Selecione uma categoria
-                    </SelectItem>
-                    {isLoadingTypologies ? (
-                      <SelectItem value="__loading__" disabled>
-                        Carregando...
+
+                {/* Busca rápida */}
+                <div className="space-y-2">
+                  <Label htmlFor="category-search" className="text-sm font-medium">Buscar Categoria:</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="category-search"
+                      placeholder="Digite para buscar..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9 bg-background border-border text-foreground"
+                    />
+                  </div>
+                </div>
+
+                {/* Seletor de categorias */}
+                <div className="space-y-2">
+                  <div className="text-xs text-muted-foreground">
+                    {isLoadingTypologies ? "Carregando categorias..." : `${filteredTypologies?.length || 0} categoria(s) encontrada(s)`}
+                  </div>
+                  <Select value={category} onValueChange={setCategory}>
+                    <SelectTrigger className="bg-background border-border text-foreground">
+                      <SelectValue placeholder="Selecione uma categoria" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-card border-border text-card-foreground max-h-[300px]">
+                      <SelectItem value="__placeholder__" disabled>
+                        Selecione uma categoria
                       </SelectItem>
-                    ) : typologies && typologies.length > 0 ? (
-                      typologies.map((typology) => (
-                        <SelectItem key={typology.id} value={typology.name}>
-                          <div className="flex items-center gap-2">
-                            <div 
-                              className="w-3 h-3 rounded-full" 
-                              style={{ backgroundColor: typology.color || "#3B82F6" }}
-                            />
-                            {typology.name}
-                          </div>
+                      {isLoadingTypologies ? (
+                        <SelectItem value="__loading__" disabled>
+                          Carregando...
                         </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="__no-categories__" disabled>
-                        Nenhuma categoria disponível
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
+                      ) : filteredTypologies && filteredTypologies.length > 0 ? (
+                        filteredTypologies.map((typology) => (
+                          <SelectItem key={typology.id} value={typology.name}>
+                            <div className="flex items-center gap-2">
+                              <div 
+                                className="w-3 h-3 rounded-full" 
+                                style={{ backgroundColor: typology.color || "#3B82F6" }}
+                              />
+                              {typology.name}
+                              <span className="text-xs text-muted-foreground ml-2">
+                                ({TYPE_LABELS[typology.type as keyof typeof TYPE_LABELS]})
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="__no-categories__" disabled>
+                          Nenhuma categoria encontrada
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
 
                 {!showAddCategory && (
                   <Button
@@ -247,19 +318,40 @@ export default function BulkEditModal({
                       className="bg-background border-border text-foreground"
                     />
 
-                    <div className="flex gap-2 flex-wrap">
-                      {COLORS.map((color) => (
-                        <button
-                          key={color}
-                          onClick={() => setNewCategoryColor(color)}
-                          className={`w-8 h-8 rounded-full border-2 transition-all ${
-                            newCategoryColor === color
-                              ? "border-foreground scale-110"
-                              : "border-transparent"
-                          }`}
-                          style={{ backgroundColor: color }}
-                        />
-                      ))}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Tipo:</Label>
+                      <div className="flex gap-2">
+                        {["income", "expense", "credit_card"].map((type) => (
+                          <Button
+                            key={type}
+                            type="button"
+                            variant={newCategoryType === type ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setNewCategoryType(type as any)}
+                            className={newCategoryType === type ? "bg-blue-600 hover:bg-blue-700" : "border-border"}
+                          >
+                            {TYPE_LABELS[type as keyof typeof TYPE_LABELS]}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Cor:</Label>
+                      <div className="flex gap-2 flex-wrap">
+                        {COLORS.map((color) => (
+                          <button
+                            key={color}
+                            onClick={() => setNewCategoryColor(color)}
+                            className={`w-8 h-8 rounded-full border-2 transition-all ${
+                              newCategoryColor === color
+                                ? "border-foreground scale-110"
+                                : "border-transparent"
+                            }`}
+                            style={{ backgroundColor: color }}
+                          />
+                        ))}
+                      </div>
                     </div>
 
                     <div className="flex gap-2">
@@ -271,6 +363,7 @@ export default function BulkEditModal({
                           setShowAddCategory(false);
                           setNewCategoryName("");
                           setNewCategoryColor("#3B82F6");
+                          setNewCategoryType("expense");
                         }}
                         className="flex-1 border-border"
                       >
