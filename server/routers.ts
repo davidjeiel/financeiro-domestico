@@ -127,6 +127,15 @@ export const appRouter = router({
       .mutation(({ input }) =>
         deleteTransaction(input.id)
       ),
+    markAsPaid: protectedProcedure
+      .input(z.object({ id: z.number(), isPaid: z.boolean() }))
+      .mutation(({ input }) => {
+        const paidDate = input.isPaid ? new Date() : null;
+        return updateTransaction(input.id, {
+          isPaid: input.isPaid ? 1 : 0,
+          paidDate,
+        });
+      }),
   }),
 
   invoice: router({

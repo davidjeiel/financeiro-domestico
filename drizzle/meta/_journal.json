@@ -43,6 +43,13 @@
       "when": 1774731854899,
       "tag": "0005_magical_orphan",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1777333516378,
+      "tag": "0006_panoramic_old_lace",
+      "breakpoints": true
     }
   ]
 }

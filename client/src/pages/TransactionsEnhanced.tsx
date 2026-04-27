@@ -11,6 +11,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import AddCategoryModal from "@/components/AddCategoryModal";
 import LoadingOverlay from "@/components/LoadingOverlay";
 // BulkTransactionActions removido - usando BulkEditModal e BulkDeleteModal
@@ -59,6 +60,16 @@ export default function TransactionsEnhanced() {
   const { data: creditCards } = trpc.creditCard.list.useQuery();
   const createMutation = trpc.transaction.create.useMutation();
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
+  const markAsPaidMutation = trpc.transaction.markAsPaid.useMutation({
+    onSuccess: () => {
+      utils.transaction.list.invalidate();
+      toast.success("Status de pagamento atualizado!");
+    },
+    onError: () => {
+      toast.error("Erro ao atualizar status de pagamento");
+    },
+  });
 
   const [open, setOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<"income" | "expense" | "credit_card">("expense");
@@ -520,6 +531,7 @@ export default function TransactionsEnhanced() {
                           <th className="text-left py-3 px-4 font-semibold text-foreground">Categoria</th>
                           <th className="text-left py-3 px-4 font-semibold text-foreground">Tipo</th>
                           <th className="text-right py-3 px-4 font-semibold text-foreground">Valor</th>
+                          <th className="text-center py-3 px-4 font-semibold text-foreground">Pago</th>
                           <th className="text-center py-3 px-4 font-semibold text-foreground">Ações</th>
                         </tr>
                       </thead>
@@ -564,6 +576,20 @@ export default function TransactionsEnhanced() {
                           : "text-red-600"
                       }`}>
                         {transaction.type === "income" ? "+" : "-"}{formatCurrency(transaction.amount)}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <input
+                          type="checkbox"
+                          checked={transaction.isPaid === 1}
+                          onChange={(e) => {
+                            markAsPaidMutation.mutate({
+                              id: transaction.id,
+                              isPaid: e.target.checked,
+                            });
+                          }}
+                          className="w-4 h-4 cursor-pointer"
+                          title={transaction.isPaid === 1 ? "Marcar como não pago" : "Marcar como pago"}
+                        />
                       </td>
                       <td className="py-3 px-4 text-center flex gap-2 justify-center">
                         <Button

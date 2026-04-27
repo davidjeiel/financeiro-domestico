@@ -81,6 +81,8 @@ export const transactions = mysqlTable("transactions", {
   installments: int("installments").default(1), // Número de parcelas
   currentInstallment: int("currentInstallment").default(1), // Parcela atual
   notes: text("notes"),
+  isPaid: int("isPaid").default(0).notNull(), // 0 = não pago, 1 = pago
+  paidDate: timestamp("paidDate"), // Data do pagamento
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

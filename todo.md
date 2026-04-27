@@ -298,3 +298,15 @@
 - [x] Testar fluxo completo - 25 testes passando
 - [x] TypeScript compilando sem erros
 - [x] Servidor rodando normalmente
+
+## Fase 39: Marcar Transacoes como Pagas
+- [x] Adicionar campo `isPaid` ao schema de transactions
+- [x] Adicionar campo `paidDate` para rastrear quando foi pago
+- [x] Criar migration SQL para adicionar colunas
+- [x] Criar procedure tRPC `markAsPaid` para marcar como pago
+- [x] Atualizar UI com coluna "Pago" na tabela
+- [x] Implementar checkbox para marcar/desmarcar como pago
+- [x] Integrar mutation com invalidação de cache
+- [x] Testar fluxo completo - 25 testes passando
+- [x] TypeScript compilando sem erros
+- [x] Servidor rodando normalmente
