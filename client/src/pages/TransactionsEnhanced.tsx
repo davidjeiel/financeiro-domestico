@@ -477,11 +477,21 @@ export default function TransactionsEnhanced() {
             });
 
             const totals = filteredTransactions.reduce((acc, t) => {
-              if (t.type === 'income') acc.income += parseFloat(t.amount);
-              else if (t.type === 'expense') acc.expense += parseFloat(t.amount);
-              else if (t.type === 'credit_card') acc.creditCard += parseFloat(t.amount);
+              const amount = parseFloat(t.amount);
+              if (t.type === 'income') {
+                acc.income += amount;
+                if (t.isPaid) acc.incomePaid += amount;
+              }
+              else if (t.type === 'expense') {
+                acc.expense += amount;
+                if (t.isPaid) acc.expensePaid += amount;
+              }
+              else if (t.type === 'credit_card') {
+                acc.creditCard += amount;
+                if (t.isPaid) acc.creditCardPaid += amount;
+              }
               return acc;
-            }, { income: 0, expense: 0, creditCard: 0 });
+            }, { income: 0, expense: 0, creditCard: 0, incomePaid: 0, expensePaid: 0, creditCardPaid: 0 });
 
             return (
               <>
@@ -490,14 +500,17 @@ export default function TransactionsEnhanced() {
                   <div className="p-3 bg-green-500/10 rounded-lg">
                     <p className="text-sm text-muted-foreground">Total Receitas</p>
                     <p className="text-lg font-semibold text-green-600">+{formatCurrency(totals.income)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Pago: {formatCurrency(totals.incomePaid)}</p>
                   </div>
                   <div className="p-3 bg-red-500/10 rounded-lg">
                     <p className="text-sm text-muted-foreground">Total Despesas</p>
                     <p className="text-lg font-semibold text-red-600">-{formatCurrency(totals.expense)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Pago: {formatCurrency(totals.expensePaid)}</p>
                   </div>
                   <div className="p-3 bg-blue-500/10 rounded-lg">
                     <p className="text-sm text-muted-foreground">Total Cartão</p>
                     <p className="text-lg font-semibold text-blue-600">-{formatCurrency(totals.creditCard)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Pago: {formatCurrency(totals.creditCardPaid)}</p>
                   </div>
                   <div className="p-3 bg-purple-500/10 rounded-lg">
                     <p className="text-sm text-muted-foreground">Saldo</p>

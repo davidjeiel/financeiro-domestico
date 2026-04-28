@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import DashboardLayoutCustom from "@/components/DashboardLayoutCustom";
 import { Card } from "@/components/ui/card";
@@ -20,17 +20,37 @@ export default function Dashboard() {
 
   // Calculate summary
   const summary = useMemo(() => {
-    if (!transactions) return { income: 0, expense: 0, creditCard: 0, balance: 0 };
+    if (!transactions) return { 
+      income: 0, 
+      expense: 0, 
+      creditCard: 0, 
+      balance: 0,
+      incomePaid: 0,
+      expensePaid: 0,
+      creditCardPaid: 0,
+    };
 
     let income = 0;
     let expense = 0;
     let creditCard = 0;
+    let incomePaid = 0;
+    let expensePaid = 0;
+    let creditCardPaid = 0;
 
     transactions.forEach(t => {
       const amount = typeof t.amount === "string" ? parseFloat(t.amount) : t.amount;
-      if (t.type === "income") income += amount;
-      else if (t.type === "expense") expense += amount;
-      else if (t.type === "credit_card") creditCard += amount;
+      if (t.type === "income") {
+        income += amount;
+        if (t.isPaid) incomePaid += amount;
+      }
+      else if (t.type === "expense") {
+        expense += amount;
+        if (t.isPaid) expensePaid += amount;
+      }
+      else if (t.type === "credit_card") {
+        creditCard += amount;
+        if (t.isPaid) creditCardPaid += amount;
+      }
     });
 
     return {
@@ -38,6 +58,9 @@ export default function Dashboard() {
       expense,
       creditCard,
       balance: income - expense - creditCard,
+      incomePaid,
+      expensePaid,
+      creditCardPaid,
     };
   }, [transactions]);
 
@@ -71,6 +94,7 @@ export default function Dashboard() {
           <SummaryCard
             title="Receitas"
             amount={summary.income}
+            amountPaid={summary.incomePaid}
             icon={<TrendingUp className="w-5 h-5" />}
             color="text-green-600"
             bgColor="bg-green-50"
@@ -78,6 +102,7 @@ export default function Dashboard() {
           <SummaryCard
             title="Despesas"
             amount={summary.expense}
+            amountPaid={summary.expensePaid}
             icon={<TrendingDown className="w-5 h-5" />}
             color="text-red-600"
             bgColor="bg-red-50"
@@ -85,6 +110,7 @@ export default function Dashboard() {
           <SummaryCard
             title="Cartão de Crédito"
             amount={summary.creditCard}
+            amountPaid={summary.creditCardPaid}
             icon={<CreditCard className="w-5 h-5" />}
             color="text-blue-600"
             bgColor="bg-blue-50"
@@ -218,12 +244,13 @@ export default function Dashboard() {
 interface SummaryCardProps {
   title: string;
   amount: number;
+  amountPaid?: number;
   icon: React.ReactNode;
   color: string;
   bgColor: string;
 }
 
-function SummaryCard({ title, amount, icon, color, bgColor }: SummaryCardProps) {
+function SummaryCard({ title, amount, amountPaid, icon, color, bgColor }: SummaryCardProps) {
   return (
     <Card className="p-6">
       <div className="flex items-center justify-between">
@@ -232,6 +259,11 @@ function SummaryCard({ title, amount, icon, color, bgColor }: SummaryCardProps) 
           <p className="text-3xl font-bold text-foreground">
             {formatCurrency(amount)}
           </p>
+          {amountPaid !== undefined && (
+            <p className="text-sm text-muted-foreground mt-2">
+              Pago: {formatCurrency(amountPaid)}
+            </p>
+          )}
         </div>
         <div className={`${bgColor} ${color} p-3 rounded-lg`}>
           {icon}

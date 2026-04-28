@@ -310,3 +310,12 @@
 - [x] Testar fluxo completo - 25 testes passando
 - [x] TypeScript compilando sem erros
 - [x] Servidor rodando normalmente
+
+## Fase 40: Totalizadores com Total e Total Pago
+- [x] Atualizar cálculo de totais para incluir total pago
+- [x] Adicionar totalizadores no dashboard com "Pago" exibido
+- [x] Adicionar totalizadores na tela de movimentações com "Pago" exibido
+- [x] Exibir breakdown de pago vs não pago em cada card
+- [x] Testar fluxo completo - 25 testes passando
+- [x] TypeScript compilando sem erros
+- [x] Servidor rodando normalmente
