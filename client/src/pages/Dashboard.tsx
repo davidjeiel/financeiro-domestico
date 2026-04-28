@@ -4,7 +4,6 @@ import DashboardLayoutCustom from "@/components/DashboardLayoutCustom";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/formatting";
-import { TrendingUp, TrendingDown, CreditCard, DollarSign } from "lucide-react";
 
 export default function Dashboard() {
   const { data: currentCompetency, isLoading: competencyLoading } =
@@ -95,32 +94,20 @@ export default function Dashboard() {
             title="Receitas"
             amount={summary.income}
             amountPaid={summary.incomePaid}
-            icon={<TrendingUp className="w-5 h-5" />}
-            color="text-green-600"
-            bgColor="bg-green-50"
           />
           <SummaryCard
             title="Despesas"
             amount={summary.expense}
             amountPaid={summary.expensePaid}
-            icon={<TrendingDown className="w-5 h-5" />}
-            color="text-red-600"
-            bgColor="bg-red-50"
           />
           <SummaryCard
             title="Cartão de Crédito"
             amount={summary.creditCard}
             amountPaid={summary.creditCardPaid}
-            icon={<CreditCard className="w-5 h-5" />}
-            color="text-blue-600"
-            bgColor="bg-blue-50"
           />
           <SummaryCard
             title="Saldo"
             amount={summary.balance}
-            icon={<DollarSign className="w-5 h-5" />}
-            color={summary.balance >= 0 ? "text-green-600" : "text-red-600"}
-            bgColor={summary.balance >= 0 ? "bg-green-50" : "bg-red-50"}
           />
         </div>
 
@@ -245,29 +232,21 @@ interface SummaryCardProps {
   title: string;
   amount: number;
   amountPaid?: number;
-  icon: React.ReactNode;
-  color: string;
-  bgColor: string;
 }
 
-function SummaryCard({ title, amount, amountPaid, icon, color, bgColor }: SummaryCardProps) {
+function SummaryCard({ title, amount, amountPaid }: SummaryCardProps) {
   return (
     <Card className="p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground mb-2">{title}</p>
-          <p className="text-3xl font-bold text-foreground">
-            {formatCurrency(amount)}
+      <div>
+        <p className="text-sm text-muted-foreground mb-2">{title}</p>
+        <p className="text-3xl font-bold text-foreground">
+          {formatCurrency(amount)}
+        </p>
+        {amountPaid !== undefined && (
+          <p className="text-sm text-muted-foreground mt-2">
+            Pago: {formatCurrency(amountPaid)}
           </p>
-          {amountPaid !== undefined && (
-            <p className="text-sm text-muted-foreground mt-2">
-              Pago: {formatCurrency(amountPaid)}
-            </p>
-          )}
-        </div>
-        <div className={`${bgColor} ${color} p-3 rounded-lg`}>
-          {icon}
-        </div>
+        )}
       </div>
     </Card>
   );
