@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8
+    container_name: financeiro-db
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: financeiro
+      MYSQL_USER: fiscaluser
+      MYSQL_PASSWORD: fiscal123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: financeiro-app
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: mysql://fiscaluser:fiscal123@mysql:3306/financeiro
+      PORT: 3000
+      LOCAL_LOGIN_ENABLED: "true"
+      LOCAL_LOGIN_PASSWORD: "admin123"
+      JWT_SECRET: "financeiro-jwt-secret-2026"
+      VITE_APP_ID: "financeiro-local"
+      OWNER_OPEN_ID: "local:admin"
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  mysql_data:

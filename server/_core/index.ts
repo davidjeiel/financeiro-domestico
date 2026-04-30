@@ -1,12 +1,15 @@
 import "dotenv/config";
 import express from "express";
+import fs from "fs";
 import { createServer } from "http";
 import net from "net";
+import path from "path";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
+import { registerLocalLoginRoute } from "./localLogin";
+import { runMigrations } from "./migrate";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
-import { serveStatic, setupVite } from "./vite";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -28,6 +31,8 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  await runMigrations();
+
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
@@ -35,6 +40,8 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+  // Local login (only when LOCAL_LOGIN_ENABLED=true)
+  registerLocalLoginRoute(app);
   // tRPC API
   app.use(
     "/api/trpc",
@@ -45,9 +52,18 @@ async function startServer() {
   );
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
+    const { setupVite } = await import("./vite");
     await setupVite(app, server);
   } else {
-    serveStatic(app);
+    const distPath = path.resolve(process.cwd(), "dist", "public");
+    if (!fs.existsSync(distPath)) {
+      console.error(`Could not find the build directory: ${distPath}, make sure to build the client first`);
+      process.exit(1);
+    }
+    app.use(express.static(distPath));
+    app.use("*", (_req, res) => {
+      res.sendFile(path.resolve(distPath, "index.html"));
+    });
   }
 
   const preferredPort = parseInt(process.env.PORT || "3000");

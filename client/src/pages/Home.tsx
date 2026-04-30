@@ -5,6 +5,8 @@ import { getLoginUrl } from "@/const";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
 
+const loginHref = import.meta.env.VITE_OAUTH_PORTAL_URL ? getLoginUrl() : "/login";
+
 export default function Home() {
   const { user, loading, isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
@@ -39,7 +41,7 @@ export default function Home() {
               Ir para Dashboard
             </Button>
           ) : (
-            <a href={getLoginUrl()}>
+            <a href={loginHref}>
               <Button variant="default">Entrar</Button>
             </a>
           )}
@@ -57,7 +59,7 @@ export default function Home() {
             competências mensais, controle seus cartões de crédito com precisão e visualize
             seus gastos através de relatórios inteligentes.
           </p>
-          <a href={getLoginUrl()}>
+          <a href={loginHref}>
             <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90">
               Começar Agora
             </Button>
@@ -105,7 +107,7 @@ export default function Home() {
           <p className="text-lg text-muted-foreground mb-8">
             Comece agora mesmo com sua conta Google e tenha acesso a todas as funcionalidades.
           </p>
-          <a href={getLoginUrl()}>
+          <a href={loginHref}>
             <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90">
               Entrar com Google
             </Button>

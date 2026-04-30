@@ -1,0 +1,30 @@
+# Dockerfile simplificado para debug
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Instalar dependências do sistema
+RUN apk add --no-cache mysql-client
+
+# Copiar arquivos do projeto
+COPY package*.json ./
+COPY pnpm-lock.yaml ./
+COPY patches ./patches
+
+# Instalar pnpm
+RUN npm install -g pnpm
+
+# Instalar dependências
+RUN pnpm install --frozen-lockfile --ignore-scripts
+
+# Copiar código fonte
+COPY . .
+
+# Build da aplicação
+RUN pnpm build
+
+# Expor porta
+EXPOSE 3000
+
+# Comando para iniciar
+CMD ["node", "dist/index.js"]

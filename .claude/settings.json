@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wsl -d podman-machine-default -- podman build -t financeiro-app /mnt/e/Codigos/projetos/financeiro-domestico)",
+      "PowerShell(wsl -d podman-machine-default -- podman build -t financeiro-app /mnt/e/Codigos/projetos/financeiro-domestico 2>&1)",
+      "PowerShell(wsl -d podman-machine-default -- cat /home/user/.config/containers/storage.conf 2>&1; echo \"---\"; wsl -d podman-machine-default -- cat /etc/containers/storage.conf 2>&1 | head -20)",
+      "PowerShell(wsl -d podman-machine-default -- sh -c 'rm -rf /home/user/.local/share/containers/storage && echo \"Storage cleared\"')",
+      "PowerShell(wsl --terminate podman-machine-default)",
+      "PowerShell(wsl --unregister podman-machine-default 2>$null)",
+      "PowerShell(podman machine rm --force podman-machine-default 2>$null)",
+      "PowerShell(podman machine init --now 2>&1)",
+      "PowerShell(podman system connection list 2>&1)",
+      "Read(//c/Users/david/.ssh/**)"
+    ]
+  }
+}

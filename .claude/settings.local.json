@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(podman --version)",
+      "Bash(podman machine *)",
+      "Bash(podman build *)",
+      "Bash(wsl --terminate podman-machine-default)",
+      "Bash(wsl --unregister podman-machine-default)"
+    ]
+  }
+}
