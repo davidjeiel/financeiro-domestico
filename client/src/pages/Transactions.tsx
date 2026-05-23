@@ -11,6 +11,7 @@ import { formatCurrency, formatDate } from "@/lib/formatting";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import LoadingOverlay from "@/components/LoadingOverlay";
+import TransactionLinksManager from "@/components/TransactionLinksManager";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -45,6 +46,8 @@ export default function Transactions() {
 
   const [open, setOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<"income" | "expense" | "credit_card">("expense");
+  const [newTransactionId, setNewTransactionId] = useState<number | null>(null);
+  const [links, setLinks] = useState<Array<{ url: string; title?: string; description?: string }>>([]);
 
   const {
     register,
@@ -233,6 +236,22 @@ export default function Transactions() {
                     rows={3}
                   />
                 </div>
+
+                {/* Links Preview */}
+                {links.length > 0 && (
+                  <div className="border-t pt-3">
+                    <p className="text-sm font-medium text-foreground mb-2">
+                      Links a adicionar: {links.length}
+                    </p>
+                    <div className="space-y-1">
+                      {links.map((link, idx) => (
+                        <div key={idx} className="text-xs text-muted-foreground truncate">
+                          {link.title || link.url}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex gap-2 pt-4">
                   <Button

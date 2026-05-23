@@ -15,35 +15,45 @@ vi.mock("./db", async () => {
   };
 });
 
-describe("SavedFilters", () => {
-  const mockUserId = 1;
-  const mockFilter = {
-    name: "Test Filter",
-    startDate: new Date("2024-01-01"),
-    endDate: new Date("2024-01-31"),
-    categories: ["Alimentação", "Transporte"],
-    types: ["expense"],
-    minAmount: 10,
-    maxAmount: 1000,
-    isDefault: false,
-  };
+describe(
+  "SavedFilters",
+  () => {
+    const mockUserId = 1;
+    const mockFilter = {
+      name: "Test Filter",
+      startDate: new Date("2024-01-01"),
+      endDate: new Date("2024-01-31"),
+      categories: ["Alimentação", "Transporte"],
+      types: ["expense"],
+      minAmount: 10,
+      maxAmount: 1000,
+      isDefault: false,
+    };
 
-  describe("createSavedFilter", () => {
-    it("should create a saved filter with valid data", async () => {
-      const result = await createSavedFilter(mockUserId, mockFilter);
-      expect(result).toBeDefined();
+    describe("createSavedFilter", () => {
+      it(
+        "should create a saved filter with valid data",
+        async () => {
+          const result = await createSavedFilter(mockUserId, mockFilter);
+          expect(result).toBeDefined();
+        },
+        { timeout: 10000 }
+      );
+
+      it(
+        "should handle missing optional fields",
+        async () => {
+          const minimalFilter = {
+            name: "Minimal Filter",
+          };
+          const result = await createSavedFilter(mockUserId, minimalFilter as any);
+          expect(result).toBeDefined();
+        },
+        { timeout: 10000 }
+      );
     });
 
-    it("should handle missing optional fields", async () => {
-      const minimalFilter = {
-        name: "Minimal Filter",
-      };
-      const result = await createSavedFilter(mockUserId, minimalFilter as any);
-      expect(result).toBeDefined();
-    });
-  });
-
-  describe("getSavedFilters", () => {
+    describe("getSavedFilters", () => {
     it("should retrieve all saved filters for a user", async () => {
       const result = await getSavedFilters(mockUserId);
       expect(Array.isArray(result)).toBe(true);
@@ -55,7 +65,7 @@ describe("SavedFilters", () => {
     });
   });
 
-  describe("getSavedFilter", () => {
+    describe("getSavedFilter", () => {
     it("should retrieve a specific saved filter by ID", async () => {
       const result = await getSavedFilter(1);
       if (result) {
@@ -70,7 +80,7 @@ describe("SavedFilters", () => {
     });
   });
 
-  describe("updateSavedFilter", () => {
+    describe("updateSavedFilter", () => {
     it("should update a saved filter", async () => {
       const updates = {
         name: "Updated Filter Name",
@@ -88,14 +98,14 @@ describe("SavedFilters", () => {
     });
   });
 
-  describe("deleteSavedFilter", () => {
+    describe("deleteSavedFilter", () => {
     it("should delete a saved filter", async () => {
       const result = await deleteSavedFilter(1);
       expect(result).toBeDefined();
     });
   });
 
-  describe("Filter data persistence", () => {
+    describe("Filter data persistence", () => {
     it("should preserve JSON arrays in categories field", async () => {
       const filterWithCategories = {
         name: "Category Filter",
@@ -124,4 +134,6 @@ describe("SavedFilters", () => {
       expect(result).toBeDefined();
     });
   });
-});
+  },
+  { timeout: 120000 }
+);

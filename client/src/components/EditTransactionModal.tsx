@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { trpc } from '@/lib/trpc';
 import { formatCurrency, formatDate } from '@/lib/formatting';
 import { Plus } from 'lucide-react';
+import TransactionLinksManager from '@/components/TransactionLinksManager';
 
 interface EditTransactionModalProps {
   isOpen: boolean;
@@ -294,6 +295,13 @@ export default function EditTransactionModal({
                 rows={3}
               />
             </div>
+
+            {/* Links */}
+            {transactionId && (
+              <div className="border-t pt-4">
+                <TransactionLinksManager transactionId={transactionId} />
+              </div>
+            )}
 
             {/* Botões */}
             <div className="flex gap-2 justify-end pt-4">

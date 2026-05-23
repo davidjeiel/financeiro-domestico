@@ -81,6 +81,7 @@ export const transactions = mysqlTable("transactions", {
   installments: int("installments").default(1), // Número de parcelas
   currentInstallment: int("currentInstallment").default(1), // Parcela atual
   notes: text("notes"),
+  links: text("links"), // JSON array de links [{url, title, description}]
   isPaid: int("isPaid").default(0).notNull(), // 0 = não pago, 1 = pago
   paidDate: timestamp("paidDate"), // Data do pagamento
   createdAt: timestamp("createdAt").defaultNow().notNull(),

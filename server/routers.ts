@@ -27,6 +27,12 @@ import {
   getSavedFilter,
   updateSavedFilter,
   deleteSavedFilter,
+  getTransactionLinks,
+  addTransactionLink,
+  updateTransactionLink,
+  deleteTransactionLink,
+  setTransactionLinks,
+  TransactionLink,
 } from "./db";
 import { GoogleSheetsManager } from "./googleSheetsIntegration";
 
@@ -317,6 +323,69 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(({ input }) =>
         deleteSavedFilter(input.id)
+      ),
+  }),
+
+  transactionLinks: router({
+    list: protectedProcedure
+      .input(z.object({ transactionId: z.number() }))
+      .query(({ input }) =>
+        getTransactionLinks(input.transactionId)
+      ),
+    add: protectedProcedure
+      .input(
+        z.object({
+          transactionId: z.number(),
+          link: z.object({
+            url: z.string().url("URL inválida"),
+            title: z.string().optional(),
+            description: z.string().optional(),
+          }),
+        })
+      )
+      .mutation(({ input }) =>
+        addTransactionLink(input.transactionId, input.link)
+      ),
+    update: protectedProcedure
+      .input(
+        z.object({
+          transactionId: z.number(),
+          linkIndex: z.number(),
+          link: z.object({
+            url: z.string().url("URL inválida"),
+            title: z.string().optional(),
+            description: z.string().optional(),
+          }),
+        })
+      )
+      .mutation(({ input }) =>
+        updateTransactionLink(input.transactionId, input.linkIndex, input.link)
+      ),
+    delete: protectedProcedure
+      .input(
+        z.object({
+          transactionId: z.number(),
+          linkIndex: z.number(),
+        })
+      )
+      .mutation(({ input }) =>
+        deleteTransactionLink(input.transactionId, input.linkIndex)
+      ),
+    setAll: protectedProcedure
+      .input(
+        z.object({
+          transactionId: z.number(),
+          links: z.array(
+            z.object({
+              url: z.string().url("URL inválida"),
+              title: z.string().optional(),
+              description: z.string().optional(),
+            })
+          ),
+        })
+      )
+      .mutation(({ input }) =>
+        setTransactionLinks(input.transactionId, input.links)
       ),
   }),
 });

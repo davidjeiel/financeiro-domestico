@@ -491,3 +491,70 @@ export async function deleteTransaction(id: number) {
   if (!db) throw new Error("Database not available");
   return db.delete(transactions).where(eq(transactions.id, id));
 }
+
+// Link management for transactions
+export interface TransactionLink {
+  url: string;
+  title?: string;
+  description?: string;
+}
+
+export async function getTransactionLinks(transactionId: number): Promise<TransactionLink[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.select().from(transactions).where(eq(transactions.id, transactionId)).limit(1);
+  if (!result.length || !result[0].links) return [];
+  
+  try {
+    return JSON.parse(result[0].links);
+  } catch {
+    return [];
+  }
+}
+
+export async function addTransactionLink(transactionId: number, link: TransactionLink): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const currentLinks = await getTransactionLinks(transactionId);
+  const updatedLinks = [...currentLinks, link];
+  
+  await db.update(transactions)
+    .set({ links: JSON.stringify(updatedLinks) })
+    .where(eq(transactions.id, transactionId));
+}
+
+export async function updateTransactionLink(transactionId: number, linkIndex: number, link: TransactionLink): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const currentLinks = await getTransactionLinks(transactionId);
+  if (linkIndex >= 0 && linkIndex < currentLinks.length) {
+    currentLinks[linkIndex] = link;
+    await db.update(transactions)
+      .set({ links: JSON.stringify(currentLinks) })
+      .where(eq(transactions.id, transactionId));
+  }
+}
+
+export async function deleteTransactionLink(transactionId: number, linkIndex: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const currentLinks = await getTransactionLinks(transactionId);
+  const updatedLinks = currentLinks.filter((_, index) => index !== linkIndex);
+  
+  await db.update(transactions)
+    .set({ links: updatedLinks.length > 0 ? JSON.stringify(updatedLinks) : null })
+    .where(eq(transactions.id, transactionId));
+}
+
+export async function setTransactionLinks(transactionId: number, links: TransactionLink[]): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(transactions)
+    .set({ links: links.length > 0 ? JSON.stringify(links) : null })
+    .where(eq(transactions.id, transactionId));
+}
