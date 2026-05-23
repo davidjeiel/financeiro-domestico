@@ -22,6 +22,11 @@ import {
   updateUserGoogleSheets,
   getUserGoogleSheetsConfig,
   disconnectGoogleSheets,
+  getSavedFilters,
+  createSavedFilter,
+  getSavedFilter,
+  updateSavedFilter,
+  deleteSavedFilter,
 } from "./db";
 import { GoogleSheetsManager } from "./googleSheetsIntegration";
 
@@ -262,6 +267,56 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(({ input }) =>
         deleteTypology(input.id)
+      ),
+  }),
+
+  savedFilter: router({
+    list: protectedProcedure.query(({ ctx }) =>
+      getSavedFilters(ctx.user.id)
+    ),
+    get: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(({ input }) =>
+        getSavedFilter(input.id)
+      ),
+    create: protectedProcedure
+      .input(
+        z.object({
+          name: z.string().min(1),
+          startDate: z.date().optional(),
+          endDate: z.date().optional(),
+          categories: z.array(z.string()).optional(),
+          types: z.array(z.enum(["income", "expense", "credit_card"])).optional(),
+          minAmount: z.number().optional(),
+          maxAmount: z.number().optional(),
+          isDefault: z.boolean().optional(),
+        })
+      )
+      .mutation(({ ctx, input }) =>
+        createSavedFilter(ctx.user.id, input)
+      ),
+    update: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          name: z.string().optional(),
+          startDate: z.date().optional(),
+          endDate: z.date().optional(),
+          categories: z.array(z.string()).optional(),
+          types: z.array(z.enum(["income", "expense", "credit_card"])).optional(),
+          minAmount: z.number().optional(),
+          maxAmount: z.number().optional(),
+          isDefault: z.boolean().optional(),
+        })
+      )
+      .mutation(({ input }) => {
+        const { id, ...updates } = input;
+        return updateSavedFilter(id, updates);
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ input }) =>
+        deleteSavedFilter(input.id)
       ),
   }),
 });

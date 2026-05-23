@@ -19,6 +19,7 @@ import BulkActionsFAB from "@/components/BulkActionsFAB";
 import BulkEditModal from "@/components/BulkEditModal";
 import BulkDeleteModal from "@/components/BulkDeleteModal";
 import EditTransactionModal from "@/components/EditTransactionModal";
+import SavedFiltersSelector from "@/components/SavedFiltersSelector";
 
 const transactionSchema = z.object({
   type: z.enum(["income", "expense", "credit_card"]),
@@ -434,7 +435,7 @@ export default function TransactionsEnhanced() {
           </h2>
           
           {/* Filters */}
-          <div className="mb-6 p-4 bg-muted rounded-lg">
+          <div className="mb-6 p-4 bg-muted rounded-lg space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Data Inicial</label>
@@ -466,6 +467,22 @@ export default function TransactionsEnhanced() {
                   Limpar Filtros
                 </Button>
               </div>
+            </div>
+            
+            {/* Saved Filters Selector */}
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <span className="text-sm font-medium text-muted-foreground">Filtros Salvos:</span>
+              <SavedFiltersSelector
+                currentFilters={{
+                  startDate: filterStartDate,
+                  endDate: filterEndDate,
+                }}
+                onFilterSelect={(filter) => {
+                  if (filter.startDate) setFilterStartDate(filter.startDate);
+                  if (filter.endDate) setFilterEndDate(filter.endDate);
+                }}
+                onFilterSave={() => {}}
+              />
             </div>
           </div>
           {transactions && transactions.length > 0 ? (() => {
