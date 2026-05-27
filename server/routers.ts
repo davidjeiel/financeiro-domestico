@@ -87,6 +87,27 @@ export const appRouter = router({
       .query(({ input }) =>
         getCompetencyTransactions(input.competencyId)
       ),
+    listWithFilters: protectedProcedure
+      .input(
+        z.object({
+          competencyId: z.number(),
+          category: z.string().optional(),
+          type: z.enum(["income", "expense", "credit_card"]).optional(),
+          creditCardId: z.number().optional(),
+          description: z.string().optional(),
+        })
+      )
+      .query(async ({ input }) => {
+        const transactions = await getCompetencyTransactions(input.competencyId);
+        
+        return transactions.filter((tx) => {
+          if (input.category && tx.category !== input.category) return false;
+          if (input.type && tx.type !== input.type) return false;
+          if (input.creditCardId && tx.creditCardId !== input.creditCardId) return false;
+          if (input.description && !tx.description?.toLowerCase().includes(input.description.toLowerCase())) return false;
+          return true;
+        });
+      }),
     get: protectedProcedure
       .input(z.object({ id: z.number() }))
       .query(({ input }) =>

@@ -1,4 +1,3 @@
-import React, { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import DashboardLayoutCustom from "@/components/DashboardLayoutCustom";
 import { Card } from "@/components/ui/card";
@@ -12,9 +11,19 @@ import { Plus, Trash2, Loader2, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import LoadingOverlay from "@/components/LoadingOverlay";
 import TransactionLinksManager from "@/components/TransactionLinksManager";
+import { ColumnSelector, ColumnConfig } from "@/components/ColumnSelector";
+import { AdvancedFilters, TransactionFilters } from "@/components/AdvancedFilters";
+
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useState } from "react";
+
+const CATEGORIES = {
+  income: ["Salário", "Freelance", "Investimentos", "Outros"],
+  expense: ["Alimentação", "Transporte", "Moradia", "Saúde", "Educação", "Lazer", "Outros"],
+  credit_card: ["Alimentação", "Compras", "Serviços", "Outros"],
+};
 
 const transactionSchema = z.object({
   type: z.enum(["income", "expense", "credit_card"]),
@@ -28,21 +37,66 @@ const transactionSchema = z.object({
 
 type TransactionFormData = z.infer<typeof transactionSchema>;
 
-const CATEGORIES = {
-  income: ["Salário", "Freelance", "Investimentos", "Outros"],
-  expense: ["Alimentação", "Transporte", "Moradia", "Saúde", "Educação", "Lazer", "Outros"],
-  credit_card: ["Alimentação", "Compras", "Serviços", "Outros"],
-};
+
 
 export default function Transactions() {
   const { data: currentCompetency } = trpc.competency.current.useQuery();
-  const { data: transactions, isLoading } = trpc.transaction.list.useQuery(
-    { competencyId: currentCompetency?.id || 0 },
-    { enabled: !!currentCompetency }
-  );
   const { data: creditCards } = trpc.creditCard.list.useQuery();
   const createMutation = trpc.transaction.create.useMutation();
   const utils = trpc.useUtils();
+
+  const defaultColumns: ColumnConfig[] = [
+    { id: 'date', label: 'Data', visible: true },
+    { id: 'description', label: 'Descricao', visible: true },
+    { id: 'category', label: 'Categoria', visible: true },
+    { id: 'type', label: 'Tipo', visible: true },
+    { id: 'amount', label: 'Valor', visible: true },
+    { id: 'creditCard', label: 'Cartao', visible: true },
+    { id: 'status', label: 'Status', visible: true },
+    { id: 'links', label: 'Links', visible: true },
+    { id: 'actions', label: 'Acoes', visible: true },
+  ];
+
+  const [filters, setFilters] = useState<TransactionFilters>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('transactionFilters');
+      return saved ? JSON.parse(saved) : {};
+    }
+    return {};
+  });
+  
+  const [columns, setColumns] = useState<ColumnConfig[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('transactionColumns');
+      return saved ? JSON.parse(saved) : defaultColumns;
+    }
+    return defaultColumns;
+  });
+
+  const handleFiltersChange = (newFilters: TransactionFilters) => {
+    setFilters(newFilters);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('transactionFilters', JSON.stringify(newFilters));
+    }
+  };
+
+  const handleColumnsChange = (newColumns: ColumnConfig[]) => {
+    setColumns(newColumns);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('transactionColumns', JSON.stringify(newColumns));
+    }
+  };
+
+  const { data: transactions, isLoading } = trpc.transaction.listWithFilters.useQuery(
+    {
+      competencyId: currentCompetency?.id || 0,
+      category: filters.category,
+      type: filters.type,
+      creditCardId: filters.creditCardId ? parseInt(filters.creditCardId) : undefined,
+      description: filters.description,
+    },
+    { enabled: !!currentCompetency }
+  );
 
   const [open, setOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<"income" | "expense" | "credit_card">("expense");
@@ -383,9 +437,25 @@ export default function Transactions() {
 
         {/* Transactions List */}
         <Card className="p-6">
-          <h2 className="text-xl font-semibold text-foreground mb-4">
-            Lançamentos - {currentCompetency?.name}
-          </h2>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold text-foreground">
+              Lançamentos - {currentCompetency?.name}
+            </h2>
+            <div className="flex gap-2">
+              <ColumnSelector columns={columns} onColumnsChange={handleColumnsChange} />
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="mb-6">
+            <AdvancedFilters
+              filters={filters}
+              onFiltersChange={handleFiltersChange}
+              creditCards={creditCards}
+              onClearFilters={() => handleFiltersChange({})}
+            />
+          </div>
+
           {transactions && transactions.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full">
