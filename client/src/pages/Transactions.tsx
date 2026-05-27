@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/formatting";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Loader2, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import LoadingOverlay from "@/components/LoadingOverlay";
 import TransactionLinksManager from "@/components/TransactionLinksManager";
@@ -48,6 +48,7 @@ export default function Transactions() {
   const [selectedType, setSelectedType] = useState<"income" | "expense" | "credit_card">("expense");
   const [newTransactionId, setNewTransactionId] = useState<number | null>(null);
   const [links, setLinks] = useState<Array<{ url: string; title?: string; description?: string }>>([]);
+  const setLinksMutation = trpc.transactionLinks.setAll.useMutation();
 
   const {
     register,
@@ -69,7 +70,7 @@ export default function Transactions() {
     if (!currentCompetency) return;
 
     try {
-      await createMutation.mutateAsync({
+      const result = await createMutation.mutateAsync({
         competencyId: currentCompetency.id,
         type: data.type,
         category: data.category,
@@ -80,8 +81,22 @@ export default function Transactions() {
         notes: data.notes,
       });
 
+      // Se houver links a salvar, salve-os
+      if (links.length > 0 && result?.id) {
+        try {
+          await setLinksMutation.mutateAsync({
+            transactionId: result.id,
+            links: links,
+          });
+        } catch (linkError) {
+          console.warn("Erro ao salvar links:", linkError);
+        }
+      }
+
       toast.success("Lançamento criado com sucesso!");
       reset();
+      setLinks([]);
+      setNewTransactionId(null);
       setOpen(false);
       utils.transaction.list.invalidate({ competencyId: currentCompetency.id });
     } catch (error) {
@@ -237,21 +252,105 @@ export default function Transactions() {
                   />
                 </div>
 
-                {/* Links Preview */}
-                {links.length > 0 && (
-                  <div className="border-t pt-3">
-                    <p className="text-sm font-medium text-foreground mb-2">
-                      Links a adicionar: {links.length}
-                    </p>
-                    <div className="space-y-1">
-                      {links.map((link, idx) => (
-                        <div key={idx} className="text-xs text-muted-foreground truncate">
-                          {link.title || link.url}
-                        </div>
-                      ))}
+                {/* Links Manager */}
+                <div className="border-t pt-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Link2 className="w-5 h-5 text-muted-foreground" />
+                        <label className="text-sm font-medium text-foreground">Links Relacionados</label>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-2"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          // Toggle link input form
+                          const linkInput = document.getElementById('new-link-url');
+                          if (linkInput) {
+                            linkInput.focus();
+                          }
+                        }}
+                      >
+                        <Plus className="w-4 h-4" />
+                        Adicionar Link
+                      </Button>
                     </div>
+
+                    {/* Quick Link Input */}
+                    <div className="space-y-2 p-3 bg-muted rounded-lg">
+                      <input
+                        id="new-link-url"
+                        type="url"
+                        placeholder="https://exemplo.com"
+                        className="input-elegant w-full text-sm"
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const urlInput = e.currentTarget;
+                            const titleInput = document.getElementById('new-link-title') as HTMLInputElement;
+                            if (urlInput.value.trim()) {
+                              try {
+                                new URL(urlInput.value);
+                                setLinks([...links, {
+                                  url: urlInput.value,
+                                  title: titleInput?.value || undefined,
+                                }]);
+                                urlInput.value = '';
+                                if (titleInput) titleInput.value = '';
+                                toast.success('Link adicionado!');
+                              } catch {
+                                toast.error('URL inválida');
+                              }
+                            }
+                          }
+                        }}
+                      />
+                      <input
+                        id="new-link-title"
+                        type="text"
+                        placeholder="Título do link (opcional)"
+                        className="input-elegant w-full text-sm"
+                      />
+                    </div>
+
+                    {/* Links List */}
+                    {links.length > 0 && (
+                      <div className="space-y-2">
+                        {links.map((link, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-start justify-between gap-2 p-2 bg-muted rounded border border-border text-sm"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-foreground truncate">
+                                {link.title || link.url}
+                              </p>
+                              {link.title && (
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {link.url}
+                                </p>
+                              )}
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setLinks(links.filter((_, i) => i !== idx));
+                                toast.success('Link removido');
+                              }}
+                              className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
 
                 <div className="flex gap-2 pt-4">
                   <Button
