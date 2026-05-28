@@ -22,6 +22,7 @@ import EditTransactionModal from "@/components/EditTransactionModal";
 import SavedFiltersSelector from "@/components/SavedFiltersSelector";
 import { ColumnSelector, ColumnConfig } from "@/components/ColumnSelector";
 import { AdvancedFilters, TransactionFilters } from "@/components/AdvancedFilters";
+import TransactionLinksManager from "@/components/TransactionLinksManager";
 
 const transactionSchema = z.object({
   type: z.enum(["income", "expense", "credit_card"]),
@@ -118,6 +119,9 @@ export default function TransactionsEnhanced() {
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
   const [showDeleteIndividual, setShowDeleteIndividual] = useState(false);
   const [deletingTransactionId, setDeletingTransactionId] = useState<number | null>(null);
+  const [newTransactionLinks, setNewTransactionLinks] = useState<Array<{ title: string; url: string }>>([]);
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   const handleAdvancedFiltersChange = (newFilters: TransactionFilters) => {
     setAdvancedFilters(newFilters);
@@ -131,6 +135,11 @@ export default function TransactionsEnhanced() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('transactionColumns', JSON.stringify(newColumns));
     }
+  };
+
+  const handleSort = (columnId: string, order: 'asc' | 'desc') => {
+    setSortColumn(columnId);
+    setSortOrder(order);
   };
 
   const {
@@ -209,12 +218,34 @@ export default function TransactionsEnhanced() {
       });
 
       toast.success("Movimentação criada com sucesso!");
+      
+      // Salvar links se houver
+      if (newTransactionLinks.length > 0) {
+        const lastTransaction = (await utils.transaction.list.getData({ competencyId: currentCompetency.id }))?.[0];
+        if (lastTransaction) {
+          for (const link of newTransactionLinks) {
+            try {
+              await trpc.transactionLinks.add.useMutation().mutateAsync({
+                transactionId: lastTransaction.id,
+                link: {
+                  url: link.url,
+                  title: link.title,
+                },
+              });
+            } catch (linkError) {
+              console.error("Erro ao salvar link:", linkError);
+            }
+          }
+        }
+      }
+      
       reset({
         type: "expense",
         transactionType: "simple",
         transactionDate: new Date().toISOString().split("T")[0],
       });
       setSelectedType("expense");
+      setNewTransactionLinks([]);
       setOpen(false);
       utils.transaction.list.invalidate({ competencyId: currentCompetency.id });
     } catch (error: any) {
@@ -440,6 +471,59 @@ export default function TransactionsEnhanced() {
                   />
                 </div>
 
+                {/* Links Manager */}
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">
+                    Links
+                  </label>
+                  <div className="space-y-2">
+                    {newTransactionLinks.map((link, idx) => (
+                      <div key={idx} className="flex items-center gap-2 p-2 bg-muted rounded">
+                        <div className="flex-1 truncate">
+                          <p className="text-sm font-medium text-foreground truncate">{link.title || 'Sem título'}</p>
+                          <p className="text-xs text-muted-foreground truncate">{link.url}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setNewTransactionLinks(newTransactionLinks.filter((_, i) => i !== idx))}
+                          className="text-red-600 hover:text-red-700 text-sm font-medium"
+                        >
+                          Remover
+                        </button>
+                      </div>
+                    ))}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Título do link"
+                        id="linkTitle"
+                        className="input-elegant flex-1"
+                      />
+                      <input
+                        type="url"
+                        placeholder="URL"
+                        id="linkUrl"
+                        className="input-elegant flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const titleInput = document.getElementById('linkTitle') as HTMLInputElement;
+                          const urlInput = document.getElementById('linkUrl') as HTMLInputElement;
+                          if (titleInput.value && urlInput.value) {
+                            setNewTransactionLinks([...newTransactionLinks, { title: titleInput.value, url: urlInput.value }]);
+                            titleInput.value = '';
+                            urlInput.value = '';
+                          }
+                        }}
+                        className="px-3 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 text-sm font-medium"
+                      >
+                        Adicionar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex gap-2 pt-4">
                   <Button
                     type="button"
@@ -476,7 +560,7 @@ export default function TransactionsEnhanced() {
             <h2 className="text-xl font-semibold text-foreground">
               Movimentações - {currentCompetency?.name}
             </h2>
-            <ColumnSelector columns={columns} onColumnsChange={handleColumnsChange} />
+            <ColumnSelector columns={columns} onColumnsChange={handleColumnsChange} onSort={handleSort} />
           </div>
           
           {/* Filters */}

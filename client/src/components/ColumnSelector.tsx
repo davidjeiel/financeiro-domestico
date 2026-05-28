@@ -13,11 +13,13 @@ export interface ColumnConfig {
 interface ColumnSelectorProps {
   columns: ColumnConfig[];
   onColumnsChange: (columns: ColumnConfig[]) => void;
+  onSort?: (columnId: string, order: 'asc' | 'desc') => void;
 }
 
 export const ColumnSelector: React.FC<ColumnSelectorProps> = ({
   columns,
   onColumnsChange,
+  onSort,
 }) => {
   const handleToggleColumn = (columnId: string) => {
     const updated = columns.map((col) =>
@@ -36,6 +38,10 @@ export const ColumnSelector: React.FC<ColumnSelectorProps> = ({
     onColumnsChange(updated);
   };
 
+  const handleSort = (columnId: string, order: 'asc' | 'desc') => {
+    onSort?.(columnId, order);
+  };
+
   const visibleCount = columns.filter((col) => col.visible).length;
 
   return (
@@ -51,7 +57,7 @@ export const ColumnSelector: React.FC<ColumnSelectorProps> = ({
           Colunas ({visibleCount})
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
+      <DropdownMenuContent align="end" className="w-64">
         <div className="p-3 space-y-3">
           <div className="flex items-center justify-between gap-2 mb-2">
             <p className="text-sm font-medium">Exibir colunas</p>
@@ -89,6 +95,22 @@ export const ColumnSelector: React.FC<ColumnSelectorProps> = ({
                 >
                   {column.label}
                 </label>
+                <div className="flex gap-0.5 ml-auto">
+                  <button
+                    onClick={() => handleSort(column.id, 'asc')}
+                    className="text-xs px-1.5 py-0.5 rounded hover:bg-primary/10 text-muted-foreground hover:text-foreground transition-colors"
+                    title="Ordenar A-Z ou 1-9"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    onClick={() => handleSort(column.id, 'desc')}
+                    className="text-xs px-1.5 py-0.5 rounded hover:bg-primary/10 text-muted-foreground hover:text-foreground transition-colors"
+                    title="Ordenar Z-A ou 9-1"
+                  >
+                    ↓
+                  </button>
+                </div>
               </div>
             ))}
           </div>
