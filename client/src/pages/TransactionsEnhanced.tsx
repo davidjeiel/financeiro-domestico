@@ -20,6 +20,8 @@ import BulkEditModal from "@/components/BulkEditModal";
 import BulkDeleteModal from "@/components/BulkDeleteModal";
 import EditTransactionModal from "@/components/EditTransactionModal";
 import SavedFiltersSelector from "@/components/SavedFiltersSelector";
+import { ColumnSelector, ColumnConfig } from "@/components/ColumnSelector";
+import { AdvancedFilters, TransactionFilters } from "@/components/AdvancedFilters";
 
 const transactionSchema = z.object({
   type: z.enum(["income", "expense", "credit_card"]),
@@ -80,8 +82,34 @@ export default function TransactionsEnhanced() {
     credit_card: [],
   });
   // Ações individuais removidas - usar seleção em lote com botões flutuantes
+  const defaultColumns: ColumnConfig[] = [
+    { id: 'date', label: 'Data', visible: true },
+    { id: 'description', label: 'Descrição', visible: true },
+    { id: 'category', label: 'Categoria', visible: true },
+    { id: 'type', label: 'Tipo', visible: true },
+    { id: 'amount', label: 'Valor', visible: true },
+    { id: 'creditCard', label: 'Cartão', visible: true },
+    { id: 'status', label: 'Status', visible: true },
+    { id: 'links', label: 'Links', visible: true },
+    { id: 'actions', label: 'Ações', visible: true },
+  ];
+
   const [filterStartDate, setFilterStartDate] = useState<string>("");
   const [filterEndDate, setFilterEndDate] = useState<string>("");
+  const [advancedFilters, setAdvancedFilters] = useState<TransactionFilters>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('transactionAdvancedFilters');
+      return saved ? JSON.parse(saved) : {};
+    }
+    return {};
+  });
+  const [columns, setColumns] = useState<ColumnConfig[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('transactionColumns');
+      return saved ? JSON.parse(saved) : defaultColumns;
+    }
+    return defaultColumns;
+  });
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<number[]>([]);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
@@ -90,6 +118,20 @@ export default function TransactionsEnhanced() {
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
   const [showDeleteIndividual, setShowDeleteIndividual] = useState(false);
   const [deletingTransactionId, setDeletingTransactionId] = useState<number | null>(null);
+
+  const handleAdvancedFiltersChange = (newFilters: TransactionFilters) => {
+    setAdvancedFilters(newFilters);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('transactionAdvancedFilters', JSON.stringify(newFilters));
+    }
+  };
+
+  const handleColumnsChange = (newColumns: ColumnConfig[]) => {
+    setColumns(newColumns);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('transactionColumns', JSON.stringify(newColumns));
+    }
+  };
 
   const {
     register,
@@ -430,9 +472,12 @@ export default function TransactionsEnhanced() {
 
         {/* Transactions List */}
         <Card className="p-6">
-          <h2 className="text-xl font-semibold text-foreground mb-4">
-            Movimentações - {currentCompetency?.name}
-          </h2>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold text-foreground">
+              Movimentações - {currentCompetency?.name}
+            </h2>
+            <ColumnSelector columns={columns} onColumnsChange={handleColumnsChange} />
+          </div>
           
           {/* Filters */}
           <div className="mb-6 p-4 bg-muted rounded-lg space-y-4">
@@ -460,6 +505,7 @@ export default function TransactionsEnhanced() {
                   onClick={() => {
                     setFilterStartDate("");
                     setFilterEndDate("");
+                    handleAdvancedFiltersChange({});
                   }}
                   variant="outline"
                   className="w-full"
@@ -468,6 +514,14 @@ export default function TransactionsEnhanced() {
                 </Button>
               </div>
             </div>
+            
+            {/* Advanced Filters */}
+            <AdvancedFilters
+              filters={advancedFilters}
+              onFiltersChange={handleAdvancedFiltersChange}
+              creditCards={creditCards}
+              onClearFilters={() => handleAdvancedFiltersChange({})}
+            />
             
             {/* Saved Filters Selector */}
             <div className="flex items-center justify-between pt-2 border-t border-border">
