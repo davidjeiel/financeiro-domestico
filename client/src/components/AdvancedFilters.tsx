@@ -4,7 +4,6 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
 import { X, Filter } from 'lucide-react';
-// CATEGORIES será passado como prop ou definido localmente
 
 export interface TransactionFilters {
   category?: string;
@@ -95,16 +94,16 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                 Tipo
               </label>
               <Select
-                value={filters.type || ''}
+                value={filters.type || 'all'}
                 onValueChange={(value) =>
-                  handleFilterChange('type', value || undefined)
+                  handleFilterChange('type', value === 'all' ? undefined : (value as 'income' | 'expense' | 'credit_card'))
                 }
               >
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue placeholder="Todos os tipos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos os tipos</SelectItem>
+                  <SelectItem value="all">Todos os tipos</SelectItem>
                   <SelectItem value="income">Receita</SelectItem>
                   <SelectItem value="expense">Despesa</SelectItem>
                   <SelectItem value="credit_card">Cartão de Crédito</SelectItem>
@@ -118,16 +117,16 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                 Categoria
               </label>
               <Select
-                value={filters.category || ''}
+                value={filters.category || 'all'}
                 onValueChange={(value) =>
-                  handleFilterChange('category', value || undefined)
+                  handleFilterChange('category', value === 'all' ? undefined : value)
                 }
               >
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue placeholder="Todas as categorias" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas as categorias</SelectItem>
+                  <SelectItem value="all">Todas as categorias</SelectItem>
                   {categories.map((cat: string) => (
                     <SelectItem key={cat} value={cat}>
                       {cat}
@@ -144,16 +143,16 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                   Conta
                 </label>
                 <Select
-                  value={filters.accountId || ''}
+                  value={filters.accountId || 'all'}
                   onValueChange={(value) =>
-                    handleFilterChange('accountId', value || undefined)
+                    handleFilterChange('accountId', value === 'all' ? undefined : value)
                   }
                 >
                   <SelectTrigger className="h-8 text-sm">
                     <SelectValue placeholder="Todas as contas" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todas as contas</SelectItem>
+                    <SelectItem value="all">Todas as contas</SelectItem>
                     {accounts.map((account) => (
                       <SelectItem key={account.id} value={account.id.toString()}>
                         {account.name}
@@ -171,16 +170,16 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                   Cartão de Crédito
                 </label>
                 <Select
-                  value={filters.creditCardId || ''}
+                  value={filters.creditCardId || 'all'}
                   onValueChange={(value) =>
-                    handleFilterChange('creditCardId', value || undefined)
+                    handleFilterChange('creditCardId', value === 'all' ? undefined : value)
                   }
                 >
                   <SelectTrigger className="h-8 text-sm">
                     <SelectValue placeholder="Todos os cartões" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos os cartões</SelectItem>
+                    <SelectItem value="all">Todos os cartões</SelectItem>
                     {creditCards.map((card) => (
                       <SelectItem key={card.id} value={card.id.toString()}>
                         {card.name}
