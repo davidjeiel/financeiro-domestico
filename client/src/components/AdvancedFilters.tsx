@@ -52,7 +52,7 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
   };
   const categories = filters.type
     ? defaultCategories[filters.type as keyof typeof defaultCategories] || []
-    : Object.values(defaultCategories).flat();
+    : Array.from(new Set(Object.values(defaultCategories).flat()));
 
   return (
     <div className="space-y-3">
