@@ -23,6 +23,7 @@ import SavedFiltersSelector from "@/components/SavedFiltersSelector";
 import { ColumnSelector, ColumnConfig } from "@/components/ColumnSelector";
 import { AdvancedFilters, TransactionFilters } from "@/components/AdvancedFilters";
 import TransactionLinksManager from "@/components/TransactionLinksManager";
+import { ColumnHeader } from "@/components/ColumnHeader";
 
 const transactionSchema = z.object({
   type: z.enum(["income", "expense", "credit_card"]),
@@ -122,6 +123,7 @@ export default function TransactionsEnhanced() {
   const [newTransactionLinks, setNewTransactionLinks] = useState<Array<{ title: string; url: string }>>([]);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
 
   const handleAdvancedFiltersChange = (newFilters: TransactionFilters) => {
     setAdvancedFilters(newFilters);
@@ -140,6 +142,18 @@ export default function TransactionsEnhanced() {
   const handleSort = (columnId: string, order: 'asc' | 'desc') => {
     setSortColumn(columnId);
     setSortOrder(order);
+  };
+
+  const handleColumnFilter = (columnId: string, value: string | undefined) => {
+    setColumnFilters((prev) => {
+      const newFilters = { ...prev };
+      if (value === undefined || value === '') {
+        delete newFilters[columnId];
+      } else {
+        newFilters[columnId] = value;
+      }
+      return newFilters;
+    });
   };
 
   const {
@@ -624,12 +638,51 @@ export default function TransactionsEnhanced() {
             </div>
           </div>
           {transactions && transactions.length > 0 ? (() => {
-            const filteredTransactions = transactions.filter(t => {
+            let filteredTransactions = transactions.filter(t => {
               const txDate = new Date(t.transactionDate).toISOString().split('T')[0];
               if (filterStartDate && txDate < filterStartDate) return false;
               if (filterEndDate && txDate > filterEndDate) return false;
               return true;
             });
+
+            if (columnFilters.transactionDate) {
+              filteredTransactions = filteredTransactions.filter(t =>
+                new Date(t.transactionDate).toISOString().split('T')[0] === columnFilters.transactionDate
+              );
+            }
+            if (columnFilters.description) {
+              filteredTransactions = filteredTransactions.filter(t =>
+                t.description?.toLowerCase().includes(columnFilters.description.toLowerCase())
+              );
+            }
+            if (columnFilters.category) {
+              filteredTransactions = filteredTransactions.filter(t => t.category === columnFilters.category);
+            }
+            if (columnFilters.type) {
+              filteredTransactions = filteredTransactions.filter(t => t.type === columnFilters.type);
+            }
+
+            if (sortColumn) {
+              filteredTransactions = [...filteredTransactions].sort((a, b) => {
+                let aVal: any = a[sortColumn as keyof typeof a];
+                let bVal: any = b[sortColumn as keyof typeof b];
+
+                if (sortColumn === 'amount') {
+                  aVal = parseFloat(aVal);
+                  bVal = parseFloat(bVal);
+                } else if (sortColumn === 'transactionDate') {
+                  aVal = new Date(aVal).getTime();
+                  bVal = new Date(bVal).getTime();
+                } else if (typeof aVal === 'string') {
+                  aVal = aVal.toLowerCase();
+                  bVal = bVal.toLowerCase();
+                }
+
+                if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+                if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+                return 0;
+              });
+            }
 
             const totals = filteredTransactions.reduce((acc, t) => {
               const amount = parseFloat(t.amount);
@@ -694,11 +747,77 @@ export default function TransactionsEnhanced() {
                               className="w-4 h-4 cursor-pointer"
                             />
                           </th>
-                          <th className="text-left py-3 px-4 font-semibold text-foreground">Data</th>
-                          <th className="text-left py-3 px-4 font-semibold text-foreground">Descrição</th>
-                          <th className="text-left py-3 px-4 font-semibold text-foreground">Categoria</th>
-                          <th className="text-left py-3 px-4 font-semibold text-foreground">Tipo</th>
-                          <th className="text-right py-3 px-4 font-semibold text-foreground">Valor</th>
+                          <th className="text-left py-3 px-4">
+                            <ColumnHeader
+                              label="Data"
+                              columnId="transactionDate"
+                              sortColumn={sortColumn}
+                              sortOrder={sortOrder}
+                              onSort={handleSort}
+                              onFilter={handleColumnFilter}
+                              filterType="date"
+                              currentFilterValue={columnFilters.transactionDate}
+                            />
+                          </th>
+                          <th className="text-left py-3 px-4">
+                            <ColumnHeader
+                              label="Descrição"
+                              columnId="description"
+                              sortColumn={sortColumn}
+                              sortOrder={sortOrder}
+                              onSort={handleSort}
+                              onFilter={handleColumnFilter}
+                              filterType="text"
+                              currentFilterValue={columnFilters.description}
+                            />
+                          </th>
+                          <th className="text-left py-3 px-4">
+                            <ColumnHeader
+                              label="Categoria"
+                              columnId="category"
+                              sortColumn={sortColumn}
+                              sortOrder={sortOrder}
+                              onSort={handleSort}
+                              onFilter={handleColumnFilter}
+                              filterType="select"
+                              filterOptions={[
+                                { label: "Alimentação", value: "Alimentação" },
+                                { label: "Transporte", value: "Transporte" },
+                                { label: "Moradia", value: "Moradia" },
+                                { label: "Saúde", value: "Saúde" },
+                                { label: "Educação", value: "Educação" },
+                                { label: "Lazer", value: "Lazer" },
+                              ]}
+                              currentFilterValue={columnFilters.category}
+                            />
+                          </th>
+                          <th className="text-left py-3 px-4">
+                            <ColumnHeader
+                              label="Tipo"
+                              columnId="type"
+                              sortColumn={sortColumn}
+                              sortOrder={sortOrder}
+                              onSort={handleSort}
+                              onFilter={handleColumnFilter}
+                              filterType="select"
+                              filterOptions={[
+                                { label: "Receita", value: "income" },
+                                { label: "Despesa", value: "expense" },
+                                { label: "Cartão", value: "credit_card" },
+                              ]}
+                              currentFilterValue={columnFilters.type}
+                            />
+                          </th>
+                          <th className="text-right py-3 px-4">
+                            <ColumnHeader
+                              label="Valor"
+                              columnId="amount"
+                              sortColumn={sortColumn}
+                              sortOrder={sortOrder}
+                              onSort={handleSort}
+                              filterType="text"
+                            />
+                          </th>
                           <th className="text-center py-3 px-4 font-semibold text-foreground">Pago</th>
                           <th className="text-center py-3 px-4 font-semibold text-foreground">Ações</th>
                         </tr>
