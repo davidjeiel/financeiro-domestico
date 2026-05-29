@@ -861,8 +861,11 @@ export default function TransactionsEnhanced() {
                       </thead>
                       <tbody>
                         {filteredTransactions.map((transaction) => (
-                    <tr key={transaction.id} className="border-b border-border hover:bg-muted">
-                      <td className="py-3 px-4">
+                    <tr key={transaction.id} className="border-b border-border hover:bg-muted cursor-pointer" onClick={() => {
+                      setEditingTransactionId(transaction.id);
+                      setShowEditIndividual(true);
+                    }}>
+                      <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selectedTransactionIds.includes(transaction.id)}
@@ -901,7 +904,7 @@ export default function TransactionsEnhanced() {
                       }`}>
                         {transaction.type === "income" ? "+" : "-"}{formatCurrency(transaction.amount)}
                       </td>
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={transaction.isPaid === 1}
@@ -915,18 +918,7 @@ export default function TransactionsEnhanced() {
                           title={transaction.isPaid === 1 ? "Marcar como não pago" : "Marcar como pago"}
                         />
                       </td>
-                      <td className="py-3 px-4 text-center flex gap-2 justify-center">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setEditingTransactionId(transaction.id);
-                            setShowEditIndividual(true);
-                          }}
-                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                        >
-                          Editar
-                        </Button>
+                      <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                         <Button
                           size="sm"
                           variant="ghost"
@@ -934,9 +926,12 @@ export default function TransactionsEnhanced() {
                             setDeletingTransactionId(transaction.id);
                             setShowDeleteIndividual(true);
                           }}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1 h-auto"
+                          title="Deletar transação"
                         >
-                          Deletar
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
                         </Button>
                       </td>
                     </tr>
