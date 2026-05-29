@@ -24,6 +24,7 @@ import { ColumnSelector, ColumnConfig } from "@/components/ColumnSelector";
 import { AdvancedFilters, TransactionFilters } from "@/components/AdvancedFilters";
 import TransactionLinksManager from "@/components/TransactionLinksManager";
 import { ColumnHeader } from "@/components/ColumnHeader";
+import { FilterPriorityManager } from "@/components/FilterPriorityManager";
 
 const transactionSchema = z.object({
   type: z.enum(["income", "expense", "credit_card"]),
@@ -124,6 +125,7 @@ export default function TransactionsEnhanced() {
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const [filterPriority, setFilterPriority] = useState<string[]>([]);
 
   const handleAdvancedFiltersChange = (newFilters: TransactionFilters) => {
     setAdvancedFilters(newFilters);
@@ -149,11 +151,19 @@ export default function TransactionsEnhanced() {
       const newFilters = { ...prev };
       if (value === undefined || value === '') {
         delete newFilters[columnId];
+        setFilterPriority((p) => p.filter((f) => f !== columnId));
       } else {
         newFilters[columnId] = value;
+        if (!filterPriority.includes(columnId)) {
+          setFilterPriority((p) => [columnId, ...p]);
+        }
       }
       return newFilters;
     });
+  };
+
+  const handleFilterPriorityChange = (newPriority: string[]) => {
+    setFilterPriority(newPriority);
   };
 
   const {
@@ -604,12 +614,20 @@ export default function TransactionsEnhanced() {
                     setFilterStartDate("");
                     setFilterEndDate("");
                     handleAdvancedFiltersChange({});
+                    setColumnFilters({});
+                    setFilterPriority([]);
                   }}
                   variant="outline"
-                  className="w-full"
+                  className="flex-1"
                 >
                   Limpar Filtros
                 </Button>
+                <FilterPriorityManager
+                  filters={columnFilters}
+                  priority={filterPriority}
+                  onPriorityChange={handleFilterPriorityChange}
+                  onFilterRemove={(columnId) => handleColumnFilter(columnId, undefined)}
+                />
               </div>
             </div>
             
@@ -660,6 +678,10 @@ export default function TransactionsEnhanced() {
             }
             if (columnFilters.type) {
               filteredTransactions = filteredTransactions.filter(t => t.type === columnFilters.type);
+            }
+            if (columnFilters.isPaid) {
+              const isPaidValue = columnFilters.isPaid === '1' ? 1 : 0;
+              filteredTransactions = filteredTransactions.filter(t => t.isPaid === isPaidValue);
             }
 
             if (sortColumn) {
@@ -818,7 +840,22 @@ export default function TransactionsEnhanced() {
                               filterType="text"
                             />
                           </th>
-                          <th className="text-center py-3 px-4 font-semibold text-foreground">Pago</th>
+                          <th className="text-center py-3 px-4">
+                            <ColumnHeader
+                              label="Pago"
+                              columnId="isPaid"
+                              sortColumn={sortColumn}
+                              sortOrder={sortOrder}
+                              onSort={handleSort}
+                              onFilter={handleColumnFilter}
+                              filterType="select"
+                              filterOptions={[
+                                { label: "Pagos", value: "1" },
+                                { label: "Não Pagos", value: "0" },
+                              ]}
+                              currentFilterValue={columnFilters.isPaid}
+                            />
+                          </th>
                           <th className="text-center py-3 px-4 font-semibold text-foreground">Ações</th>
                         </tr>
                       </thead>
