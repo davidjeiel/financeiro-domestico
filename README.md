@@ -1,5 +1,7 @@
 # Controle Financeiro Doméstico
 
+**Demo:** https://davidjeiel.github.io/financeiro-domestico/
+
 Aplicação web para controle de finanças pessoais. Organiza receitas, despesas e cartões de crédito por competências mensais, com relatórios, calendário e exportação de dados.
 
 ---
@@ -11,6 +13,7 @@ Aplicação web para controle de finanças pessoais. Organiza receitas, despesas
 - [Configuração do ambiente](#configuração-do-ambiente)
 - [Modos de login](#modos-de-login)
 - [Desenvolvimento sem containers](#desenvolvimento-sem-containers)
+- [Deploy no GitHub Pages](#deploy-no-github-pages)
 - [Scripts disponíveis](#scripts-disponíveis)
 - [Páginas da aplicação](#páginas-da-aplicação)
 - [Banco de dados e migrações](#banco-de-dados-e-migrações)
@@ -201,6 +204,53 @@ pnpm dev
 ```
 
 Acesse [http://localhost:3000](http://localhost:3000).
+
+---
+
+## Deploy no GitHub Pages
+
+O frontend é automaticamente construído e publicado no GitHub Pages a cada push na branch `main` via [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
+
+URL de acesso: **https://davidjeiel.github.io/financeiro-domestico/**
+
+### Ativando o GitHub Pages no repositório (primeira vez)
+
+1. Acesse **Settings → Pages** no repositório
+2. Em **Source**, selecione **GitHub Actions**
+3. Faça um push na branch `main` (ou acione manualmente em **Actions → Deploy to GitHub Pages → Run workflow**)
+
+### Observações importantes
+
+> O GitHub Pages só serve arquivos **estáticos**. Ao acessar a aplicação publicada, a landing page (`/`) carrega normalmente. As demais páginas (dashboard, lançamentos etc.) necessitam de uma API backend em funcionamento.
+
+**Para usar o app completo em produção** você precisa hospedar o backend (Node.js + MySQL) em um serviço como [Railway](https://railway.app), [Render](https://render.com) ou [Fly.io](https://fly.io), e configurar o CORS e as variáveis de ambiente abaixo.
+
+### Variáveis de ambiente para o build de produção
+
+Configure como **Secrets** em **Settings → Secrets and variables → Actions**:
+
+| Secret | Descrição |
+|---|---|
+| `VITE_OAUTH_PORTAL_URL` | URL do portal de login OAuth (ex: Google) |
+
+Para alterar o base path (ex: domínio próprio sem subdiretório), edite `VITE_BASE_URL` diretamente no arquivo [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml):
+
+```yaml
+VITE_BASE_URL: /   # domínio próprio
+VITE_BASE_URL: /financeiro-domestico/   # GitHub Pages padrão
+```
+
+### Arquitetura do deploy estático
+
+```
+push → main
+  └── GitHub Actions build
+        ├── pnpm install
+        ├── pnpm build:pages  (somente Vite, sem o servidor Express)
+        │     └── VITE_BASE_URL=/financeiro-domestico/
+        └── actions/deploy-pages
+              └── dist/public/ → github-pages environment
+```
 
 ---
 

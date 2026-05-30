@@ -13,30 +13,35 @@ import Export from "@/pages/Export";
 import Filters from "@/pages/Filters";
 import CompetencyConfig from "@/pages/CompetencyConfig";
 import RecurringAndInstallments from "@/pages/RecurringAndInstallments";
-import { Route, Switch } from "wouter";
+import { Route, Router, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 
-function Router() {
+// Remove trailing slash so wouter receives "" (root) or "/financeiro-domestico"
+const routerBase = (import.meta.env.VITE_BASE_URL ?? "/").replace(/\/$/, "");
+
+function AppRouter() {
   return (
-    <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/dashboard"} component={Dashboard} />
-      <Route path="/lancamentos" component={TransactionsEnhanced} />
-      <Route path={"/cards"} component={CreditCards} />
-      <Route path={"/invoices"} component={InvoicesEnhanced} />
-      <Route path={"/calendar"} component={Calendar} />
-      <Route path={"/reports"} component={Reports} />
-      <Route path={"/export"} component={Export} />
-      <Route path={"/filters"} component={Filters} />
-      <Route path={"/competency-config"} component={CompetencyConfig} />
-      <Route path={"/recurring-installments"} component={RecurringAndInstallments} />
-      <Route path={"/settings"} component={Settings} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
-      <Route component={NotFound} />
-    </Switch>
+    <Router base={routerBase}>
+      <Switch>
+        <Route path={"/"} component={Home} />
+        <Route path={"/dashboard"} component={Dashboard} />
+        <Route path="/lancamentos" component={TransactionsEnhanced} />
+        <Route path={"/cards"} component={CreditCards} />
+        <Route path={"/invoices"} component={InvoicesEnhanced} />
+        <Route path={"/calendar"} component={Calendar} />
+        <Route path={"/reports"} component={Reports} />
+        <Route path={"/export"} component={Export} />
+        <Route path={"/filters"} component={Filters} />
+        <Route path={"/competency-config"} component={CompetencyConfig} />
+        <Route path={"/recurring-installments"} component={RecurringAndInstallments} />
+        <Route path={"/settings"} component={Settings} />
+        <Route path={"/404"} component={NotFound} />
+        {/* Final fallback route */}
+        <Route component={NotFound} />
+      </Switch>
+    </Router>
   );
 }
 
@@ -49,7 +54,7 @@ function App() {
       >
         <TooltipProvider>
           <Toaster />
-          <Router />
+          <AppRouter />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
