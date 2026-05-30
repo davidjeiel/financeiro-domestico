@@ -5,6 +5,7 @@ import Dashboard from "@/pages/Dashboard";
 import TransactionsEnhanced from "./pages/TransactionsEnhanced";
 import CreditCards from "@/pages/CreditCards";
 import Invoices from "@/pages/Invoices";
+import InvoicesEnhanced from "@/pages/InvoicesEnhanced";
 import Reports from "@/pages/Reports";
 import Calendar from "@/pages/Calendar";
 import Settings from "@/pages/Settings";
@@ -24,7 +25,7 @@ function Router() {
       <Route path={"/dashboard"} component={Dashboard} />
       <Route path="/lancamentos" component={TransactionsEnhanced} />
       <Route path={"/cards"} component={CreditCards} />
-      <Route path={"/invoices"} component={Invoices} />
+      <Route path={"/invoices"} component={InvoicesEnhanced} />
       <Route path={"/calendar"} component={Calendar} />
       <Route path={"/reports"} component={Reports} />
       <Route path={"/export"} component={Export} />

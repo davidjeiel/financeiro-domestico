@@ -52,15 +52,17 @@ export default function EditTransactionModal({
 
   useEffect(() => {
     if (transaction) {
+      const formatDateForInput = (date: Date | string | null | undefined) => {
+        if (!date) return '';
+        const d = typeof date === 'string' ? new Date(date) : date;
+        return d.toLocaleDateString('pt-BR').split('/').reverse().join('-');
+      };
+      
       setFormData({
         description: transaction.description || '',
         amount: (transaction.amount || 0).toString(),
-        transactionDate: transaction.transactionDate
-          ? new Date(transaction.transactionDate).toISOString().split('T')[0]
-          : '',
-        dueDate: transaction.dueDate
-          ? new Date(transaction.dueDate).toISOString().split('T')[0]
-          : '',
+        transactionDate: formatDateForInput(transaction.transactionDate),
+        dueDate: formatDateForInput(transaction.dueDate),
         notes: transaction.notes || '',
         category: transaction.category || '__placeholder__',
       });

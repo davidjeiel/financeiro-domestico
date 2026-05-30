@@ -166,6 +166,12 @@ export default function TransactionsEnhanced() {
     setFilterPriority(newPriority);
   };
 
+  // Função para obter data local no formato YYYY-MM-DD
+  const getLocalDateString = () => {
+    const today = new Date();
+    return today.toLocaleDateString('pt-BR').split('/').reverse().join('-');
+  };
+
   const {
     register,
     handleSubmit,
@@ -178,7 +184,7 @@ export default function TransactionsEnhanced() {
     defaultValues: {
       type: "expense",
       transactionType: "simple",
-      transactionDate: new Date().toISOString().split("T")[0],
+      transactionDate: getLocalDateString(),
     },
   });
 
@@ -266,7 +272,7 @@ export default function TransactionsEnhanced() {
       reset({
         type: "expense",
         transactionType: "simple",
-        transactionDate: new Date().toISOString().split("T")[0],
+        transactionDate: getLocalDateString(),
       });
       setSelectedType("expense");
       setNewTransactionLinks([]);
