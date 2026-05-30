@@ -180,9 +180,49 @@
 - [ ] Testar criação de parcelamentos com 180 parcelas
 
 ## Fase 26: Correções Críticas de Bugs
-- [x] Corrigir bug de timezone nas datas (20/04 salvando como 19/04) - Usando Date.UTC
+- [x] Corrigir bug de timezone nas datas (20/04 salvando como 19/04) - Usando toLocaleDateString
 - [x] Remover opção de GitHub das configurações - Removido da aba de configurações
 - [x] Corrigir sincronização com Google Sheets para salvar dados realmente - Adicionado procedure syncTransactions
+
+## Fase 42: Filtros Salvos e Links em Transações
+- [x] Implementar seletor de filtros salvos na tela de transações
+- [x] Permitir salvar combinações de filtros com nome customizável
+- [x] Adicionar funcionalidade de vincular URLs a transações
+- [x] Permitir adicionar/editar/deletar links no cadastro e edição
+- [x] Exibir links em modal de visualização
+- [x] Todos os 67 testes passando
+
+## Fase 43: Organização Avançada de Transações
+- [x] Implementar seletor de colunas visíveis na tabela
+- [x] Adicionar filtros avançados (categoria, tipo, cartão, descrição)
+- [x] Implementar ordenação por coluna (A-Z, Z-A, 1-9, 9-1)
+- [x] Adicionar filtro por status de pagamento (Pago/Não Pago)
+- [x] Implementar gerenciador de prioridade de filtros
+- [x] Persistir preferências no localStorage
+- [x] Todos os 67 testes passando
+
+## Fase 44: Interface de Transações Melhorada
+- [x] Remover botão "Editar" com texto
+- [x] Transformar botão "Deletar" em ícone de lixeira
+- [x] Fazer linha clicável para abrir modal de edição
+- [x] Adicionar stopPropagation em checkbox e botão deletar
+- [x] Todos os 67 testes passando
+
+## Fase 45: Correção de Timezone
+- [x] Corrigir problema de datas sendo registradas com dia anterior
+- [x] Usar toLocaleDateString em vez de toISOString
+- [x] Atualizar TransactionsEnhanced com getLocalDateString
+- [x] Atualizar EditTransactionModal com formatDateForInput
+- [x] Todos os 67 testes passando
+
+## Fase 46: Tela de Faturas Melhorada
+- [x] Criar página InvoicesEnhanced com visualização de transações
+- [x] Implementar filtros avançados na tela de faturas
+- [x] Adicionar seletor de colunas na tela de faturas
+- [x] Implementar ordenação de transações por coluna
+- [x] Exibir transações de cada cartão dentro da fatura
+- [x] Integrar com App.tsx para usar nova página
+- [x] Todos os 67 testes passando
 
 
 ## Fase 27: Seletor de Categorias e Edição em Lote
@@ -326,3 +366,13 @@
 - [x] Manter informações de total e total pago
 - [x] Testar fluxo completo - 25 testes passando
 - [x] TypeScript compilando sem erros
+
+## Fase 47: Próximas Melhorias (Backlog)
+- [ ] Adicionar filtro por intervalo de valores
+- [ ] Implementar busca global por descrição/categoria
+- [ ] Adicionar indicadores visuais de links nas transações
+- [ ] Implementar exportação de dados filtrados (CSV/PDF)
+- [ ] Adicionar atalhos de teclado para filtros rápidos
+- [ ] Migrar preferências para servidor (sincronizar entre dispositivos)
+- [ ] Implementar sincronização real com Google Sheets
+- [ ] Adicionar notificações de vencimento de faturas

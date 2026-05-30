@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import DashboardLayoutCustom from "@/components/DashboardLayoutCustom";
 import { Card } from "@/components/ui/card";
@@ -6,7 +6,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/formatting";
 import { AlertCircle, CheckCircle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AdvancedFilters, TransactionFilters } from "@/components/AdvancedFilters";
 import { ColumnSelector, ColumnConfig } from "@/components/ColumnSelector";
 import { ColumnHeader } from "@/components/ColumnHeader";
 
@@ -14,9 +13,14 @@ const DEFAULT_COLUMNS: ColumnConfig[] = [
   { id: "date", label: "Data", visible: true },
   { id: "description", label: "Descrição", visible: true },
   { id: "category", label: "Categoria", visible: true },
-  { id: "type", label: "Tipo", visible: true },
   { id: "amount", label: "Valor", visible: true },
 ];
+
+interface InvoiceFilters {
+  creditCardId?: string;
+  category?: string;
+  description?: string;
+}
 
 export default function InvoicesEnhanced() {
   const { data: currentCompetency } = trpc.competency.current.useQuery();
@@ -31,14 +35,21 @@ export default function InvoicesEnhanced() {
     { enabled: !!currentCompetency }
   );
 
+  // Obter cartão com maior limite como padrão
+  const defaultCreditCardId = useMemo(() => {
+    if (!creditCards || creditCards.length === 0) return undefined;
+    const maxCard = creditCards.reduce((max, card) => 
+      (parseFloat(card.limit || "0") || 0) > (parseFloat(max.limit || "0") || 0) ? card : max
+    );
+    return maxCard.id.toString();
+  }, [creditCards]);
+
   const [columns, setColumns] = useState<ColumnConfig[]>(DEFAULT_COLUMNS);
-  const [filters, setFilters] = useState<TransactionFilters>({
+  const [filters, setFilters] = useState<InvoiceFilters>({
+    creditCardId: defaultCreditCardId,
     category: undefined,
-    type: undefined,
-    creditCardId: undefined,
     description: undefined,
   });
-  const [columnFilters, setColumnFilters] = useState<Record<string, string | undefined>>({});
   const [sortBy, setSortBy] = useState<{ column: string; direction: "asc" | "desc" } | null>(null);
 
   const getStatusIcon = (status: string) => {
@@ -85,20 +96,12 @@ export default function InvoicesEnhanced() {
         t.type === "credit_card" &&
         (!filters.creditCardId || t.creditCardId === parseInt(filters.creditCardId)) &&
         (!filters.category || t.category === filters.category) &&
-        (!filters.type || t.type === filters.type) &&
         (!filters.description || t.description?.toLowerCase().includes(filters.description.toLowerCase()))
     );
   };
 
   const handleColumnSort = (columnId: string, direction: "asc" | "desc") => {
     setSortBy({ column: columnId, direction });
-  };
-
-  const handleColumnFilter = (columnId: string, value: string) => {
-    setColumnFilters((prev) => ({
-      ...prev,
-      [columnId]: value || undefined,
-    }));
   };
 
   const sortTransactions = (txs: typeof transactions | undefined) => {
@@ -123,6 +126,18 @@ export default function InvoicesEnhanced() {
     return sorted;
   };
 
+  // Obter categorias únicas das transações de cartão
+  const availableCategories = useMemo(() => {
+    if (!transactions) return [];
+    const categories = new Set(
+      transactions
+        .filter((t) => t.type === "credit_card")
+        .map((t) => t.category)
+        .filter(Boolean)
+    );
+    return Array.from(categories).sort();
+  }, [transactions]);
+
   if (invoicesLoading || transactionsLoading) {
     return (
       <DashboardLayoutCustom>
@@ -138,19 +153,63 @@ export default function InvoicesEnhanced() {
     <DashboardLayoutCustom title="Faturas de Cartão">
       <div className="space-y-6">
         {/* Filtros e Seletor de Colunas */}
-        <div className="flex gap-4 items-center">
+        <div className="flex gap-4 items-center flex-wrap">
           <ColumnSelector columns={columns} onColumnsChange={setColumns} />
-          <AdvancedFilters filters={filters} onFiltersChange={setFilters} />
+          
+          {/* Seletor de Cartão */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-foreground">Cartão:</label>
+            <select
+              value={filters.creditCardId || ""}
+              onChange={(e) => setFilters({ ...filters, creditCardId: e.target.value || undefined })}
+              className="px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm"
+            >
+              {creditCards?.map((card) => (
+                <option key={card.id} value={card.id}>
+                  {card.name} (Limite: {formatCurrency(parseFloat(card.limit || "0") || 0)})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filtro de Categoria */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-foreground">Categoria:</label>
+            <select
+              value={filters.category || ""}
+              onChange={(e) => setFilters({ ...filters, category: e.target.value || undefined })}
+              className="px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm"
+            >
+              <option value="">Todas</option>
+              {availableCategories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filtro de Descrição */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-foreground">Descrição:</label>
+            <input
+              type="text"
+              placeholder="Buscar..."
+              value={filters.description || ""}
+              onChange={(e) => setFilters({ ...filters, description: e.target.value || undefined })}
+              className="px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm"
+            />
+          </div>
+
           <Button
             variant="outline"
             onClick={() => {
               setFilters({
+                creditCardId: defaultCreditCardId,
                 category: undefined,
-                type: undefined,
-                creditCardId: undefined,
                 description: undefined,
               });
-              setColumnFilters({});
+              setSortBy(null);
             }}
           >
             Limpar Filtros
@@ -238,7 +297,6 @@ export default function InvoicesEnhanced() {
                                       sortColumn={sortBy?.column}
                                       sortOrder={sortBy?.direction}
                                       onSort={(colId, dir) => handleColumnSort(colId, dir)}
-                                      onFilter={(colId, val) => handleColumnFilter(colId, val || "")}
                                     />
                                   </th>
                                 )
@@ -255,31 +313,9 @@ export default function InvoicesEnhanced() {
                                       {col.id === "date" && formatDate(transaction.transactionDate)}
                                       {col.id === "description" && (transaction.description || "-")}
                                       {col.id === "category" && transaction.category}
-                                      {col.id === "type" && (
-                                        <span
-                                          className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                            transaction.type === "income"
-                                              ? "bg-green-500/10 text-green-600"
-                                              : transaction.type === "expense"
-                                              ? "bg-red-500/10 text-red-600"
-                                              : "bg-blue-500/10 text-blue-600"
-                                          }`}
-                                        >
-                                          {transaction.type === "income"
-                                            ? "Receita"
-                                            : transaction.type === "expense"
-                                            ? "Despesa"
-                                            : "Cartão"}
-                                        </span>
-                                      )}
                                       {col.id === "amount" && (
-                                        <span
-                                          className={`font-semibold ${
-                                            transaction.type === "income" ? "text-green-600" : "text-red-600"
-                                          }`}
-                                        >
-                                          {transaction.type === "income" ? "+" : "-"}
-                                          {formatCurrency(transaction.amount)}
+                                        <span className="font-semibold text-red-600">
+                                          -{formatCurrency(transaction.amount)}
                                         </span>
                                       )}
                                     </td>
