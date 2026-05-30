@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import DashboardLayoutCustom from "@/components/DashboardLayoutCustom";
 import { Card } from "@/components/ui/card";
@@ -89,14 +89,29 @@ export default function InvoicesEnhanced() {
     return creditCards?.find((c) => c.id === cardId)?.name || `Cartão ${cardId}`;
   };
 
-  const getInvoiceTransactions = (invoiceId: number) => {
-    if (!transactions) return [];
+  const getInvoiceTransactions = (invoice: any) => {
+    if (!transactions || !invoice) return [];
+    
+    // Vincular transacoes a fatura por:
+    // 1. Mesmo cartao de credito
+    // 2. Data da transacao entre fechamento e vencimento
+    // 3. Aplicar filtros do usuario
     return transactions.filter(
-      (t) =>
-        t.type === "credit_card" &&
-        (!filters.creditCardId || t.creditCardId === parseInt(filters.creditCardId)) &&
-        (!filters.category || t.category === filters.category) &&
-        (!filters.description || t.description?.toLowerCase().includes(filters.description.toLowerCase()))
+      (t) => {
+        const txDate = new Date(t.transactionDate);
+        const closingDate = new Date(invoice.closingDate);
+        const dueDate = new Date(invoice.dueDate);
+        
+        return (
+          t.type === "credit_card" &&
+          t.creditCardId === invoice.creditCardId &&
+          txDate >= closingDate &&
+          txDate <= dueDate &&
+          (!filters.creditCardId || t.creditCardId === parseInt(filters.creditCardId)) &&
+          (!filters.category || t.category === filters.category) &&
+          (!filters.description || t.description?.toLowerCase().includes(filters.description.toLowerCase()))
+        );
+      }
     );
   };
 
@@ -220,7 +235,7 @@ export default function InvoicesEnhanced() {
         {invoices && invoices.length > 0 ? (
           <div className="grid grid-cols-1 gap-6">
             {invoices.map((invoice) => {
-              const invoiceTxs = getInvoiceTransactions(invoice.id);
+              const invoiceTxs = getInvoiceTransactions(invoice);
               const sortedTxs = sortTransactions(invoiceTxs);
 
               return (

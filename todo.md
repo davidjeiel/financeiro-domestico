@@ -376,3 +376,15 @@
 - [ ] Migrar preferências para servidor (sincronizar entre dispositivos)
 - [ ] Implementar sincronização real com Google Sheets
 - [ ] Adicionar notificações de vencimento de faturas
+
+## Fase 48: Correção de Exibição de Faturas e Agrupamento por Vencimento
+- [x] Debugar lógica de getInvoiceTransactions na página InvoicesEnhanced
+- [x] Corrigir vinculação de transações a faturas por data (closingDate <= txDate <= dueDate)
+- [x] Implementar agrupamento de débitos por data de vencimento na tela de Lançamentos
+- [x] Adicionar helper getInvoiceDueDate para obter data de vencimento de transação
+- [x] Adicionar busca de faturas em TransactionsEnhanced
+- [x] Implementar ordenação padrão: cartões agrupados por vencimento, depois outros por data
+- [x] Criar 4 novos testes para validar vinculação e agrupamento (invoiceTransactions.test.ts)
+- [x] Total de 71 testes passando com sucesso
+- [x] TypeScript compilando sem erros
+- [x] Servidor rodando normalmente

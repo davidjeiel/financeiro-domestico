@@ -64,6 +64,29 @@ export default function TransactionsEnhanced() {
     { enabled: !!currentCompetency }
   );
   const { data: creditCards } = trpc.creditCard.list.useQuery();
+  const { data: invoices } = trpc.invoice.list.useQuery(
+    { competencyId: currentCompetency?.id || 0 },
+    { enabled: !!currentCompetency }
+  );
+  
+  // Helper para obter data de vencimento de uma transacao de cartao
+  const getInvoiceDueDate = (transaction: any): Date | null => {
+    if (transaction.type !== 'credit_card' || !invoices) return null;
+    
+    const txDate = new Date(transaction.transactionDate);
+    const invoice = invoices.find(inv => {
+      const closingDate = new Date(inv.closingDate);
+      const dueDate = new Date(inv.dueDate);
+      return (
+        inv.creditCardId === transaction.creditCardId &&
+        txDate >= closingDate &&
+        txDate <= dueDate
+      );
+    });
+    
+    return invoice ? new Date(invoice.dueDate) : null;
+  };
+  
   const createMutation = trpc.transaction.create.useMutation();
   const utils = trpc.useUtils();
   const queryClient = useQueryClient();
@@ -709,6 +732,28 @@ export default function TransactionsEnhanced() {
                 if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
                 if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
                 return 0;
+              });
+            } else {
+              // Agrupar transacoes de cartao por data de vencimento por padrao
+              filteredTransactions = [...filteredTransactions].sort((a, b) => {
+                const aIsCC = a.type === 'credit_card';
+                const bIsCC = b.type === 'credit_card';
+                
+                // Se ambas sao cartao, ordenar por data de vencimento
+                if (aIsCC && bIsCC) {
+                  const aDueDate = getInvoiceDueDate(a)?.getTime() || 0;
+                  const bDueDate = getInvoiceDueDate(b)?.getTime() || 0;
+                  if (aDueDate !== bDueDate) return aDueDate - bDueDate;
+                  // Se mesma data de vencimento, ordenar por data da transacao
+                  return new Date(a.transactionDate).getTime() - new Date(b.transactionDate).getTime();
+                }
+                
+                // Cartoes vem primeiro
+                if (aIsCC) return -1;
+                if (bIsCC) return 1;
+                
+                // Nao cartoes ordenados por data
+                return new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime();
               });
             }
 
