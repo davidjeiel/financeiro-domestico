@@ -7,4 +7,6 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  localLoginEnabled: process.env.LOCAL_LOGIN_ENABLED === "true",
+  localLoginPassword: process.env.LOCAL_LOGIN_PASSWORD ?? "",
 };

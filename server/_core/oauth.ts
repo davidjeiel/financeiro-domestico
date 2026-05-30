@@ -2,6 +2,7 @@ import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import type { Express, Request, Response } from "express";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
+import { ENV } from "./env";
 import { sdk } from "./sdk";
 
 function getQueryParam(req: Request, key: string): string | undefined {
@@ -10,6 +11,41 @@ function getQueryParam(req: Request, key: string): string | undefined {
 }
 
 export function registerOAuthRoutes(app: Express) {
+  app.post("/api/local-login", async (req: Request, res: Response) => {
+    if (!ENV.localLoginEnabled) {
+      res.status(403).json({ error: "Local login is not enabled" });
+      return;
+    }
+
+    const { password } = req.body as { password?: string };
+    if (!password || password !== ENV.localLoginPassword) {
+      res.status(401).json({ error: "Senha incorreta" });
+      return;
+    }
+
+    try {
+      await db.upsertUser({
+        openId: ENV.ownerOpenId,
+        name: "Admin Local",
+        email: null,
+        loginMethod: "local",
+        lastSignedIn: new Date(),
+      });
+
+      const sessionToken = await sdk.createSessionToken(ENV.ownerOpenId, {
+        name: "Admin Local",
+        expiresInMs: ONE_YEAR_MS,
+      });
+
+      const cookieOptions = getSessionCookieOptions(req);
+      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[LocalLogin] Failed", error);
+      res.status(500).json({ error: "Erro interno ao autenticar" });
+    }
+  });
+
   app.get("/api/oauth/callback", async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
     const state = getQueryParam(req, "state");

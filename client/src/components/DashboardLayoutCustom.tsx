@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Menu, X, LogOut, Settings } from "lucide-react";
 import { useLocation } from "wouter";
 import { getLoginUrl } from "@/const";
@@ -8,6 +9,84 @@ import { getLoginUrl } from "@/const";
 interface DashboardLayoutCustomProps {
   children: React.ReactNode;
   title?: string;
+}
+
+const IS_LOCAL = !import.meta.env.VITE_OAUTH_PORTAL_URL;
+
+function LoginScreen() {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  if (IS_LOCAL) {
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setError("");
+      setLoading(true);
+      try {
+        const res = await fetch("/api/local-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password }),
+        });
+        if (res.ok) {
+          window.location.href = "/dashboard";
+        } else {
+          const data = await res.json().catch(() => ({}));
+          setError((data as { error?: string }).error ?? "Senha incorreta");
+        }
+      } catch {
+        setError("Erro de conexão com o servidor");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-full max-w-sm space-y-6 p-8 rounded-2xl border border-border bg-card shadow-lg">
+          <div className="text-center space-y-1">
+            <h1 className="text-2xl font-bold text-foreground">Controle Financeiro</h1>
+            <p className="text-sm text-muted-foreground">Ambiente local — entre com a senha de teste</p>
+          </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground" htmlFor="local-password">
+                Senha
+              </label>
+              <Input
+                id="local-password"
+                type="password"
+                placeholder="Senha de acesso local"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                autoFocus
+                required
+              />
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Entrando…" : "Entrar"}
+            </Button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-center space-y-4">
+        <h1 className="text-4xl font-bold text-foreground">Controle Financeiro</h1>
+        <p className="text-muted-foreground">Gerencie suas finanças com elegância</p>
+        <a href={getLoginUrl()}>
+          <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+            Entrar com Google
+          </Button>
+        </a>
+      </div>
+    </div>
+  );
 }
 
 export default function DashboardLayoutCustom({
@@ -24,19 +103,7 @@ export default function DashboardLayoutCustom({
   };
 
   if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold text-foreground mb-4">Controle Financeiro</h1>
-          <p className="text-muted-foreground mb-8">Gerencie suas finanças com elegância</p>
-          <a href={getLoginUrl()}>
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-              Entrar com Google
-            </Button>
-          </a>
-        </div>
-      </div>
-    );
+    return <LoginScreen />;
   }
 
   return (
