@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +40,7 @@ export default function SavedFiltersSelector({
   const { data: savedFilters, isLoading } = (trpc.savedFilter?.list?.useQuery?.() || { data: [], isLoading: false }) as any;
   const createMutation = (trpc.savedFilter?.create?.useMutation?.() || { mutateAsync: async () => {} }) as any;
   const deleteMutation = (trpc.savedFilter?.delete?.useMutation?.() || { mutateAsync: async () => {} }) as any;
+  const deleteAllMutation = (trpc.savedFilter?.deleteAll?.useMutation?.() || { mutateAsync: async () => {} }) as any;
   const utils = trpc.useUtils?.() as any;
 
   const [selectedFilterId, setSelectedFilterId] = useState<string>("");
@@ -66,7 +67,7 @@ export default function SavedFiltersSelector({
         maxAmount: selected.maxAmount ? parseFloat(selected.maxAmount) : undefined,
       };
       onFilterSelect(filter);
-      toast.success(`Filtro "${selected.name}" carregado!`);
+      toast.success(`Filtro "${selected.name}" carregado e aplicado!`);
     }
   };
 
@@ -95,7 +96,7 @@ export default function SavedFiltersSelector({
       await utils.savedFilter.list.invalidate();
       setFilterName("");
       setShowSaveDialog(false);
-      toast.success("Filtro salvo com sucesso!");
+      toast.success("Filtro salvo e aplicado com sucesso!");
     } catch (error) {
       toast.error("Erro ao salvar filtro");
     } finally {
@@ -116,8 +117,21 @@ export default function SavedFiltersSelector({
     }
   };
 
+  const handleDeleteAllFilters = async () => {
+    if (!confirm("Tem certeza que deseja deletar TODOS os filtros salvos? Esta ação não pode ser desfeita.")) return;
+
+    try {
+      await deleteAllMutation.mutateAsync();
+      await utils.savedFilter.list.invalidate();
+      setSelectedFilterId("");
+      toast.success("Todos os filtros foram deletados!");
+    } catch (error) {
+      toast.error("Erro ao deletar filtros");
+    }
+  };
+
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 flex-wrap">
       {/* Selector */}
       <Select value={selectedFilterId} onValueChange={handleSelectFilter}>
         <SelectTrigger className="w-48">
@@ -149,8 +163,23 @@ export default function SavedFiltersSelector({
             handleDeleteFilter(parseInt(selectedFilterId))
           }
           className="text-red-600 hover:text-red-700 hover:bg-red-50"
+          title="Deletar este filtro"
         >
           <Trash2 className="w-4 h-4" />
+        </Button>
+      )}
+
+      {/* Delete All Button */}
+      {savedFilters && savedFilters.length > 0 && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleDeleteAllFilters}
+          className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+          title="Deletar todos os filtros salvos"
+        >
+          <Trash2 className="w-4 h-4 mr-1" />
+          Limpar Tudo
         </Button>
       )}
 

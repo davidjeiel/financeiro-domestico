@@ -1,6 +1,6 @@
 import { eq, and, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, competencies, creditCards, transactions, invoices, typologies, savedFilters, recurringTransactions, installments, installmentTransactions, InsertCreditCard, InsertTransaction, InsertTypology, InsertRecurringTransaction, InsertInstallment, InsertInstallmentTransaction } from "../drizzle/schema";
+import { InsertUser, users, competencies, creditCards, transactions, invoices, typologies, savedFilters, recurringTransactions, installments, installmentTransactions, accounts, Account, InsertAccount, InsertCreditCard, InsertTransaction, InsertTypology, InsertRecurringTransaction, InsertInstallment, InsertInstallmentTransaction } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -370,6 +370,14 @@ export async function deleteSavedFilter(filterId: number) {
   return db.delete(savedFilters).where(eq(savedFilters.id, filterId));
 }
 
+// Deletar todos os filtros de um usuário (para limpeza)
+export async function deleteAllSavedFilters(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.delete(savedFilters).where(eq(savedFilters.userId, userId));
+}
+
 // Configuração de Competência Padrão
 export async function updateUserCompetencyConfig(
   userId: number,
@@ -557,4 +565,45 @@ export async function setTransactionLinks(transactionId: number, links: Transact
   await db.update(transactions)
     .set({ links: links.length > 0 ? JSON.stringify(links) : null })
     .where(eq(transactions.id, transactionId));
+}
+
+
+// Contas (Bank Accounts)
+export async function createAccount(data: InsertAccount) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(accounts).values(data);
+}
+
+export async function getUserAccounts(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.select().from(accounts).where(
+    and(eq(accounts.userId, userId), eq(accounts.isActive, 1))
+  ).orderBy(desc(accounts.createdAt));
+}
+
+export async function getAccountById(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.select().from(accounts).where(eq(accounts.id, id)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function updateAccount(id: number, data: Partial<InsertAccount>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(accounts).set(data).where(eq(accounts.id, id));
+}
+
+export async function updateAccountBalance(id: number, newBalance: number | string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(accounts).set({ balance: newBalance.toString() as any }).where(eq(accounts.id, id));
+}
+
+export async function deleteAccount(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(accounts).set({ isActive: 0 }).where(eq(accounts.id, id));
 }

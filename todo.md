@@ -388,3 +388,31 @@
 - [x] Total de 71 testes passando com sucesso
 - [x] TypeScript compilando sem erros
 - [x] Servidor rodando normalmente
+
+
+## Fase 49: Limpeza de Filtros, Execução Automática e Menu de Contas
+- [ ] Limpar todos os filtros de teste salvos do banco de dados
+- [ ] Implementar execução automática de filtros ao salvar novo filtro
+- [ ] Implementar execução automática de filtros ao selecionar filtro salvo
+- [ ] Implementar diálogo de seleção múltipla de cartões quando tipo for "Cartão"
+- [ ] Criar página/menu de gerenciamento de contas
+- [ ] Adicionar campo de saldo em contas
+- [ ] Implementar funcionalidade de ajuste de saldo de contas
+- [ ] Criar testes para novas funcionalidades
+- [ ] Validar todas as mudanças
+
+
+## Fase 49: Limpeza de Filtros e Novas Funcionalidades
+
+- [x] Adicionar procedure `deleteAll` para limpar todos os filtros salvos
+- [x] Modificar SavedFiltersSelector para executar filtros automaticamente ao selecionar
+- [x] Modificar SavedFiltersSelector para executar filtros automaticamente ao salvar
+- [x] Adicionar botão "Limpar Tudo" para deletar todos os filtros de teste
+- [x] Criar componente CreditCardMultiSelect para seleção múltipla de cartões
+- [x] Integrar seleção múltipla de cartões no AdvancedFilters quando tipo for "Cartão"
+- [x] Criar tabela `accounts` no banco de dados
+- [x] Adicionar funções de gerenciamento de contas em server/db.ts
+- [x] Criar procedures de contas em server/routers.ts
+- [x] Criar página AccountsManagement.tsx com interface completa
+- [x] Implementar criar, editar, deletar e ajustar saldo de contas
+- [x] Validar todos os testes (71 testes passando)

@@ -277,3 +277,25 @@ export const installmentTransactionsRelations = relations(installmentTransaction
   installment: one(installments, { fields: [installmentTransactions.installmentId], references: [installments.id] }),
   transaction: one(transactions, { fields: [installmentTransactions.transactionId], references: [transactions.id] }),
 }));
+
+// Contas (Bank Accounts)
+export const accounts = mysqlTable("accounts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 100 }).notNull(), // Ex: "Conta Corrente", "Poupança"
+  type: mysqlEnum("type", ["checking", "savings", "investment"]).default("checking").notNull(),
+  balance: decimal("balance", { precision: 12, scale: 2 }).notNull().default("0"), // Saldo atual
+  initialBalance: decimal("initialBalance", { precision: 12, scale: 2 }).notNull().default("0"), // Saldo inicial
+  color: varchar("color", { length: 7 }).default("#3B82F6"), // Cor em hex
+  isActive: int("isActive").default(1).notNull(), // 0 ou 1
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Account = typeof accounts.$inferSelect;
+export type InsertAccount = typeof accounts.$inferInsert;
+
+// Relações de contas
+export const accountsRelations = relations(accounts, ({ one }) => ({
+  user: one(users, { fields: [accounts.userId], references: [users.id] }),
+}));

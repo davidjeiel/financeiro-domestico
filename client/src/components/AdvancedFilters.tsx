@@ -4,11 +4,13 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
 import { X, Filter } from 'lucide-react';
+import CreditCardMultiSelect from './CreditCardMultiSelect';
 
 export interface TransactionFilters {
   category?: string;
   accountId?: string;
   creditCardId?: string;
+  creditCardIds?: number[]; // Para múltipla seleção
   type?: 'income' | 'expense' | 'credit_card';
   description?: string;
 }
@@ -164,7 +166,28 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
             )}
 
             {/* Credit Card Filter */}
-            {creditCards.length > 0 && (
+            {creditCards.length > 0 && filters.type === 'credit_card' ? (
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Selecionar Cartões
+                </label>
+                <CreditCardMultiSelect
+                  creditCards={creditCards.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    lastDigits: (c as any).lastDigits,
+                    color: (c as any).color,
+                  }))}
+                  selectedIds={filters.creditCardIds || []}
+                  onSelectionChange={(ids) =>
+                    onFiltersChange({
+                      ...filters,
+                      creditCardIds: ids.length === 0 ? undefined : ids,
+                    })
+                  }
+                />
+              </div>
+            ) : creditCards.length > 0 ? (
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">
                   Cartão de Crédito
@@ -188,7 +211,7 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                   </SelectContent>
                 </Select>
               </div>
-            )}
+            ) : null}
 
             {/* Description Filter */}
             <div className="sm:col-span-2">

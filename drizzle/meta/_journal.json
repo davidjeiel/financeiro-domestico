@@ -57,6 +57,13 @@
       "when": 1779553501745,
       "tag": "0007_nappy_jack_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1780237730926,
+      "tag": "0008_petite_betty_ross",
+      "breakpoints": true
     }
   ]
 }
