@@ -48,6 +48,9 @@ jobs:
           # Se vazios, o build usa a tela de login local (apenas para teste — não há backend).
           VITE_OAUTH_PORTAL_URL: ${{ secrets.VITE_OAUTH_PORTAL_URL }}
 
+      - name: Disable Jekyll
+        run: touch dist/public/.nojekyll
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
