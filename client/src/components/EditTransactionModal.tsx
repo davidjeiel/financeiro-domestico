@@ -150,68 +150,70 @@ export default function EditTransactionModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-md flex flex-col max-h-[90vh] gap-0 p-0">
+        {/* Header fixo */}
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
           <DialogTitle>Editar Transação</DialogTitle>
         </DialogHeader>
 
         {isFetching ? (
-          <div className="flex justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <div className="flex justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
           </div>
         ) : (
-          <div className="space-y-4">
-            {/* Descrição */}
-            <div>
-              <Label htmlFor="description">Descrição</Label>
-              <Input
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Ex: Compra no supermercado"
-              />
-            </div>
+          <>
+            {/* Corpo rolável */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+              {/* Descrição */}
+              <div>
+                <Label htmlFor="description">Descrição</Label>
+                <Input
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Ex: Compra no supermercado"
+                />
+              </div>
 
-            {/* Valor */}
-            <div>
-              <Label htmlFor="amount">Valor</Label>
-              <Input
-                id="amount"
-                type="number"
-                step="0.01"
-                value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                placeholder="0.00"
-              />
-            </div>
+              {/* Valor */}
+              <div>
+                <Label htmlFor="amount">Valor</Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  step="0.01"
+                  value={formData.amount}
+                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                  placeholder="0.00"
+                />
+              </div>
 
-            {/* Data da Transação */}
-            <div>
-              <Label htmlFor="transactionDate">Data da Transação</Label>
-              <Input
-                id="transactionDate"
-                type="date"
-                value={formData.transactionDate}
-                onChange={(e) => setFormData({ ...formData, transactionDate: e.target.value })}
-              />
-            </div>
+              {/* Data da Transação */}
+              <div>
+                <Label htmlFor="transactionDate">Data da Transação</Label>
+                <Input
+                  id="transactionDate"
+                  type="date"
+                  value={formData.transactionDate}
+                  onChange={(e) => setFormData({ ...formData, transactionDate: e.target.value })}
+                />
+              </div>
 
-            {/* Data de Vencimento */}
-            <div>
-              <Label htmlFor="dueDate">Data de Vencimento</Label>
-              <Input
-                id="dueDate"
-                type="date"
-                value={formData.dueDate}
-                onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-              />
-            </div>
+              {/* Data de Vencimento */}
+              <div>
+                <Label htmlFor="dueDate">Data de Vencimento</Label>
+                <Input
+                  id="dueDate"
+                  type="date"
+                  value={formData.dueDate}
+                  onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                />
+              </div>
 
-            {/* Categoria - Seletor Simples */}
-            <div>
-              <Label htmlFor="category">Categoria</Label>
-              {!showNewCategoryInput ? (
-                <div className="flex gap-2">
+              {/* Categoria */}
+              <div>
+                <Label htmlFor="category">Categoria</Label>
+                {!showNewCategoryInput ? (
                   <Select value={formData.category} onValueChange={(value) => {
                     if (value === '__new__') {
                       setShowNewCategoryInput(true);
@@ -242,71 +244,60 @@ export default function EditTransactionModal({
                       </SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Input
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
-                    placeholder="Nome da categoria"
-                    autoFocus
-                  />
-                  <div className="flex gap-2">
-                    {colorOptions.map((color) => (
-                      <button
-                        key={color}
-                        className={`w-6 h-6 rounded-full border-2 ${
-                          newCategoryColor === color ? 'border-foreground' : 'border-transparent'
-                        }`}
-                        style={{ backgroundColor: color }}
-                        onClick={() => setNewCategoryColor(color)}
-                      />
-                    ))}
+                ) : (
+                  <div className="space-y-2">
+                    <Input
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder="Nome da categoria"
+                      autoFocus
+                    />
+                    <div className="flex gap-2 flex-wrap">
+                      {colorOptions.map((color) => (
+                        <button
+                          key={color}
+                          className={`w-6 h-6 rounded-full border-2 ${
+                            newCategoryColor === color ? 'border-foreground' : 'border-transparent'
+                          }`}
+                          style={{ backgroundColor: color }}
+                          onClick={() => setNewCategoryColor(color)}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={handleCreateCategory} disabled={createTypologyMutation.isPending}>
+                        Criar
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => { setShowNewCategoryInput(false); setNewCategoryName(''); }}>
+                        Cancelar
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={handleCreateCategory}
-                      disabled={createTypologyMutation.isPending}
-                    >
-                      Criar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setShowNewCategoryInput(false);
-                        setNewCategoryName('');
-                      }}
-                    >
-                      Cancelar
-                    </Button>
-                  </div>
+                )}
+              </div>
+
+              {/* Notas */}
+              <div>
+                <Label htmlFor="notes">Notas</Label>
+                <Textarea
+                  id="notes"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder="Adicione observações sobre esta transação"
+                  rows={3}
+                />
+              </div>
+
+              {/* Links */}
+              {transactionId && (
+                <div className="border-t pt-4">
+                  <TransactionLinksManager transactionId={transactionId} />
                 </div>
               )}
             </div>
 
-            {/* Notas */}
-            <div>
-              <Label htmlFor="notes">Notas</Label>
-              <Textarea
-                id="notes"
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="Adicione observações sobre esta transação"
-                rows={3}
-              />
-            </div>
-
-            {/* Links */}
-            {transactionId && (
-              <div className="border-t pt-4">
-                <TransactionLinksManager transactionId={transactionId} />
-              </div>
-            )}
-
-            {/* Botões */}
-            <div className="flex gap-2 justify-end pt-4">
+            {/* Footer fixo */}
+            <div className="flex gap-2 justify-end px-6 py-4 border-t border-border shrink-0">
               <Button variant="outline" onClick={onClose}>
                 Cancelar
               </Button>
@@ -314,7 +305,7 @@ export default function EditTransactionModal({
                 {isLoading ? 'Salvando...' : 'Salvar'}
               </Button>
             </div>
-          </div>
+          </>
         )}
       </DialogContent>
     </Dialog>

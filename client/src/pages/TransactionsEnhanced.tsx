@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/formatting";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, Filter, ChevronDown, ChevronUp } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -136,8 +136,8 @@ export default function TransactionsEnhanced() {
     }
     return defaultColumns;
   });
+  const [showFilters, setShowFilters] = useState(false);
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<number[]>([]);
-  const [showBulkActions, setShowBulkActions] = useState(false);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [showEditIndividual, setShowEditIndividual] = useState(false);
@@ -319,6 +319,72 @@ export default function TransactionsEnhanced() {
     );
   }
 
+  // ── Filtering & sorting (hoisted so totals can be rendered outside the Card) ──
+  let filteredTransactions = (transactions ?? []).filter(t => {
+    const txDate = new Date(t.transactionDate).toISOString().split('T')[0];
+    if (filterStartDate && txDate < filterStartDate) return false;
+    if (filterEndDate && txDate > filterEndDate) return false;
+    return true;
+  });
+
+  if (columnFilters.transactionDate)
+    filteredTransactions = filteredTransactions.filter(t =>
+      new Date(t.transactionDate).toISOString().split('T')[0] === columnFilters.transactionDate);
+  if (columnFilters.description)
+    filteredTransactions = filteredTransactions.filter(t =>
+      t.description?.toLowerCase().includes(columnFilters.description.toLowerCase()));
+  if (columnFilters.category)
+    filteredTransactions = filteredTransactions.filter(t => t.category === columnFilters.category);
+  if (columnFilters.type)
+    filteredTransactions = filteredTransactions.filter(t => t.type === columnFilters.type);
+  if (columnFilters.isPaid) {
+    const isPaidValue = columnFilters.isPaid === '1' ? 1 : 0;
+    filteredTransactions = filteredTransactions.filter(t => t.isPaid === isPaidValue);
+  }
+
+  if (sortColumn) {
+    filteredTransactions = [...filteredTransactions].sort((a, b) => {
+      let aVal: any = a[sortColumn as keyof typeof a];
+      let bVal: any = b[sortColumn as keyof typeof b];
+      if (sortColumn === 'amount') { aVal = parseFloat(aVal); bVal = parseFloat(bVal); }
+      else if (sortColumn === 'transactionDate') { aVal = new Date(aVal).getTime(); bVal = new Date(bVal).getTime(); }
+      else if (typeof aVal === 'string') { aVal = aVal.toLowerCase(); bVal = bVal.toLowerCase(); }
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  } else {
+    filteredTransactions = [...filteredTransactions].sort((a, b) => {
+      const aIsCC = a.type === 'credit_card';
+      const bIsCC = b.type === 'credit_card';
+      if (aIsCC && bIsCC) {
+        const aDue = getInvoiceDueDate(a)?.getTime() ?? 0;
+        const bDue = getInvoiceDueDate(b)?.getTime() ?? 0;
+        if (aDue !== bDue) return aDue - bDue;
+        return new Date(a.transactionDate).getTime() - new Date(b.transactionDate).getTime();
+      }
+      if (aIsCC) return -1;
+      if (bIsCC) return 1;
+      return new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime();
+    });
+  }
+
+  const totals = filteredTransactions.reduce(
+    (acc, t) => {
+      const amt = parseFloat(t.amount);
+      if (t.type === 'income')       { acc.income      += amt; if (t.isPaid) acc.incomePaid      += amt; }
+      else if (t.type === 'expense') { acc.expense     += amt; if (t.isPaid) acc.expensePaid     += amt; }
+      else                           { acc.creditCard  += amt; if (t.isPaid) acc.creditCardPaid  += amt; }
+      return acc;
+    },
+    { income: 0, expense: 0, creditCard: 0, incomePaid: 0, expensePaid: 0, creditCardPaid: 0 }
+  );
+
+  const hasActiveFilters =
+    !!filterStartDate || !!filterEndDate ||
+    Object.keys(advancedFilters).length > 0 ||
+    Object.keys(columnFilters).length > 0;
+
   return (
     <DashboardLayoutCustom title="Movimentações">
       <LoadingOverlay
@@ -328,7 +394,7 @@ export default function TransactionsEnhanced() {
         status="loading"
       />
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* Add Transaction Dialog */}
         <div className="flex justify-end">
           <Dialog open={open} onOpenChange={setOpen}>
@@ -338,12 +404,15 @@ export default function TransactionsEnhanced() {
                 Nova Movimentação
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl bg-card text-card-foreground border-border max-h-96 overflow-y-auto">
-              <DialogHeader>
+            <DialogContent className="max-w-2xl flex flex-col max-h-[90vh] gap-0 p-0 bg-card text-card-foreground border-border">
+              {/* Header fixo */}
+              <DialogHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
                 <DialogTitle className="text-foreground">Nova Movimentação</DialogTitle>
               </DialogHeader>
 
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
+                {/* Corpo rolável — scroll vertical quando necessário, sem overflow horizontal */}
+                <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4">
                 {/* Type Selection */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -545,19 +614,21 @@ export default function TransactionsEnhanced() {
                         </button>
                       </div>
                     ))}
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="Título do link"
-                        id="linkTitle"
-                        className="input-elegant flex-1"
-                      />
-                      <input
-                        type="url"
-                        placeholder="URL"
-                        id="linkUrl"
-                        className="input-elegant flex-1"
-                      />
+                    <div className="grid grid-cols-1 gap-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          placeholder="Título do link"
+                          id="linkTitle"
+                          className="input-elegant w-full"
+                        />
+                        <input
+                          type="url"
+                          placeholder="URL"
+                          id="linkUrl"
+                          className="input-elegant w-full"
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={() => {
@@ -569,15 +640,18 @@ export default function TransactionsEnhanced() {
                             urlInput.value = '';
                           }
                         }}
-                        className="px-3 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 text-sm font-medium"
+                        className="px-3 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 text-sm font-medium w-full"
                       >
-                        Adicionar
+                        Adicionar Link
                       </button>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex gap-2 pt-4">
+                </div>{/* fim do corpo rolável */}
+
+                {/* Footer fixo */}
+                <div className="shrink-0 px-6 py-4 border-t border-border flex gap-2">
                   <Button
                     type="button"
                     variant="outline"
@@ -607,203 +681,130 @@ export default function TransactionsEnhanced() {
           </Dialog>
         </div>
 
+        {/* Totalizadores — sticky abaixo do header da página */}
+        {transactions && transactions.length > 0 && (
+          <div className="sticky top-0 z-10 -mx-8 px-8 pt-2 pb-3 bg-background/95 backdrop-blur-sm border-b border-border">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="p-3 bg-green-500/10 rounded-lg">
+                <p className="text-xs text-muted-foreground">Receitas</p>
+                <p className="text-base font-semibold text-green-600">+{formatCurrency(totals.income)}</p>
+                <p className="text-xs text-muted-foreground">Pago: {formatCurrency(totals.incomePaid)}</p>
+              </div>
+              <div className="p-3 bg-red-500/10 rounded-lg">
+                <p className="text-xs text-muted-foreground">Despesas</p>
+                <p className="text-base font-semibold text-red-600">-{formatCurrency(totals.expense)}</p>
+                <p className="text-xs text-muted-foreground">Pago: {formatCurrency(totals.expensePaid)}</p>
+              </div>
+              <div className="p-3 bg-blue-500/10 rounded-lg">
+                <p className="text-xs text-muted-foreground">Cartão</p>
+                <p className="text-base font-semibold text-blue-600">-{formatCurrency(totals.creditCard)}</p>
+                <p className="text-xs text-muted-foreground">Pago: {formatCurrency(totals.creditCardPaid)}</p>
+              </div>
+              <div className="p-3 bg-purple-500/10 rounded-lg">
+                <p className="text-xs text-muted-foreground">Saldo</p>
+                <p className={`text-base font-semibold ${totals.income - totals.expense - totals.creditCard >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatCurrency(totals.income - totals.expense - totals.creditCard)}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Transactions List */}
         <Card className="p-6">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-foreground">
               Movimentações - {currentCompetency?.name}
             </h2>
-            <ColumnSelector columns={columns} onColumnsChange={handleColumnsChange} onSort={handleSort} />
-          </div>
-          
-          {/* Filters */}
-          <div className="mb-6 p-4 bg-muted rounded-lg space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Data Inicial</label>
-                <input
-                  type="date"
-                  value={filterStartDate}
-                  onChange={(e) => setFilterStartDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Data Final</label>
-                <input
-                  type="date"
-                  value={filterEndDate}
-                  onChange={(e) => setFilterEndDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground"
-                />
-              </div>
-              <div className="flex items-end gap-2">
-                <Button
-                  onClick={() => {
-                    setFilterStartDate("");
-                    setFilterEndDate("");
-                    handleAdvancedFiltersChange({});
-                    setColumnFilters({});
-                    setFilterPriority([]);
-                  }}
-                  variant="outline"
-                  className="flex-1"
-                >
-                  Limpar Filtros
-                </Button>
-                <FilterPriorityManager
-                  filters={columnFilters}
-                  priority={filterPriority}
-                  onPriorityChange={handleFilterPriorityChange}
-                  onFilterRemove={(columnId) => handleColumnFilter(columnId, undefined)}
-                />
-              </div>
-            </div>
-            
-            {/* Advanced Filters */}
-            <AdvancedFilters
-              filters={advancedFilters}
-              onFiltersChange={handleAdvancedFiltersChange}
-              creditCards={creditCards}
-              onClearFilters={() => handleAdvancedFiltersChange({})}
-            />
-            
-            {/* Saved Filters Selector */}
-            <div className="flex items-center justify-between pt-2 border-t border-border">
-              <span className="text-sm font-medium text-muted-foreground">Filtros Salvos:</span>
-              <SavedFiltersSelector
-                currentFilters={{
-                  startDate: filterStartDate,
-                  endDate: filterEndDate,
-                }}
-                onFilterSelect={(filter) => {
-                  if (filter.startDate) setFilterStartDate(filter.startDate);
-                  if (filter.endDate) setFilterEndDate(filter.endDate);
-                }}
-                onFilterSave={() => {}}
-              />
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowFilters(v => !v)}
+                className={hasActiveFilters ? "border-primary text-primary" : ""}
+              >
+                <Filter className="w-4 h-4 mr-1.5" />
+                Filtros
+                {hasActiveFilters && (
+                  <span className="ml-1.5 w-2 h-2 rounded-full bg-primary inline-block" />
+                )}
+                {showFilters ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
+              </Button>
+              <ColumnSelector columns={columns} onColumnsChange={handleColumnsChange} onSort={handleSort} />
             </div>
           </div>
-          {transactions && transactions.length > 0 ? (() => {
-            let filteredTransactions = transactions.filter(t => {
-              const txDate = new Date(t.transactionDate).toISOString().split('T')[0];
-              if (filterStartDate && txDate < filterStartDate) return false;
-              if (filterEndDate && txDate > filterEndDate) return false;
-              return true;
-            });
 
-            if (columnFilters.transactionDate) {
-              filteredTransactions = filteredTransactions.filter(t =>
-                new Date(t.transactionDate).toISOString().split('T')[0] === columnFilters.transactionDate
-              );
-            }
-            if (columnFilters.description) {
-              filteredTransactions = filteredTransactions.filter(t =>
-                t.description?.toLowerCase().includes(columnFilters.description.toLowerCase())
-              );
-            }
-            if (columnFilters.category) {
-              filteredTransactions = filteredTransactions.filter(t => t.category === columnFilters.category);
-            }
-            if (columnFilters.type) {
-              filteredTransactions = filteredTransactions.filter(t => t.type === columnFilters.type);
-            }
-            if (columnFilters.isPaid) {
-              const isPaidValue = columnFilters.isPaid === '1' ? 1 : 0;
-              filteredTransactions = filteredTransactions.filter(t => t.isPaid === isPaidValue);
-            }
-
-            if (sortColumn) {
-              filteredTransactions = [...filteredTransactions].sort((a, b) => {
-                let aVal: any = a[sortColumn as keyof typeof a];
-                let bVal: any = b[sortColumn as keyof typeof b];
-
-                if (sortColumn === 'amount') {
-                  aVal = parseFloat(aVal);
-                  bVal = parseFloat(bVal);
-                } else if (sortColumn === 'transactionDate') {
-                  aVal = new Date(aVal).getTime();
-                  bVal = new Date(bVal).getTime();
-                } else if (typeof aVal === 'string') {
-                  aVal = aVal.toLowerCase();
-                  bVal = bVal.toLowerCase();
-                }
-
-                if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
-                if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
-                return 0;
-              });
-            } else {
-              // Agrupar transacoes de cartao por data de vencimento por padrao
-              filteredTransactions = [...filteredTransactions].sort((a, b) => {
-                const aIsCC = a.type === 'credit_card';
-                const bIsCC = b.type === 'credit_card';
-                
-                // Se ambas sao cartao, ordenar por data de vencimento
-                if (aIsCC && bIsCC) {
-                  const aDueDate = getInvoiceDueDate(a)?.getTime() || 0;
-                  const bDueDate = getInvoiceDueDate(b)?.getTime() || 0;
-                  if (aDueDate !== bDueDate) return aDueDate - bDueDate;
-                  // Se mesma data de vencimento, ordenar por data da transacao
-                  return new Date(a.transactionDate).getTime() - new Date(b.transactionDate).getTime();
-                }
-                
-                // Cartoes vem primeiro
-                if (aIsCC) return -1;
-                if (bIsCC) return 1;
-                
-                // Nao cartoes ordenados por data
-                return new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime();
-              });
-            }
-
-            const totals = filteredTransactions.reduce((acc, t) => {
-              const amount = parseFloat(t.amount);
-              if (t.type === 'income') {
-                acc.income += amount;
-                if (t.isPaid) acc.incomePaid += amount;
-              }
-              else if (t.type === 'expense') {
-                acc.expense += amount;
-                if (t.isPaid) acc.expensePaid += amount;
-              }
-              else if (t.type === 'credit_card') {
-                acc.creditCard += amount;
-                if (t.isPaid) acc.creditCardPaid += amount;
-              }
-              return acc;
-            }, { income: 0, expense: 0, creditCard: 0, incomePaid: 0, expensePaid: 0, creditCardPaid: 0 });
-
-            return (
-              <>
-                {/* Totals */}
-                <div className="mb-4 grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="p-3 bg-green-500/10 rounded-lg">
-                    <p className="text-sm text-muted-foreground">Total Receitas</p>
-                    <p className="text-lg font-semibold text-green-600">+{formatCurrency(totals.income)}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Pago: {formatCurrency(totals.incomePaid)}</p>
-                  </div>
-                  <div className="p-3 bg-red-500/10 rounded-lg">
-                    <p className="text-sm text-muted-foreground">Total Despesas</p>
-                    <p className="text-lg font-semibold text-red-600">-{formatCurrency(totals.expense)}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Pago: {formatCurrency(totals.expensePaid)}</p>
-                  </div>
-                  <div className="p-3 bg-blue-500/10 rounded-lg">
-                    <p className="text-sm text-muted-foreground">Total Cartão</p>
-                    <p className="text-lg font-semibold text-blue-600">-{formatCurrency(totals.creditCard)}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Pago: {formatCurrency(totals.creditCardPaid)}</p>
-                  </div>
-                  <div className="p-3 bg-purple-500/10 rounded-lg">
-                    <p className="text-sm text-muted-foreground">Saldo</p>
-                    <p className={`text-lg font-semibold ${totals.income - totals.expense - totals.creditCard >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(totals.income - totals.expense - totals.creditCard)}
-                    </p>
-                  </div>
+          {/* Filters — colapsável */}
+          {showFilters && (
+            <div className="mb-6 p-4 bg-muted rounded-lg space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Data Inicial</label>
+                  <input
+                    type="date"
+                    value={filterStartDate}
+                    onChange={(e) => setFilterStartDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground"
+                  />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Data Final</label>
+                  <input
+                    type="date"
+                    value={filterEndDate}
+                    onChange={(e) => setFilterEndDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground"
+                  />
+                </div>
+                <div className="flex items-end gap-2">
+                  <Button
+                    onClick={() => {
+                      setFilterStartDate("");
+                      setFilterEndDate("");
+                      handleAdvancedFiltersChange({});
+                      setColumnFilters({});
+                      setFilterPriority([]);
+                    }}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    Limpar Filtros
+                  </Button>
+                  <FilterPriorityManager
+                    filters={columnFilters}
+                    priority={filterPriority}
+                    onPriorityChange={handleFilterPriorityChange}
+                    onFilterRemove={(columnId) => handleColumnFilter(columnId, undefined)}
+                  />
+                </div>
+              </div>
 
-                {filteredTransactions.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
+              <AdvancedFilters
+                filters={advancedFilters}
+                onFiltersChange={handleAdvancedFiltersChange}
+                creditCards={creditCards}
+                onClearFilters={() => handleAdvancedFiltersChange({})}
+              />
+
+              <div className="flex items-center justify-between pt-2 border-t border-border">
+                <span className="text-sm font-medium text-muted-foreground">Filtros Salvos:</span>
+                <SavedFiltersSelector
+                  currentFilters={{ startDate: filterStartDate, endDate: filterEndDate }}
+                  onFilterSelect={(filter) => {
+                    if (filter.startDate) setFilterStartDate(filter.startDate);
+                    if (filter.endDate) setFilterEndDate(filter.endDate);
+                  }}
+                  onFilterSave={() => {}}
+                />
+              </div>
+            </div>
+          )}
+
+          {transactions && transactions.length > 0 ? (
+            <>
+              {filteredTransactions.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
                       <thead className="border-b border-border">
                         <tr>
                           <th className="text-left py-3 px-4 font-semibold text-foreground">
@@ -995,9 +996,8 @@ export default function TransactionsEnhanced() {
                     Nenhuma movimentação no período selecionado
                   </p>
                 )}
-              </>
-            );
-          })() : (
+            </>
+          ) : (
             <p className="text-muted-foreground text-center py-8">
               Nenhuma movimentação nesta competência
             </p>
