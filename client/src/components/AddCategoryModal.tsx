@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 
 const COLORS = [
   "#3B82F6", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6",
@@ -16,19 +17,24 @@ const COLORS = [
 ];
 
 export interface AddCategoryModalProps {
-  onCategoryAdded?: (category: { name: string; color: string; icon?: string }) => void;
   transactionType: "income" | "expense" | "credit_card";
+  parentCategories?: Array<{ id: number; name: string }>;
+  onSuccess?: (name: string) => void;
 }
 
 export function AddCategoryModal({
-  onCategoryAdded,
   transactionType,
+  parentCategories,
+  onSuccess,
 }: AddCategoryModalProps) {
   const [open, setOpen] = useState(false);
   const [categoryName, setCategoryName] = useState("");
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
   const [selectedIcon, setSelectedIcon] = useState("📌");
-  const [isLoading, setIsLoading] = useState(false);
+  const [selectedParentId, setSelectedParentId] = useState<number | undefined>(undefined);
+
+  const utils = trpc.useUtils();
+  const createMutation = trpc.typology.create.useMutation();
 
   const getTypeLabel = () => {
     switch (transactionType) {
@@ -49,30 +55,28 @@ export function AddCategoryModal({
       return;
     }
 
-    setIsLoading(true);
     try {
-      // Simular delay de processamento
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      const newCategory = {
-        name: categoryName,
-        color: selectedColor,
+      await createMutation.mutateAsync({
+        name: categoryName.trim(),
+        type: transactionType,
         icon: selectedIcon,
-      };
+        color: selectedColor,
+        parentId: selectedParentId,
+      });
 
-      onCategoryAdded?.(newCategory);
-      toast.success(`Categoria "${categoryName}" adicionada com sucesso!`);
-      
+      await utils.typology.list.invalidate();
+      onSuccess?.(categoryName.trim());
+      toast.success(`Categoria "${categoryName.trim()}" adicionada com sucesso!`);
+
       // Reset form
       setCategoryName("");
       setSelectedColor(COLORS[0]);
       setSelectedIcon("📌");
+      setSelectedParentId(undefined);
       setOpen(false);
     } catch (error) {
       toast.error("Erro ao adicionar categoria");
       console.error(error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -113,9 +117,33 @@ export function AddCategoryModal({
               value={categoryName}
               onChange={(e) => setCategoryName(e.target.value)}
               className="input-elegant w-full"
-              disabled={isLoading}
+              disabled={createMutation.isPending}
             />
           </div>
+
+          {/* Parent Category Selection */}
+          {parentCategories && parentCategories.length > 0 && (
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">
+                Categoria pai (opcional)
+              </label>
+              <select
+                value={selectedParentId ?? ""}
+                onChange={(e) =>
+                  setSelectedParentId(e.target.value ? parseInt(e.target.value) : undefined)
+                }
+                className="input-elegant w-full"
+                disabled={createMutation.isPending}
+              >
+                <option value="">Nenhuma (categoria raiz)</option>
+                {parentCategories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Emoji Selection */}
           <div>
@@ -133,7 +161,7 @@ export function AddCategoryModal({
                       ? "border-primary bg-primary/10"
                       : "border-border hover:border-primary/50"
                   }`}
-                  disabled={isLoading}
+                  disabled={createMutation.isPending}
                 >
                   {emoji}
                 </button>
@@ -158,7 +186,7 @@ export function AddCategoryModal({
                       : "border-border"
                   }`}
                   style={{ backgroundColor: color }}
-                  disabled={isLoading}
+                  disabled={createMutation.isPending}
                 />
               ))}
             </div>
@@ -189,7 +217,7 @@ export function AddCategoryModal({
               type="button"
               variant="outline"
               onClick={() => setOpen(false)}
-              disabled={isLoading}
+              disabled={createMutation.isPending}
               className="flex-1"
             >
               Cancelar
@@ -197,10 +225,10 @@ export function AddCategoryModal({
             <Button
               type="button"
               onClick={handleAddCategory}
-              disabled={isLoading || !categoryName.trim()}
+              disabled={createMutation.isPending || !categoryName.trim()}
               className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
             >
-              {isLoading ? (
+              {createMutation.isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Adicionando...

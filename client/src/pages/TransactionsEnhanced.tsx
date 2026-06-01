@@ -42,12 +42,6 @@ const transactionSchema = z.object({
 
 type TransactionFormData = z.infer<typeof transactionSchema>;
 
-const CATEGORIES = {
-  income: ["Salário", "Freelance", "Investimentos", "Outros"],
-  expense: ["Alimentação", "Transporte", "Moradia", "Saúde", "Educação", "Lazer", "Outros"],
-  credit_card: ["Alimentação", "Compras", "Serviços", "Outros"],
-};
-
 const FREQUENCIES = {
   daily: "Diária",
   weekly: "Semanal",
@@ -64,6 +58,7 @@ export default function TransactionsEnhanced() {
     { enabled: !!currentCompetency }
   );
   const { data: creditCards } = trpc.creditCard.list.useQuery();
+  const { data: allTypologies, refetch: refetchTypologies } = trpc.typology.list.useQuery();
   const { data: invoices } = trpc.invoice.list.useQuery(
     { competencyId: currentCompetency?.id || 0 },
     { enabled: !!currentCompetency }
@@ -102,11 +97,6 @@ export default function TransactionsEnhanced() {
 
   const [open, setOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<"income" | "expense" | "credit_card">("expense");
-  const [dynamicCategories, setDynamicCategories] = useState<{ [key: string]: { name: string; color: string; icon?: string }[] }>({
-    income: [],
-    expense: [],
-    credit_card: [],
-  });
   // Ações individuais removidas - usar seleção em lote com botões flutuantes
   const defaultColumns: ColumnConfig[] = [
     { id: 'date', label: 'Data', visible: true },
@@ -213,20 +203,6 @@ export default function TransactionsEnhanced() {
 
   const watchType = watch("type");
   const watchTransactionType = watch("transactionType");
-
-  const handleAddCategory = (category: { name: string; color: string; icon?: string }) => {
-    setDynamicCategories(prev => ({
-      ...prev,
-      [selectedType]: [...(prev[selectedType] || []), category],
-    }));
-    toast.success(`Categoria "${category.name}" adicionada!`);
-  };
-
-  const getAllCategories = () => {
-    const baseCategories = CATEGORIES[selectedType as keyof typeof CATEGORIES] || [];
-    const dynamicCats = dynamicCategories[selectedType] || [];
-    return [...baseCategories, ...dynamicCats.map(c => c.name)];
-  };
 
   const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newType = e.target.value as typeof selectedType;
@@ -455,7 +431,14 @@ export default function TransactionsEnhanced() {
                     </label>
                     <AddCategoryModal
                       transactionType={selectedType}
-                      onCategoryAdded={handleAddCategory}
+                      parentCategories={(allTypologies ?? [])
+                        .filter((t) => t.type === selectedType && t.parentId == null)
+                        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name))
+                        .map((t) => ({ id: t.id, name: t.name }))}
+                      onSuccess={(name) => {
+                        refetchTypologies();
+                        setValue("category", name);
+                      }}
                     />
                   </div>
                   <select
@@ -463,11 +446,33 @@ export default function TransactionsEnhanced() {
                     className="input-elegant w-full"
                   >
                     <option value="">Selecione uma categoria</option>
-                    {getAllCategories().map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
+                    {(() => {
+                      const typeTypologies = (allTypologies ?? []).filter(
+                        (t) => t.type === selectedType
+                      );
+                      const topLevel = typeTypologies
+                        .filter((t) => t.parentId == null)
+                        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name));
+                      const result: React.ReactNode[] = [];
+                      for (const parent of topLevel) {
+                        result.push(
+                          <option key={parent.id} value={parent.name}>
+                            {parent.name}
+                          </option>
+                        );
+                        const children = typeTypologies
+                          .filter((t) => t.parentId === parent.id)
+                          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name));
+                        for (const child of children) {
+                          result.push(
+                            <option key={child.id} value={child.name}>
+                              {"  ↳ "}{child.name}
+                            </option>
+                          );
+                        }
+                      }
+                      return result;
+                    })()}
                   </select>
                   {errors.category && <p className="text-red-600 text-sm mt-1">{errors.category.message}</p>}
                 </div>

@@ -23,6 +23,11 @@ const typologySchema = z.object({
 
 type TypologyFormData = z.infer<typeof typologySchema>;
 
+interface TypologyLink {
+  url: string;
+  title: string;
+}
+
 const COLORS = [
   "#3B82F6", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6",
   "#EC4899", "#06B6D4", "#6366F1", "#14B8A6", "#F97316",
@@ -39,7 +44,11 @@ export default function Settings() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
   const [selectedType, setSelectedType] = useState<"income" | "expense" | "credit_card">("expense");
-  
+  const [selectedParentId, setSelectedParentId] = useState<number | undefined>(undefined);
+  const [typologyLinks, setTypologyLinks] = useState<TypologyLink[]>([]);
+  const [linkTitle, setLinkTitle] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+
   // Google Sheets
   const [sheetId, setSheetId] = useState("");
   const [isConnectingSheets, setIsConnectingSheets] = useState(false);
@@ -54,7 +63,6 @@ export default function Settings() {
     register,
     handleSubmit,
     reset,
-    watch,
     formState: { errors },
   } = useForm<TypologyFormData>({
     resolver: zodResolver(typologySchema),
@@ -64,12 +72,15 @@ export default function Settings() {
   });
 
   const onSubmit = async (data: TypologyFormData) => {
+    const linksJson = typologyLinks.length > 0 ? JSON.stringify(typologyLinks) : undefined;
     try {
       if (editingId) {
         await updateMutation.mutateAsync({
           id: editingId,
           ...data,
           color: selectedColor,
+          parentId: selectedParentId,
+          links: linksJson,
         });
         setEditingId(null);
         toast.success("Tipologia atualizada com sucesso!");
@@ -77,12 +88,18 @@ export default function Settings() {
         await createMutation.mutateAsync({
           ...data,
           color: selectedColor,
+          parentId: selectedParentId,
+          links: linksJson,
         });
         toast.success("Tipologia criada com sucesso!");
       }
       reset();
       setSelectedColor(COLORS[0]);
       setSelectedType("expense");
+      setSelectedParentId(undefined);
+      setTypologyLinks([]);
+      setLinkTitle("");
+      setLinkUrl("");
       utils.typology.list.invalidate();
     } catch (error) {
       toast.error("Erro ao salvar tipologia");
@@ -312,6 +329,83 @@ export default function Settings() {
                 </div>
               </div>
 
+              {/* Categoria pai */}
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">
+                  Categoria pai (opcional)
+                </label>
+                <select
+                  value={selectedParentId ?? ""}
+                  onChange={(e) =>
+                    setSelectedParentId(e.target.value ? parseInt(e.target.value) : undefined)
+                  }
+                  className="input-elegant w-full"
+                >
+                  <option value="">Nenhuma (categoria raiz)</option>
+                  {(typologies ?? [])
+                    .filter((t) => t.type === selectedType && t.parentId == null)
+                    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name))
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {/* Links */}
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">
+                  Links
+                </label>
+                <div className="space-y-2">
+                  {typologyLinks.map((link, idx) => (
+                    <div key={idx} className="flex items-center gap-2 p-2 bg-muted rounded">
+                      <div className="flex-1 truncate">
+                        <p className="text-sm font-medium text-foreground truncate">{link.title || "Sem título"}</p>
+                        <p className="text-xs text-muted-foreground truncate">{link.url}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setTypologyLinks(typologyLinks.filter((_, i) => i !== idx))}
+                        className="text-red-600 hover:text-red-700 text-sm font-medium"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  ))}
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Título do link"
+                      value={linkTitle}
+                      onChange={(e) => setLinkTitle(e.target.value)}
+                      className="input-elegant w-full"
+                    />
+                    <input
+                      type="url"
+                      placeholder="URL"
+                      value={linkUrl}
+                      onChange={(e) => setLinkUrl(e.target.value)}
+                      className="input-elegant w-full"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (linkTitle.trim() && linkUrl.trim()) {
+                        setTypologyLinks([...typologyLinks, { title: linkTitle.trim(), url: linkUrl.trim() }]);
+                        setLinkTitle("");
+                        setLinkUrl("");
+                      }
+                    }}
+                    className="px-3 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 text-sm font-medium w-full"
+                  >
+                    Adicionar Link
+                  </button>
+                </div>
+              </div>
+
               <div className="flex gap-2 pt-4">
                 {editingId && (
                   <Button
@@ -321,6 +415,10 @@ export default function Settings() {
                       setEditingId(null);
                       reset();
                       setSelectedColor(COLORS[0]);
+                      setSelectedParentId(undefined);
+                      setTypologyLinks([]);
+                      setLinkTitle("");
+                      setLinkUrl("");
                     }}
                   >
                     <X className="w-4 h-4 mr-2" />
@@ -374,7 +472,19 @@ export default function Settings() {
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => setEditingId(typology.id)}
+                        onClick={() => {
+                          setEditingId(typology.id);
+                          setSelectedColor(typology.color || COLORS[0]);
+                          setSelectedType(typology.type);
+                          setSelectedParentId(typology.parentId ?? undefined);
+                          try {
+                            setTypologyLinks(typology.links ? JSON.parse(typology.links) : []);
+                          } catch {
+                            setTypologyLinks([]);
+                          }
+                          setLinkTitle("");
+                          setLinkUrl("");
+                        }}
                         className="p-2 hover:bg-muted rounded-lg transition-colors text-foreground"
                       >
                         <Edit2 className="w-4 h-4" />

@@ -153,6 +153,8 @@ export const typologies = mysqlTable("typologies", {
   color: varchar("color", { length: 7 }).default("#3B82F6"),
   isActive: int("isActive").default(1).notNull(),
   order: int("order").default(0),
+  parentId: int("parentId"), // NULL = categoria raiz; não-nulo = subcategoria
+  links: text("links"), // JSON array [{url, title}]
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

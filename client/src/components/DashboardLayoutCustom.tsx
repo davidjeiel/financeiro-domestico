@@ -93,7 +93,7 @@ export default function DashboardLayoutCustom({
   children,
   title = "Controle Financeiro",
 }: DashboardLayoutCustomProps) {
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated, loading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [, navigate] = useLocation();
 
@@ -101,6 +101,12 @@ export default function DashboardLayoutCustom({
     await logout();
     navigate("/");
   };
+
+  // Enquanto a verificação de sessão está em andamento, não renderiza nada
+  // para evitar o flash da tela de login.
+  if (loading) {
+    return null;
+  }
 
   if (!isAuthenticated) {
     return <LoginScreen />;

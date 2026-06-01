@@ -117,6 +117,7 @@ export default function EditTransactionModal({
     try {
       await updateMutation.mutateAsync({
         id: transactionId || 0,
+        category: formData.category,
         description: formData.description,
         amount: formData.amount,
         transactionDate: new Date(formData.transactionDate),
@@ -225,23 +226,50 @@ export default function EditTransactionModal({
                       <SelectValue placeholder="Selecione uma categoria" />
                     </SelectTrigger>
                     <SelectContent>
-                      {typologies.map((typology) => (
-                        <SelectItem key={typology.id} value={typology.name}>
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="w-3 h-3 rounded-full"
-                              style={{ backgroundColor: typology.color || '#3b82f6' }}
-                            />
-                            {typology.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                      <SelectItem value="__new__">
-                        <div className="flex items-center gap-2 text-primary">
-                          <Plus className="w-4 h-4" />
-                          Criar nova categoria
-                        </div>
-                      </SelectItem>
+                      {(() => {
+                        const topLevel = typologies
+                          .filter((t) => t.parentId == null)
+                          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name));
+                        const items: React.ReactNode[] = [];
+                        for (const parent of topLevel) {
+                          items.push(
+                            <SelectItem key={parent.id} value={parent.name}>
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="w-3 h-3 rounded-full"
+                                  style={{ backgroundColor: parent.color || '#3b82f6' }}
+                                />
+                                {parent.name}
+                              </div>
+                            </SelectItem>
+                          );
+                          const children = typologies
+                            .filter((t) => t.parentId === parent.id)
+                            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name));
+                          for (const child of children) {
+                            items.push(
+                              <SelectItem key={child.id} value={child.name}>
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className="w-3 h-3 rounded-full"
+                                    style={{ backgroundColor: child.color || '#3b82f6' }}
+                                  />
+                                  {"  ↳ "}{child.name}
+                                </div>
+                              </SelectItem>
+                            );
+                          }
+                        }
+                        items.push(
+                          <SelectItem key="__new__" value="__new__">
+                            <div className="flex items-center gap-2 text-primary">
+                              <Plus className="w-4 h-4" />
+                              Criar nova categoria
+                            </div>
+                          </SelectItem>
+                        );
+                        return items;
+                      })()}
                     </SelectContent>
                   </Select>
                 ) : (

@@ -267,6 +267,8 @@ export const appRouter = router({
           description: z.string().optional(),
           icon: z.string().optional(),
           color: z.string().optional(),
+          parentId: z.number().optional(),
+          links: z.string().optional(),
         })
       )
       .mutation(({ ctx, input }) =>
@@ -277,6 +279,8 @@ export const appRouter = router({
           description: input.description,
           icon: input.icon,
           color: input.color,
+          parentId: input.parentId,
+          links: input.links,
         })
       ),
     update: protectedProcedure
@@ -287,6 +291,8 @@ export const appRouter = router({
           description: z.string().optional(),
           icon: z.string().optional(),
           color: z.string().optional(),
+          parentId: z.number().optional(),
+          links: z.string().optional(),
         })
       )
       .mutation(({ input }) =>
@@ -295,6 +301,8 @@ export const appRouter = router({
           description: input.description,
           icon: input.icon,
           color: input.color,
+          parentId: input.parentId,
+          links: input.links,
         })
       ),
     delete: protectedProcedure
