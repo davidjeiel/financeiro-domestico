@@ -1,8 +1,9 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import { InsertUser, users, competencies, creditCards, transactions, invoices, typologies, savedFilters, recurringTransactions, installments, installmentTransactions, accounts, Account, InsertAccount, InsertCreditCard, InsertTransaction, InsertTypology, InsertRecurringTransaction, InsertInstallment, InsertInstallmentTransaction } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import { calculateInvoiceDates } from './competencyLogic';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: any = null;
@@ -242,6 +243,74 @@ export async function getCompetencyInvoices(competencyId: number) {
   return db.select().from(invoices).where(eq(invoices.competencyId, competencyId)).orderBy(desc(invoices.dueDate));
 }
 
+
+export async function upsertInvoiceForCreditCard(
+  userId: number,
+  creditCardId: number,
+  competencyId: number
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const [card] = await db.select().from(creditCards).where(eq(creditCards.id, creditCardId)).limit(1);
+  if (!card) return;
+
+  const [competency] = await db.select().from(competencies).where(eq(competencies.id, competencyId)).limit(1);
+  if (!competency) return;
+
+  const { closingDate, dueDate } = calculateInvoiceDates(card, competency.year, competency.month);
+
+  const txs = await db
+    .select()
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.creditCardId, creditCardId),
+        eq(transactions.competencyId, competencyId)
+      )
+    );
+
+  const total = txs.reduce((sum, t) => sum + parseFloat(String(t.amount) || "0"), 0);
+
+  const [existing] = await db
+    .select()
+    .from(invoices)
+    .where(and(eq(invoices.creditCardId, creditCardId), eq(invoices.competencyId, competencyId)))
+    .limit(1);
+
+  if (existing) {
+    await db
+      .update(invoices)
+      .set({ totalAmount: total.toFixed(2) })
+      .where(eq(invoices.id, existing.id));
+  } else {
+    await db.insert(invoices).values({
+      userId,
+      creditCardId,
+      competencyId,
+      closingDate,
+      dueDate,
+      totalAmount: total.toFixed(2),
+      paidAmount: "0",
+      status: "open",
+    });
+  }
+}
+
+export async function syncInvoicesForCompetency(userId: number, competencyId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const txs = await db
+    .select()
+    .from(transactions)
+    .where(and(eq(transactions.userId, userId), eq(transactions.competencyId, competencyId), eq(transactions.type, "credit_card")));
+
+  const cardIds = [...new Set(txs.map((t) => t.creditCardId).filter(Boolean))] as number[];
+  for (const cardId of cardIds) {
+    await upsertInvoiceForCreditCard(userId, cardId, competencyId);
+  }
+}
 
 // Tipologias
 export async function createTypology(typology: InsertTypology) {

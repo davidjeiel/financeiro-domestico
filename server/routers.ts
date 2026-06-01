@@ -15,6 +15,8 @@ import {
   updateTransaction,
   deleteTransaction,
   getCompetencyInvoices,
+  upsertInvoiceForCreditCard,
+  syncInvoicesForCompetency,
   createTypology,
   getTypologiesByUser,
   getTypologiesByUserAndType,
@@ -141,12 +143,13 @@ export const appRouter = router({
           notes: z.string().optional(),
         })
       )
-      .mutation(({ ctx, input }) =>
-        createTransaction({
-          userId: ctx.user.id,
-          ...input,
-        })
-      ),
+      .mutation(async ({ ctx, input }) => {
+        const tx = await createTransaction({ userId: ctx.user.id, ...input });
+        if (input.type === "credit_card" && input.creditCardId) {
+          await upsertInvoiceForCreditCard(ctx.user.id, input.creditCardId, input.competencyId);
+        }
+        return tx;
+      }),
     update: protectedProcedure
       .input(
         z.object({
@@ -188,6 +191,11 @@ export const appRouter = router({
       .input(z.object({ competencyId: z.number() }))
       .query(({ input }) =>
         getCompetencyInvoices(input.competencyId)
+      ),
+    sync: protectedProcedure
+      .input(z.object({ competencyId: z.number() }))
+      .mutation(({ ctx, input }) =>
+        syncInvoicesForCompetency(ctx.user.id, input.competencyId)
       ),
   }),
 

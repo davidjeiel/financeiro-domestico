@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import DashboardLayoutCustom from "@/components/DashboardLayoutCustom";
 import { Card } from "@/components/ui/card";
@@ -24,6 +24,11 @@ interface InvoiceFilters {
 
 export default function InvoicesEnhanced() {
   const { data: currentCompetency } = trpc.competency.current.useQuery();
+  const utils = trpc.useUtils();
+  const syncMutation = trpc.invoice.sync.useMutation({
+    onSuccess: () => utils.invoice.list.invalidate(),
+  });
+
   const { data: invoices, isLoading: invoicesLoading } = trpc.invoice.list.useQuery(
     { competencyId: currentCompetency?.id || 0 },
     { enabled: !!currentCompetency }
@@ -34,6 +39,13 @@ export default function InvoicesEnhanced() {
     { competencyId: currentCompetency?.id || 0 },
     { enabled: !!currentCompetency }
   );
+
+  // Sincroniza faturas ao carregar, para gerar as que ainda não existem
+  useEffect(() => {
+    if (currentCompetency && !syncMutation.isPending && !syncMutation.isSuccess) {
+      syncMutation.mutate({ competencyId: currentCompetency.id });
+    }
+  }, [currentCompetency?.id]);
 
   // Obter cartão com maior limite como padrão
   const defaultCreditCardId = useMemo(() => {
@@ -91,27 +103,14 @@ export default function InvoicesEnhanced() {
 
   const getInvoiceTransactions = (invoice: any) => {
     if (!transactions || !invoice) return [];
-    
-    // Vincular transacoes a fatura por:
-    // 1. Mesmo cartao de credito
-    // 2. Data da transacao entre fechamento e vencimento
-    // 3. Aplicar filtros do usuario
+    // Transações já são da mesma competência; basta casar pelo cartão
     return transactions.filter(
-      (t) => {
-        const txDate = new Date(t.transactionDate);
-        const closingDate = new Date(invoice.closingDate);
-        const dueDate = new Date(invoice.dueDate);
-        
-        return (
-          t.type === "credit_card" &&
-          t.creditCardId === invoice.creditCardId &&
-          txDate >= closingDate &&
-          txDate <= dueDate &&
-          (!filters.creditCardId || t.creditCardId === parseInt(filters.creditCardId)) &&
-          (!filters.category || t.category === filters.category) &&
-          (!filters.description || t.description?.toLowerCase().includes(filters.description.toLowerCase()))
-        );
-      }
+      (t) =>
+        t.type === "credit_card" &&
+        t.creditCardId === invoice.creditCardId &&
+        (!filters.creditCardId || t.creditCardId === parseInt(filters.creditCardId)) &&
+        (!filters.category || t.category === filters.category) &&
+        (!filters.description || t.description?.toLowerCase().includes(filters.description.toLowerCase()))
     );
   };
 
