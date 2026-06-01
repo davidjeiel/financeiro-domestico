@@ -1,18 +1,30 @@
 import { eq, and, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import mysql from "mysql2/promise";
 import { InsertUser, users, competencies, creditCards, transactions, invoices, typologies, savedFilters, recurringTransactions, installments, installmentTransactions, accounts, Account, InsertAccount, InsertCreditCard, InsertTransaction, InsertTypology, InsertRecurringTransaction, InsertInstallment, InsertInstallmentTransaction } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _pool: any = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
+// Lazily create the drizzle instance with proper mysql2 pool
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      if (!_pool) {
+        _pool = mysql.createPool({
+          uri: process.env.DATABASE_URL,
+          connectionLimit: 10,
+          enableKeepAlive: true,
+          waitForConnections: true,
+          queueLimit: 0,
+        });
+      }
+      _db = drizzle(_pool);
     } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
+      console.error("[Database] Failed to connect:", error);
       _db = null;
+      _pool = null;
     }
   }
   return _db;
