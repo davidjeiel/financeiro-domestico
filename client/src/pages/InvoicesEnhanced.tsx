@@ -4,7 +4,8 @@ import DashboardLayoutCustom from "@/components/DashboardLayoutCustom";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/formatting";
-import { AlertCircle, CheckCircle, Clock, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import { AlertCircle, CheckCircle, Clock, ChevronLeft, ChevronRight, CalendarDays, Pencil } from "lucide-react";
+import EditTransactionModal from "@/components/EditTransactionModal";
 import { Button } from "@/components/ui/button";
 import { ColumnSelector, ColumnConfig } from "@/components/ColumnSelector";
 import { ColumnHeader } from "@/components/ColumnHeader";
@@ -92,6 +93,8 @@ export default function InvoicesEnhanced() {
     );
     return maxCard.id.toString();
   }, [creditCards]);
+
+  const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
 
   const [columns, setColumns] = useState<ColumnConfig[]>(DEFAULT_COLUMNS);
   const [filters, setFilters] = useState<InvoiceFilters>({
@@ -375,7 +378,11 @@ export default function InvoicesEnhanced() {
                         </thead>
                         <tbody>
                           {sortedTxs.map((transaction) => (
-                            <tr key={transaction.id} className="border-b border-border hover:bg-muted">
+                            <tr
+                              key={transaction.id}
+                              className="border-b border-border hover:bg-muted cursor-pointer group"
+                              onClick={() => setEditingTransactionId(transaction.id)}
+                            >
                               {columns.map(
                                 (col) =>
                                   col.visible && (
@@ -391,6 +398,9 @@ export default function InvoicesEnhanced() {
                                     </td>
                                   )
                               )}
+                              <td className="py-3 px-2 w-8">
+                                <Pencil className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -412,6 +422,16 @@ export default function InvoicesEnhanced() {
           </Card>
         )}
       </div>
+
+      <EditTransactionModal
+        isOpen={editingTransactionId !== null}
+        transactionId={editingTransactionId}
+        onClose={() => setEditingTransactionId(null)}
+        onSuccess={() => {
+          utils.transaction.list.invalidate();
+          if (activeCompetency) syncMutation.mutate({ competencyId: activeCompetency.id });
+        }}
+      />
     </DashboardLayoutCustom>
   );
 }
