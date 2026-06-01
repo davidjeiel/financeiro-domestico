@@ -4,7 +4,7 @@ import DashboardLayoutCustom from "@/components/DashboardLayoutCustom";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/formatting";
-import { AlertCircle, CheckCircle, Clock } from "lucide-react";
+import { AlertCircle, CheckCircle, Clock, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ColumnSelector, ColumnConfig } from "@/components/ColumnSelector";
 import { ColumnHeader } from "@/components/ColumnHeader";
@@ -25,27 +25,64 @@ interface InvoiceFilters {
 export default function InvoicesEnhanced() {
   const { data: currentCompetency } = trpc.competency.current.useQuery();
   const utils = trpc.useUtils();
+
+  // Period navigation state
+  const [navYear, setNavYear] = useState<number | null>(null);
+  const [navMonth, setNavMonth] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (currentCompetency && navYear === null) {
+      setNavYear(currentCompetency.year);
+      setNavMonth(currentCompetency.month);
+    }
+  }, [currentCompetency, navYear]);
+
+  const { data: navCompetency } = trpc.competency.getByYearMonth.useQuery(
+    { year: navYear!, month: navMonth! },
+    { enabled: navYear !== null && navMonth !== null }
+  );
+
+  const activeCompetency = navCompetency ?? currentCompetency;
+  const isCurrentPeriod =
+    navYear === currentCompetency?.year && navMonth === currentCompetency?.month;
+
+  const goPrev = () => {
+    if (navYear === null || navMonth === null) return;
+    if (navMonth === 1) { setNavYear(navYear - 1); setNavMonth(12); }
+    else setNavMonth(navMonth - 1);
+  };
+  const goNext = () => {
+    if (navYear === null || navMonth === null) return;
+    if (navMonth === 12) { setNavYear(navYear + 1); setNavMonth(1); }
+    else setNavMonth(navMonth + 1);
+  };
+  const goCurrent = () => {
+    if (!currentCompetency) return;
+    setNavYear(currentCompetency.year);
+    setNavMonth(currentCompetency.month);
+  };
+
   const syncMutation = trpc.invoice.sync.useMutation({
     onSuccess: () => utils.invoice.list.invalidate(),
   });
 
   const { data: invoices, isLoading: invoicesLoading } = trpc.invoice.list.useQuery(
-    { competencyId: currentCompetency?.id || 0 },
-    { enabled: !!currentCompetency }
+    { competencyId: activeCompetency?.id || 0 },
+    { enabled: !!activeCompetency }
   );
 
   const { data: creditCards } = trpc.creditCard.list.useQuery();
   const { data: transactions, isLoading: transactionsLoading } = trpc.transaction.list.useQuery(
-    { competencyId: currentCompetency?.id || 0 },
-    { enabled: !!currentCompetency }
+    { competencyId: activeCompetency?.id || 0 },
+    { enabled: !!activeCompetency }
   );
 
-  // Sincroniza faturas ao carregar, para gerar as que ainda não existem
+  // Sincroniza faturas ao mudar de período
   useEffect(() => {
-    if (currentCompetency && !syncMutation.isPending && !syncMutation.isSuccess) {
-      syncMutation.mutate({ competencyId: currentCompetency.id });
+    if (activeCompetency && !syncMutation.isPending) {
+      syncMutation.mutate({ competencyId: activeCompetency.id });
     }
-  }, [currentCompetency?.id]);
+  }, [activeCompetency?.id]);
 
   // Obter cartão com maior limite como padrão
   const defaultCreditCardId = useMemo(() => {
@@ -166,6 +203,25 @@ export default function InvoicesEnhanced() {
   return (
     <DashboardLayoutCustom title="Faturas de Cartão">
       <div className="space-y-6">
+        {/* Navegação de período */}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={goPrev} title="Período anterior">
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <span className="text-base font-semibold min-w-[160px] text-center select-none">
+            {activeCompetency?.name ?? "..."}
+          </span>
+          <Button variant="outline" size="icon" onClick={goNext} title="Próximo período">
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+          {!isCurrentPeriod && (
+            <Button variant="outline" size="sm" onClick={goCurrent} title="Ir para o período atual">
+              <CalendarDays className="w-4 h-4 mr-1" />
+              Mês Atual
+            </Button>
+          )}
+        </div>
+
         {/* Filtros e Seletor de Colunas */}
         <div className="flex gap-4 items-center flex-wrap">
           <ColumnSelector columns={columns} onColumnsChange={setColumns} />
