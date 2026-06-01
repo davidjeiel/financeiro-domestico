@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import DashboardLayoutCustom from "@/components/DashboardLayoutCustom";
 import { Card } from "@/components/ui/card";
@@ -138,6 +138,7 @@ export default function TransactionsEnhanced() {
   const [showDeleteIndividual, setShowDeleteIndividual] = useState(false);
   const [deletingTransactionId, setDeletingTransactionId] = useState<number | null>(null);
   const [newTransactionLinks, setNewTransactionLinks] = useState<Array<{ title: string; url: string }>>([]);
+  const [pendingNewCategory, setPendingNewCategory] = useState<string | null>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
@@ -206,6 +207,26 @@ export default function TransactionsEnhanced() {
 
   const watchType = watch("type");
   const watchTransactionType = watch("transactionType");
+
+  useEffect(() => {
+    if (pendingNewCategory && allTypologies?.some((t) => t.name === pendingNewCategory)) {
+      setValue("category", pendingNewCategory);
+      setPendingNewCategory(null);
+    }
+  }, [allTypologies, pendingNewCategory, setValue]);
+
+  useEffect(() => {
+    if (open) {
+      reset({
+        type: "expense",
+        transactionType: "simple",
+        transactionDate: getLocalDateString(),
+      });
+      setSelectedType("expense");
+      setNewTransactionLinks([]);
+      setPendingNewCategory(null);
+    }
+  }, [open]);
 
   const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newType = e.target.value as typeof selectedType;
@@ -440,7 +461,7 @@ export default function TransactionsEnhanced() {
                         .map((t) => ({ id: t.id, name: t.name }))}
                       onSuccess={(name) => {
                         refetchTypologies();
-                        setValue("category", name);
+                        setPendingNewCategory(name);
                       }}
                     />
                   </div>
