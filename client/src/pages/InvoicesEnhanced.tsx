@@ -4,11 +4,15 @@ import DashboardLayoutCustom from "@/components/DashboardLayoutCustom";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/formatting";
-import { AlertCircle, CheckCircle, Clock, ChevronLeft, ChevronRight, CalendarDays, Pencil } from "lucide-react";
+import { AlertCircle, CheckCircle, Clock, ChevronLeft, ChevronRight, CalendarDays, Pencil, Trash2, CreditCard } from "lucide-react";
 import EditTransactionModal from "@/components/EditTransactionModal";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ColumnSelector, ColumnConfig } from "@/components/ColumnSelector";
 import { ColumnHeader } from "@/components/ColumnHeader";
+import { toast } from "sonner";
 
 const DEFAULT_COLUMNS: ColumnConfig[] = [
   { id: "date", label: "Data", visible: true },
@@ -95,6 +99,42 @@ export default function InvoicesEnhanced() {
   }, [creditCards]);
 
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
+  const [deletingTransactionId, setDeletingTransactionId] = useState<number | null>(null);
+
+  // Payment dialog state
+  const [payingInvoice, setPayingInvoice] = useState<{ id: number; total: number; paid: number } | null>(null);
+  const [paymentType, setPaymentType] = useState<"full" | "partial">("full");
+  const [partialAmount, setPartialAmount] = useState("");
+
+  const deleteMutation = trpc.transaction.delete.useMutation({
+    onSuccess: () => {
+      utils.transaction.list.invalidate();
+      if (activeCompetency) syncMutation.mutate({ competencyId: activeCompetency.id });
+      toast.success("Lançamento excluído!");
+    },
+    onError: () => toast.error("Erro ao excluir lançamento"),
+  });
+
+  const payMutation = trpc.invoice.pay.useMutation({
+    onSuccess: () => {
+      utils.invoice.list.invalidate();
+      setPayingInvoice(null);
+      toast.success("Pagamento registrado!");
+    },
+    onError: () => toast.error("Erro ao registrar pagamento"),
+  });
+
+  const handlePay = () => {
+    if (!payingInvoice) return;
+    const amount = paymentType === "full"
+      ? payingInvoice.total
+      : parseFloat(partialAmount.replace(",", "."));
+    if (isNaN(amount) || amount <= 0) {
+      toast.error("Informe um valor válido");
+      return;
+    }
+    payMutation.mutate({ invoiceId: payingInvoice.id, paidAmount: amount });
+  };
 
   const [columns, setColumns] = useState<ColumnConfig[]>(DEFAULT_COLUMNS);
   const [filters, setFilters] = useState<InvoiceFilters>({
@@ -308,11 +348,28 @@ export default function InvoicesEnhanced() {
                         Fechamento: {formatDate(invoice.closingDate)} | Vencimento: {formatDate(invoice.dueDate)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                       {getStatusIcon(invoice.status)}
                       <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(invoice.status)}`}>
                         {getStatusLabel(invoice.status)}
                       </span>
+                      {invoice.status !== "paid" && (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setPayingInvoice({
+                              id: invoice.id,
+                              total: Number(invoice.totalAmount),
+                              paid: Number(invoice.paidAmount || 0),
+                            });
+                            setPaymentType("full");
+                            setPartialAmount("");
+                          }}
+                        >
+                          <CreditCard className="w-4 h-4 mr-1" />
+                          Pagar Fatura
+                        </Button>
+                      )}
                     </div>
                   </div>
 
@@ -398,8 +455,22 @@ export default function InvoicesEnhanced() {
                                     </td>
                                   )
                               )}
-                              <td className="py-3 px-2 w-8">
-                                <Pencil className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                              <td className="py-3 px-2 w-16" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                                  <button
+                                    onClick={() => {
+                                      if (confirm("Excluir este lançamento?")) {
+                                        setDeletingTransactionId(transaction.id);
+                                        deleteMutation.mutate({ id: transaction.id });
+                                      }
+                                    }}
+                                    className="text-red-500 hover:text-red-700 p-0.5 rounded"
+                                    title="Excluir lançamento"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -408,6 +479,31 @@ export default function InvoicesEnhanced() {
                     </div>
                   ) : (
                     <p className="text-muted-foreground text-center py-4">Nenhuma transação nesta fatura</p>
+                  )}
+
+                  {/* Detalhamento do gasto */}
+                  {sortedTxs.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                        Detalhamento do período
+                      </p>
+                      <div className="space-y-1">
+                        {sortedTxs.map((t) => (
+                          <div key={t.id} className="flex justify-between text-sm">
+                            <span className="text-muted-foreground truncate max-w-[60%]">
+                              {formatDate(t.transactionDate)} · {t.description || t.category}
+                            </span>
+                            <span className="font-medium text-foreground">{formatCurrency(t.amount)}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between text-sm font-semibold pt-2 border-t border-border mt-2">
+                          <span>Total dos lançamentos</span>
+                          <span className="text-red-600">
+                            {formatCurrency(sortedTxs.reduce((s, t) => s + Number(t.amount), 0))}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </Card>
               );
@@ -422,6 +518,94 @@ export default function InvoicesEnhanced() {
           </Card>
         )}
       </div>
+
+      {/* Dialog de pagamento de fatura */}
+      <Dialog open={payingInvoice !== null} onOpenChange={(o) => !o && setPayingInvoice(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Registrar Pagamento</DialogTitle>
+          </DialogHeader>
+          {payingInvoice && (
+            <div className="space-y-4 pt-2">
+              <div className="p-3 rounded-lg bg-muted text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total da fatura</span>
+                  <span className="font-semibold">{formatCurrency(payingInvoice.total)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Já pago</span>
+                  <span className="font-semibold text-green-600">{formatCurrency(payingInvoice.paid)}</span>
+                </div>
+                <div className="flex justify-between border-t border-border pt-1">
+                  <span className="text-muted-foreground">Saldo restante</span>
+                  <span className="font-semibold text-red-600">
+                    {formatCurrency(payingInvoice.total - payingInvoice.paid)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPaymentType("full")}
+                  className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                    paymentType === "full"
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border hover:bg-muted"
+                  }`}
+                >
+                  Pagamento Total
+                </button>
+                <button
+                  onClick={() => setPaymentType("partial")}
+                  className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                    paymentType === "partial"
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border hover:bg-muted"
+                  }`}
+                >
+                  Pagamento Parcial
+                </button>
+              </div>
+
+              {paymentType === "full" && (
+                <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/20 text-sm text-center">
+                  Será registrado o pagamento de{" "}
+                  <span className="font-bold">{formatCurrency(payingInvoice.total)}</span>
+                </div>
+              )}
+
+              {paymentType === "partial" && (
+                <div className="space-y-2">
+                  <Label>Valor pago</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    max={payingInvoice.total}
+                    placeholder="0,00"
+                    value={partialAmount}
+                    onChange={(e) => setPartialAmount(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" className="flex-1" onClick={() => setPayingInvoice(null)}>
+                  Cancelar
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handlePay}
+                  disabled={payMutation.isPending || (paymentType === "partial" && !partialAmount)}
+                >
+                  {payMutation.isPending ? "Salvando..." : "Confirmar"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <EditTransactionModal
         isOpen={editingTransactionId !== null}

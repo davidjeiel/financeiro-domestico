@@ -297,6 +297,22 @@ export async function upsertInvoiceForCreditCard(
   }
 }
 
+export async function updateInvoicePayment(invoiceId: number, paidAmount: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId)).limit(1);
+  if (!invoice) throw new Error("Invoice not found");
+
+  const total = parseFloat(String(invoice.totalAmount));
+  const status = paidAmount <= 0 ? "open" : paidAmount >= total ? "paid" : "partial";
+
+  await db
+    .update(invoices)
+    .set({ paidAmount: paidAmount.toFixed(2), status })
+    .where(eq(invoices.id, invoiceId));
+}
+
 export async function syncInvoicesForCompetency(userId: number, competencyId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -306,7 +322,7 @@ export async function syncInvoicesForCompetency(userId: number, competencyId: nu
     .from(transactions)
     .where(and(eq(transactions.userId, userId), eq(transactions.competencyId, competencyId), eq(transactions.type, "credit_card")));
 
-  const cardIds = [...new Set(txs.map((t) => t.creditCardId).filter(Boolean))] as number[];
+  const cardIds = Array.from(new Set(txs.map((t) => t.creditCardId).filter(Boolean))) as number[];
   for (const cardId of cardIds) {
     await upsertInvoiceForCreditCard(userId, cardId, competencyId);
   }

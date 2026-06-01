@@ -312,7 +312,7 @@ export default function TransactionsEnhanced() {
       
       // Salvar links se houver
       if (newTransactionLinks.length > 0) {
-        const lastTransaction = (await utils.transaction.list.getData({ competencyId: currentCompetency.id }))?.[0];
+        const lastTransaction = (await utils.transaction.list.getData({ competencyId: activeCompetency!.id }))?.[0];
         if (lastTransaction) {
           for (const link of newTransactionLinks) {
             try {
@@ -1044,18 +1044,25 @@ export default function TransactionsEnhanced() {
                         {transaction.type === "income" ? "+" : "-"}{formatCurrency(transaction.amount)}
                       </td>
                       <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={transaction.isPaid === 1}
-                          onChange={(e) => {
-                            markAsPaidMutation.mutate({
-                              id: transaction.id,
-                              isPaid: e.target.checked,
-                            });
-                          }}
-                          className="w-4 h-4 cursor-pointer"
-                          title={transaction.isPaid === 1 ? "Marcar como não pago" : "Marcar como pago"}
-                        />
+                        {transaction.type === "credit_card" ? (
+                          <span
+                            className="inline-flex items-center justify-center w-4 h-4 rounded border border-border opacity-40 cursor-not-allowed"
+                            title="Pagamento de fatura é realizado na tela de Faturas"
+                          />
+                        ) : (
+                          <input
+                            type="checkbox"
+                            checked={transaction.isPaid === 1}
+                            onChange={(e) => {
+                              markAsPaidMutation.mutate({
+                                id: transaction.id,
+                                isPaid: e.target.checked,
+                              });
+                            }}
+                            className="w-4 h-4 cursor-pointer"
+                            title={transaction.isPaid === 1 ? "Marcar como não pago" : "Marcar como pago"}
+                          />
+                        )}
                       </td>
                       <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                         <Button

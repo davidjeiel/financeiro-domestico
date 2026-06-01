@@ -17,6 +17,7 @@ import {
   getCompetencyInvoices,
   upsertInvoiceForCreditCard,
   syncInvoicesForCompetency,
+  updateInvoicePayment,
   createTypology,
   getTypologiesByUser,
   getTypologiesByUserAndType,
@@ -196,6 +197,11 @@ export const appRouter = router({
       .input(z.object({ competencyId: z.number() }))
       .mutation(({ ctx, input }) =>
         syncInvoicesForCompetency(ctx.user.id, input.competencyId)
+      ),
+    pay: protectedProcedure
+      .input(z.object({ invoiceId: z.number(), paidAmount: z.number().min(0) }))
+      .mutation(({ input }) =>
+        updateInvoicePayment(input.invoiceId, input.paidAmount)
       ),
   }),
 
