@@ -58,7 +58,10 @@ export default function TransactionsEnhanced() {
     { enabled: !!currentCompetency }
   );
   const { data: creditCards } = trpc.creditCard.list.useQuery();
-  const { data: allTypologies, refetch: refetchTypologies } = trpc.typology.list.useQuery();
+  const { data: allTypologies, refetch: refetchTypologies, isError: typologiesError } = trpc.typology.list.useQuery(undefined, {
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+  });
   const { data: invoices } = trpc.invoice.list.useQuery(
     { competencyId: currentCompetency?.id || 0 },
     { enabled: !!currentCompetency }
