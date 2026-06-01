@@ -5,6 +5,7 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import {
   getOrCreateCurrentCompetency,
+  getOrCreateCompetencyByYearMonth,
   getUserCompetencies,
   getUserCreditCards,
   createCreditCard,
@@ -63,6 +64,11 @@ export const appRouter = router({
     list: protectedProcedure.query(({ ctx }) =>
       getUserCompetencies(ctx.user.id)
     ),
+    getByYearMonth: protectedProcedure
+      .input(z.object({ year: z.number().int(), month: z.number().int().min(1).max(12) }))
+      .query(({ ctx, input }) =>
+        getOrCreateCompetencyByYearMonth(ctx.user.id, input.year, input.month)
+      ),
   }),
 
   creditCard: router({

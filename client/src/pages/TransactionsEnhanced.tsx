@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/formatting";
-import { Plus, Loader2, Filter, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Loader2, Filter, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -53,9 +53,47 @@ const FREQUENCIES = {
 
 export default function TransactionsEnhanced() {
   const { data: currentCompetency } = trpc.competency.current.useQuery();
+
+  // Period navigation state — null until currentCompetency loads
+  const [navYear, setNavYear] = useState<number | null>(null);
+  const [navMonth, setNavMonth] = useState<number | null>(null);
+
+  // Initialise nav from currentCompetency on first load
+  useEffect(() => {
+    if (currentCompetency && navYear === null) {
+      setNavYear(currentCompetency.year);
+      setNavMonth(currentCompetency.month);
+    }
+  }, [currentCompetency, navYear]);
+
+  const { data: navCompetency } = trpc.competency.getByYearMonth.useQuery(
+    { year: navYear!, month: navMonth! },
+    { enabled: navYear !== null && navMonth !== null }
+  );
+
+  const activeCompetency = navCompetency ?? currentCompetency;
+  const isCurrentPeriod =
+    navYear === currentCompetency?.year && navMonth === currentCompetency?.month;
+
+  const goPrev = () => {
+    if (navYear === null || navMonth === null) return;
+    if (navMonth === 1) { setNavYear(navYear - 1); setNavMonth(12); }
+    else setNavMonth(navMonth - 1);
+  };
+  const goNext = () => {
+    if (navYear === null || navMonth === null) return;
+    if (navMonth === 12) { setNavYear(navYear + 1); setNavMonth(1); }
+    else setNavMonth(navMonth + 1);
+  };
+  const goCurrent = () => {
+    if (!currentCompetency) return;
+    setNavYear(currentCompetency.year);
+    setNavMonth(currentCompetency.month);
+  };
+
   const { data: transactions, isLoading } = trpc.transaction.list.useQuery(
-    { competencyId: currentCompetency?.id || 0 },
-    { enabled: !!currentCompetency }
+    { competencyId: activeCompetency?.id || 0 },
+    { enabled: !!activeCompetency }
   );
   const { data: creditCards } = trpc.creditCard.list.useQuery();
   const { data: allTypologies, refetch: refetchTypologies, isError: typologiesError } = trpc.typology.list.useQuery(undefined, {
@@ -63,8 +101,8 @@ export default function TransactionsEnhanced() {
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
   const { data: invoices } = trpc.invoice.list.useQuery(
-    { competencyId: currentCompetency?.id || 0 },
-    { enabled: !!currentCompetency }
+    { competencyId: activeCompetency?.id || 0 },
+    { enabled: !!activeCompetency }
   );
   
   // Helper para obter data de vencimento de uma transacao de cartao
@@ -235,7 +273,7 @@ export default function TransactionsEnhanced() {
   };
 
   const onSubmit = async (data: TransactionFormData) => {
-    if (!currentCompetency) {
+    if (!activeCompetency) {
       toast.error("Competência não carregada");
       return;
     }
@@ -260,7 +298,7 @@ export default function TransactionsEnhanced() {
       const transactionDate = new Date(Date.UTC(year, month - 1, day));
 
       await createMutation.mutateAsync({
-        competencyId: currentCompetency.id,
+        competencyId: activeCompetency.id,
         type: data.type,
         category: data.category,
         description: data.description || "",
@@ -300,7 +338,7 @@ export default function TransactionsEnhanced() {
       setSelectedType("expense");
       setNewTransactionLinks([]);
       setOpen(false);
-      utils.transaction.list.invalidate({ competencyId: currentCompetency.id });
+      utils.transaction.list.invalidate({ competencyId: activeCompetency.id });
     } catch (error: any) {
       console.error("Erro ao criar movimentação:", error);
       const errorMessage = error?.message || "Erro ao criar movimentação";
@@ -395,8 +433,28 @@ export default function TransactionsEnhanced() {
       />
 
       <div className="space-y-4">
-        {/* Add Transaction Dialog */}
-        <div className="flex justify-end">
+        {/* Toolbar: period navigation + new transaction */}
+        <div className="flex items-center justify-between gap-4">
+          {/* Period navigation */}
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" onClick={goPrev} title="Período anterior">
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <span className="text-base font-semibold min-w-[160px] text-center select-none">
+              {activeCompetency?.name ?? "..."}
+            </span>
+            <Button variant="outline" size="icon" onClick={goNext} title="Próximo período">
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+            {!isCurrentPeriod && (
+              <Button variant="outline" size="sm" onClick={goCurrent} title="Ir para o período atual">
+                <CalendarDays className="w-4 h-4 mr-1" />
+                Mês Atual
+              </Button>
+            )}
+          </div>
+
+          {/* Add Transaction Dialog */}
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
@@ -743,7 +801,7 @@ export default function TransactionsEnhanced() {
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-foreground">
-              Movimentações - {currentCompetency?.name}
+              Movimentações - {activeCompetency?.name}
             </h2>
             <div className="flex items-center gap-2">
               <Button

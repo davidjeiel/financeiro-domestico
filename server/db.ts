@@ -164,6 +164,33 @@ export async function getOrCreateCurrentCompetency(userId: number) {
   return created[0]!;
 }
 
+export async function getOrCreateCompetencyByYearMonth(userId: number, year: number, month: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const name = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" })
+    .format(new Date(year, month - 1, 1));
+  const capitalizedName = name.charAt(0).toUpperCase() + name.slice(1);
+
+  const existing = await db
+    .select()
+    .from(competencies)
+    .where(and(eq(competencies.userId, userId), eq(competencies.year, year), eq(competencies.month, month)))
+    .limit(1);
+
+  if (existing.length > 0) return existing[0];
+
+  await db.insert(competencies).values({ userId, year, month, name: capitalizedName });
+
+  const created = await db
+    .select()
+    .from(competencies)
+    .where(and(eq(competencies.userId, userId), eq(competencies.year, year), eq(competencies.month, month)))
+    .limit(1);
+
+  return created[0]!;
+}
+
 export async function getUserCompetencies(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
