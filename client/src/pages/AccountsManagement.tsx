@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
+import DashboardLayoutCustom from '@/components/DashboardLayoutCustom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,7 +21,7 @@ import {
 import { toast } from 'sonner';
 import { Plus, Edit2, Trash2, DollarSign, Loader2 } from 'lucide-react';
 
-export default function AccountsManagement() {
+function AccountsManagementContent() {
   const { data: accounts, isLoading, refetch } = trpc.account.list.useQuery();
   const createMutation = trpc.account.create.useMutation();
   const updateMutation = trpc.account.update.useMutation();
@@ -145,7 +146,8 @@ export default function AccountsManagement() {
   }
 
   return (
-    <div className="space-y-6">
+    <DashboardLayoutCustom>
+      <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Contas</h1>
@@ -426,5 +428,10 @@ export default function AccountsManagement() {
         </DialogContent>
       </Dialog>
     </div>
+    </DashboardLayoutCustom>
   );
+}
+
+export default function AccountsManagement() {
+  return <AccountsManagementContent />;
 }
