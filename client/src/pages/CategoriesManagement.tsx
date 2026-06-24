@@ -40,7 +40,7 @@ export default function CategoriesManagement() {
     }
 
     try {
-      if (editingId) {
+      if (editingId !== null) {
         await updateMutation.mutateAsync({
           id: editingId,
           name: formData.name,
@@ -62,9 +62,10 @@ export default function CategoriesManagement() {
       setEditingId(null);
       setIsOpen(false);
       refetch();
-    } catch (error) {
-      toast.error("Erro ao salvar categoria");
-      console.error(error);
+    } catch (error: any) {
+      const errorMessage = error?.message || error?.data?.code || "Erro ao salvar categoria";
+      toast.error(errorMessage);
+      console.error("[Categories] Error saving:", error);
     }
   };
 
@@ -86,9 +87,10 @@ export default function CategoriesManagement() {
       await deleteMutation.mutateAsync({ id });
       toast.success("Categoria deletada com sucesso!");
       refetch();
-    } catch (error) {
-      toast.error("Erro ao deletar categoria");
-      console.error(error);
+    } catch (error: any) {
+      const errorMessage = error?.message || error?.data?.code || "Erro ao deletar categoria";
+      toast.error(errorMessage);
+      console.error("[Categories] Error deleting:", error);
     }
   };
 
@@ -130,7 +132,10 @@ export default function CategoriesManagement() {
 
           <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-              <Button onClick={() => handleClose()}>
+              <Button onClick={() => {
+                setEditingId(null);
+                setFormData({ name: "", type: "expense", icon: "📌", color: "#EF4444" });
+              }}>
                 <Plus className="w-4 h-4 mr-2" />
                 Nova Categoria
               </Button>

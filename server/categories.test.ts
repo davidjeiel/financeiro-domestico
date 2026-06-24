@@ -3,20 +3,23 @@ import * as db from "./db";
 
 describe("Categories (Typologies)", () => {
   let testUserId: number;
+  const testOpenId = `test-user-${Date.now()}-${Math.random()}`;
 
   beforeAll(async () => {
     // Criar usuário de teste
     await db.upsertUser({
-      openId: `test-user-${Date.now()}`,
+      openId: testOpenId,
       name: "Test User",
       email: "test@example.com",
       loginMethod: "test",
       lastSignedIn: new Date(),
     });
 
-    const user = await db.getUserByOpenId(`test-user-${Date.now()}`);
+    const user = await db.getUserByOpenId(testOpenId);
     if (user) {
       testUserId = user.id;
+    } else {
+      throw new Error("Failed to create test user");
     }
   });
 
