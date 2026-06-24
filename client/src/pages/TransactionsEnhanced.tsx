@@ -515,7 +515,7 @@ export default function TransactionsEnhanced() {
                       transactionType={selectedType}
                       parentCategories={(allTypologies ?? [])
                         .filter((t) => t.type === selectedType && t.parentId == null)
-                        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name))
+                        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name))
                         .map((t) => ({ id: t.id, name: t.name }))}
                       onSuccess={(name) => {
                         refetchTypologies();
@@ -534,7 +534,7 @@ export default function TransactionsEnhanced() {
                       );
                       const topLevel = typeTypologies
                         .filter((t) => t.parentId == null)
-                        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name));
+                        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
                       const result: React.ReactNode[] = [];
                       for (const parent of topLevel) {
                         result.push(
@@ -544,7 +544,7 @@ export default function TransactionsEnhanced() {
                         );
                         const children = typeTypologies
                           .filter((t) => t.parentId === parent.id)
-                          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name));
+                          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
                         for (const child of children) {
                           result.push(
                             <option key={child.id} value={child.name}>

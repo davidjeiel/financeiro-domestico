@@ -152,7 +152,7 @@ export const typologies = mysqlTable("typologies", {
   icon: varchar("icon", { length: 50 }), // emoji ou nome do ícone
   color: varchar("color", { length: 7 }).default("#3B82F6"),
   isActive: int("isActive").default(1).notNull(),
-  order: int("order").default(0),
+  sortOrder: int("sortOrder").default(0),
   parentId: int("parentId"), // NULL = categoria raiz; não-nulo = subcategoria
   links: text("links"), // JSON array [{url, title}]
   createdAt: timestamp("createdAt").defaultNow().notNull(),

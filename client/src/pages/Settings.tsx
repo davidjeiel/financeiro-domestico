@@ -344,7 +344,7 @@ export default function Settings() {
                   <option value="">Nenhuma (categoria raiz)</option>
                   {(typologies ?? [])
                     .filter((t) => t.type === selectedType && t.parentId == null)
-                    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name))
+                    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name))
                     .map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.name}

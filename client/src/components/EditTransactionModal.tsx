@@ -229,7 +229,7 @@ export default function EditTransactionModal({
                       {(() => {
                         const topLevel = typologies
                           .filter((t) => t.parentId == null)
-                          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name));
+                          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
                         const items: React.ReactNode[] = [];
                         for (const parent of topLevel) {
                           items.push(
@@ -245,7 +245,7 @@ export default function EditTransactionModal({
                           );
                           const children = typologies
                             .filter((t) => t.parentId === parent.id)
-                            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name));
+                            .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
                           for (const child of children) {
                             items.push(
                               <SelectItem key={child.id} value={child.name}>

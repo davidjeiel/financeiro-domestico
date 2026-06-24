@@ -64,6 +64,13 @@
       "when": 1780237730926,
       "tag": "0008_petite_betty_ross",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1782266723258,
+      "tag": "0009_optimal_wild_child",
+      "breakpoints": true
     }
   ]
 }

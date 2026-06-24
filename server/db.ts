@@ -342,7 +342,7 @@ export async function getTypologiesByUser(userId: number) {
   if (!db) throw new Error("Database not available");
 
   // Retornar todas as tipologias do usuário, ativas ou não
-  return db.select().from(typologies).where(eq(typologies.userId, userId)).orderBy(typologies.order);
+  return db.select().from(typologies).where(eq(typologies.userId, userId)).orderBy(typologies.sortOrder);
 }
 
 export async function getTypologiesByUserAndType(userId: number, type: "income" | "expense" | "credit_card") {
@@ -350,7 +350,7 @@ export async function getTypologiesByUserAndType(userId: number, type: "income" 
   if (!db) throw new Error("Database not available");
 
   // Retornar todas as tipologias do usuário por tipo, ativas ou não
-  return db.select().from(typologies).where(and(eq(typologies.userId, userId), eq(typologies.type, type))).orderBy(typologies.order);
+  return db.select().from(typologies).where(and(eq(typologies.userId, userId), eq(typologies.type, type))).orderBy(typologies.sortOrder);
 }
 
 export async function updateTypology(id: number, updates: Partial<InsertTypology>) {
@@ -374,26 +374,26 @@ export async function createDefaultTypologies(userId: number) {
 
   const defaultTypologies: InsertTypology[] = [
     // Receitas
-    { userId, name: "Salário", type: "income", icon: "💰", color: "#10B981", order: 1, isActive: 1 },
-    { userId, name: "Freelance", type: "income", icon: "💻", color: "#10B981", order: 2, isActive: 1 },
-    { userId, name: "Investimentos", type: "income", icon: "📈", color: "#10B981", order: 3, isActive: 1 },
-    { userId, name: "Outros", type: "income", icon: "💵", color: "#10B981", order: 4, isActive: 1 },
+    { userId, name: "Salário", type: "income", icon: "💰", color: "#10B981", sortOrder: 1, isActive: 1 },
+    { userId, name: "Freelance", type: "income", icon: "💻", color: "#10B981", sortOrder: 2, isActive: 1 },
+    { userId, name: "Investimentos", type: "income", icon: "📈", color: "#10B981", sortOrder: 3, isActive: 1 },
+    { userId, name: "Outros", type: "income", icon: "💵", color: "#10B981", sortOrder: 4, isActive: 1 },
     
     // Despesas
-    { userId, name: "Alimentação", type: "expense", icon: "🍔", color: "#EF4444", order: 1, isActive: 1 },
-    { userId, name: "Transporte", type: "expense", icon: "🚗", color: "#EF4444", order: 2, isActive: 1 },
-    { userId, name: "Saúde", type: "expense", icon: "🏥", color: "#EF4444", order: 3, isActive: 1 },
-    { userId, name: "Educação", type: "expense", icon: "📚", color: "#EF4444", order: 4, isActive: 1 },
-    { userId, name: "Entretenimento", type: "expense", icon: "🎬", color: "#EF4444", order: 5, isActive: 1 },
-    { userId, name: "Utilidades", type: "expense", icon: "💡", color: "#EF4444", order: 6, isActive: 1 },
-    { userId, name: "Moradia", type: "expense", icon: "🏠", color: "#EF4444", order: 7, isActive: 1 },
-    { userId, name: "Outros", type: "expense", icon: "📌", color: "#EF4444", order: 8, isActive: 1 },
+    { userId, name: "Alimentação", type: "expense", icon: "🍔", color: "#EF4444", sortOrder: 1, isActive: 1 },
+    { userId, name: "Transporte", type: "expense", icon: "🚗", color: "#EF4444", sortOrder: 2, isActive: 1 },
+    { userId, name: "Saúde", type: "expense", icon: "🏥", color: "#EF4444", sortOrder: 3, isActive: 1 },
+    { userId, name: "Educação", type: "expense", icon: "📚", color: "#EF4444", sortOrder: 4, isActive: 1 },
+    { userId, name: "Entretenimento", type: "expense", icon: "🎬", color: "#EF4444", sortOrder: 5, isActive: 1 },
+    { userId, name: "Utilidades", type: "expense", icon: "💡", color: "#EF4444", sortOrder: 6, isActive: 1 },
+    { userId, name: "Moradia", type: "expense", icon: "🏠", color: "#EF4444", sortOrder: 7, isActive: 1 },
+    { userId, name: "Outros", type: "expense", icon: "📌", color: "#EF4444", sortOrder: 8, isActive: 1 },
     
     // Cartão de Crédito
-    { userId, name: "Compras", type: "credit_card", icon: "🛍️", color: "#3B82F6", order: 1, isActive: 1 },
-    { userId, name: "Alimentação", type: "credit_card", icon: "🍽️", color: "#3B82F6", order: 2, isActive: 1 },
-    { userId, name: "Assinaturas", type: "credit_card", icon: "📱", color: "#3B82F6", order: 3, isActive: 1 },
-    { userId, name: "Outros", type: "credit_card", icon: "💳", color: "#3B82F6", order: 4, isActive: 1 },
+    { userId, name: "Compras", type: "credit_card", icon: "🛍️", color: "#3B82F6", sortOrder: 1, isActive: 1 },
+    { userId, name: "Alimentação", type: "credit_card", icon: "🍽️", color: "#3B82F6", sortOrder: 2, isActive: 1 },
+    { userId, name: "Assinaturas", type: "credit_card", icon: "📱", color: "#3B82F6", sortOrder: 3, isActive: 1 },
+    { userId, name: "Outros", type: "credit_card", icon: "💳", color: "#3B82F6", sortOrder: 4, isActive: 1 },
   ];
 
   try {
