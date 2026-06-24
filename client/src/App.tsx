@@ -14,6 +14,7 @@ import Filters from "@/pages/Filters";
 import CompetencyConfig from "@/pages/CompetencyConfig";
 import RecurringAndInstallments from "@/pages/RecurringAndInstallments";
 import AccountsManagement from "@/pages/AccountsManagement";
+import CategoriesManagement from "@/pages/CategoriesManagement";
 import { Route, Router, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -38,6 +39,7 @@ function AppRouter() {
         <Route path={"/competency-config"} component={CompetencyConfig} />
         <Route path={"/recurring-installments"} component={RecurringAndInstallments} />
         <Route path={"/accounts"} component={AccountsManagement} />
+        <Route path={"/categories"} component={CategoriesManagement} />
         <Route path={"/settings"} component={Settings} />
         <Route path={"/404"} component={NotFound} />
         {/* Final fallback route */}

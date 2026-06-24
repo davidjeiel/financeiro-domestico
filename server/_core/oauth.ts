@@ -64,13 +64,19 @@ export function registerOAuthRoutes(app: Express) {
         return;
       }
 
-      await db.upsertUser({
+      const userResult = await db.upsertUser({
         openId: userInfo.openId,
         name: userInfo.name || null,
         email: userInfo.email ?? null,
         loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
         lastSignedIn: new Date(),
       });
+
+      // Criar categorias padrão se for novo usuário
+      const existingUser = await db.getUserByOpenId(userInfo.openId);
+      if (existingUser && existingUser.createdAt && new Date().getTime() - new Date(existingUser.createdAt).getTime() < 5000) {
+        await db.createDefaultTypologies(existingUser.id);
+      }
 
       const sessionToken = await sdk.createSessionToken(userInfo.openId, {
         name: userInfo.name || "",

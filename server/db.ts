@@ -367,6 +367,43 @@ export async function deleteTypology(id: number) {
   return db.delete(typologies).where(eq(typologies.id, id));
 }
 
+// Criar categorias padrão para novo usuário
+export async function createDefaultTypologies(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const defaultTypologies: InsertTypology[] = [
+    // Receitas
+    { userId, name: "Salário", type: "income", icon: "💰", color: "#10B981", order: 1, isActive: 1 },
+    { userId, name: "Freelance", type: "income", icon: "💻", color: "#10B981", order: 2, isActive: 1 },
+    { userId, name: "Investimentos", type: "income", icon: "📈", color: "#10B981", order: 3, isActive: 1 },
+    { userId, name: "Outros", type: "income", icon: "💵", color: "#10B981", order: 4, isActive: 1 },
+    
+    // Despesas
+    { userId, name: "Alimentação", type: "expense", icon: "🍔", color: "#EF4444", order: 1, isActive: 1 },
+    { userId, name: "Transporte", type: "expense", icon: "🚗", color: "#EF4444", order: 2, isActive: 1 },
+    { userId, name: "Saúde", type: "expense", icon: "🏥", color: "#EF4444", order: 3, isActive: 1 },
+    { userId, name: "Educação", type: "expense", icon: "📚", color: "#EF4444", order: 4, isActive: 1 },
+    { userId, name: "Entretenimento", type: "expense", icon: "🎬", color: "#EF4444", order: 5, isActive: 1 },
+    { userId, name: "Utilidades", type: "expense", icon: "💡", color: "#EF4444", order: 6, isActive: 1 },
+    { userId, name: "Moradia", type: "expense", icon: "🏠", color: "#EF4444", order: 7, isActive: 1 },
+    { userId, name: "Outros", type: "expense", icon: "📌", color: "#EF4444", order: 8, isActive: 1 },
+    
+    // Cartão de Crédito
+    { userId, name: "Compras", type: "credit_card", icon: "🛍️", color: "#3B82F6", order: 1, isActive: 1 },
+    { userId, name: "Alimentação", type: "credit_card", icon: "🍽️", color: "#3B82F6", order: 2, isActive: 1 },
+    { userId, name: "Assinaturas", type: "credit_card", icon: "📱", color: "#3B82F6", order: 3, isActive: 1 },
+    { userId, name: "Outros", type: "credit_card", icon: "💳", color: "#3B82F6", order: 4, isActive: 1 },
+  ];
+
+  try {
+    await db.insert(typologies).values(defaultTypologies);
+    console.log(`[Database] Created ${defaultTypologies.length} default typologies for user ${userId}`);
+  } catch (error) {
+    console.error(`[Database] Failed to create default typologies for user ${userId}:`, error);
+  }
+}
+
 
 // Google Sheets Integration
 export async function updateUserGoogleSheets(
