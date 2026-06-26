@@ -776,8 +776,13 @@ export async function deleteAccount(id: number) {
 export async function createWorkspace(data: InsertWorkspace) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(workspaces).values(data);
-  return result;
+  await db.insert(workspaces).values(data);
+  // Retrieve the created workspace
+  const result = await db.select().from(workspaces)
+    .where(eq(workspaces.ownerId, data.ownerId))
+    .orderBy(workspaces.id)
+    .limit(1);
+  return result[0] || null;
 }
 
 export async function getWorkspacesByUser(userId: number) {
@@ -798,14 +803,21 @@ export async function getWorkspaceById(id: number) {
 export async function updateWorkspace(id: number, data: Partial<InsertWorkspace>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.update(workspaces).set(data).where(eq(workspaces.id, id));
+  await db.update(workspaces).set(data).where(eq(workspaces.id, id));
+  const result = await db.select().from(workspaces).where(eq(workspaces.id, id));
+  return result[0] || null;
 }
 
 // Workspace Members
 export async function addWorkspaceMember(data: InsertWorkspaceMember) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.insert(workspaceMembers).values(data);
+  await db.insert(workspaceMembers).values(data);
+  const result = await db.select().from(workspaceMembers)
+    .where(eq(workspaceMembers.workspaceId, data.workspaceId))
+    .orderBy(workspaceMembers.id)
+    .limit(1);
+  return result[0] || null;
 }
 
 export async function getWorkspaceMembers(workspaceId: number) {
@@ -817,20 +829,26 @@ export async function getWorkspaceMembers(workspaceId: number) {
 export async function updateWorkspaceMemberRole(memberId: number, role: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.update(workspaceMembers).set({ role: role as any }).where(eq(workspaceMembers.id, memberId));
+  await db.update(workspaceMembers).set({ role: role as any }).where(eq(workspaceMembers.id, memberId));
+  const result = await db.select().from(workspaceMembers).where(eq(workspaceMembers.id, memberId));
+  return result[0] || null;
 }
 
 export async function removeWorkspaceMember(memberId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.delete(workspaceMembers).where(eq(workspaceMembers.id, memberId));
+  const result = await db.select().from(workspaceMembers).where(eq(workspaceMembers.id, memberId));
+  await db.delete(workspaceMembers).where(eq(workspaceMembers.id, memberId));
+  return result[0] || null;
 }
 
 // Workspace Invites
 export async function createWorkspaceInvite(data: InsertWorkspaceInvite) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.insert(workspaceInvites).values(data);
+  await db.insert(workspaceInvites).values(data);
+  const result = await db.select().from(workspaceInvites).where(eq(workspaceInvites.token, data.token));
+  return result[0] || null;
 }
 
 export async function getWorkspaceInviteByToken(token: string) {
@@ -867,18 +885,26 @@ export async function acceptWorkspaceInvite(inviteId: number, userId: number) {
   });
   
   // Marcar convite como aceito
-  return db.update(workspaceInvites).set({
+  await db.update(workspaceInvites).set({
     status: "accepted" as any,
     acceptedAt: new Date(),
     acceptedBy: userId,
   }).where(eq(workspaceInvites.id, inviteId));
+  
+  const result = await db.select().from(workspaceInvites).where(eq(workspaceInvites.id, inviteId));
+  return result[0] || null;
 }
 
 // Shared Accounts
 export async function createSharedAccount(data: InsertSharedAccount) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.insert(sharedAccounts).values(data);
+  await db.insert(sharedAccounts).values(data);
+  const result = await db.select().from(sharedAccounts)
+    .where(eq(sharedAccounts.accountId, data.accountId))
+    .orderBy(sharedAccounts.id)
+    .limit(1);
+  return result[0] || null;
 }
 
 export async function getSharedAccountsByWorkspace(workspaceId: number) {
@@ -891,7 +917,12 @@ export async function getSharedAccountsByWorkspace(workspaceId: number) {
 export async function addTransactionResponsibility(data: InsertTransactionResponsibility) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.insert(transactionResponsibilities).values(data);
+  await db.insert(transactionResponsibilities).values(data);
+  const result = await db.select().from(transactionResponsibilities)
+    .where(eq(transactionResponsibilities.transactionId, data.transactionId))
+    .orderBy(transactionResponsibilities.id)
+    .limit(1);
+  return result[0] || null;
 }
 
 export async function getTransactionResponsibilities(transactionId: number) {
@@ -903,14 +934,20 @@ export async function getTransactionResponsibilities(transactionId: number) {
 export async function removeTransactionResponsibility(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.delete(transactionResponsibilities).where(eq(transactionResponsibilities.id, id));
+  const result = await db.select().from(transactionResponsibilities).where(eq(transactionResponsibilities.id, id));
+  await db.delete(transactionResponsibilities).where(eq(transactionResponsibilities.id, id));
+  return result[0] || null;
 }
 
 // Audit Log
 export async function logAuditAction(data: InsertAuditLog) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.insert(auditLog).values(data);
+  await db.insert(auditLog).values(data);
+  const result = await db.select().from(auditLog)
+    .orderBy(desc(auditLog.id))
+    .limit(1);
+  return result[0] || null;
 }
 
 export async function getAuditLogByWorkspace(workspaceId: number, limit = 100) {

@@ -44,7 +44,27 @@ import {
   updateAccount,
   updateAccountBalance,
   deleteAccount,
+  createWorkspace,
+  getWorkspacesByUser,
+  getWorkspaceById,
+  updateWorkspace,
+  addWorkspaceMember,
+  getWorkspaceMembers,
+  updateWorkspaceMemberRole,
+  removeWorkspaceMember,
+  createWorkspaceInvite,
+  getWorkspaceInviteByToken,
+  getPendingInvitesByEmail,
+  acceptWorkspaceInvite,
+  createSharedAccount,
+  getSharedAccountsByWorkspace,
+  addTransactionResponsibility,
+  getTransactionResponsibilities,
+  removeTransactionResponsibility,
+  logAuditAction,
+  getAuditLogByWorkspace,
 } from "./db";
+import { randomBytes } from "crypto";
 import { GoogleSheetsManager } from "./googleSheetsIntegration";
 
 export const appRouter = router({
@@ -507,6 +527,190 @@ export const appRouter = router({
       .mutation(({ input }) =>
         deleteAccount(input.id)
       ),
+  }),
+  workspace: router({
+    list: protectedProcedure.query(({ ctx }) => getWorkspacesByUser(ctx.user.id)),
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(({ input }) => getWorkspaceById(input.id)),
+    create: protectedProcedure
+      .input(
+        z.object({
+          name: z.string().min(1),
+          description: z.string().optional(),
+          type: z.enum(["personal", "family", "business"]),
+        })
+      )
+      .mutation(({ input, ctx }) =>
+        createWorkspace({
+          ownerId: ctx.user.id,
+          name: input.name,
+          description: input.description,
+          type: input.type as any,
+          isActive: 1,
+        })
+      ),
+    update: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          name: z.string().optional(),
+          description: z.string().optional(),
+          type: z.enum(["personal", "family", "business"]).optional(),
+        })
+      )
+      .mutation(({ input }) => {
+        const { id, ...updates } = input;
+        return updateWorkspace(id, updates as any);
+      }),
+    members: router({
+      list: protectedProcedure
+        .input(z.object({ workspaceId: z.number() }))
+        .query(({ input }) => getWorkspaceMembers(input.workspaceId)),
+      add: protectedProcedure
+        .input(
+          z.object({
+            workspaceId: z.number(),
+            email: z.string().email(),
+            role: z.enum(["owner", "editor", "viewer"]),
+          })
+        )
+        .mutation(async ({ input, ctx }) => {
+          const token = randomBytes(32).toString("hex");
+          const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 dias
+          
+          await logAuditAction({
+            workspaceId: input.workspaceId,
+            userId: ctx.user.id,
+            action: "invite_member",
+            entityType: "workspace",
+            entityId: input.workspaceId,
+            changes: JSON.stringify({ email: input.email, role: input.role }),
+          });
+          
+          return createWorkspaceInvite({
+            workspaceId: input.workspaceId,
+            email: input.email,
+            token,
+            role: input.role as any,
+            invitedBy: ctx.user.id,
+            expiresAt,
+            status: "pending" as any,
+          });
+        }),
+      updateRole: protectedProcedure
+        .input(
+          z.object({
+            memberId: z.number(),
+            role: z.enum(["owner", "editor", "viewer"]),
+          })
+        )
+        .mutation(({ input, ctx }) => {
+          logAuditAction({
+            workspaceId: 0, // TODO: get from member
+            userId: ctx.user.id,
+            action: "update_member_role",
+            entityType: "member",
+            entityId: input.memberId,
+            changes: JSON.stringify({ role: input.role }),
+          });
+          return updateWorkspaceMemberRole(input.memberId, input.role);
+        }),
+      remove: protectedProcedure
+        .input(z.object({ memberId: z.number() }))
+        .mutation(({ input, ctx }) => {
+          logAuditAction({
+            workspaceId: 0, // TODO: get from member
+            userId: ctx.user.id,
+            action: "remove_member",
+            entityType: "member",
+            entityId: input.memberId,
+            changes: JSON.stringify({}),
+          });
+          return removeWorkspaceMember(input.memberId);
+        }),
+    }),
+    invites: router({
+      getPending: protectedProcedure
+        .input(z.object({ email: z.string().email() }))
+        .query(({ input }) => getPendingInvitesByEmail(input.email)),
+      accept: protectedProcedure
+        .input(z.object({ token: z.string() }))
+        .mutation(async ({ input, ctx }) => {
+          const invite = await getWorkspaceInviteByToken(input.token);
+          if (!invite) throw new Error("Invite not found or expired");
+          if (invite.email !== ctx.user.email) throw new Error("Email mismatch");
+          
+          return acceptWorkspaceInvite(invite.id, ctx.user.id);
+        }),
+    }),
+  }),
+  sharedAccount: router({
+    create: protectedProcedure
+      .input(
+        z.object({
+          accountId: z.number(),
+          workspaceId: z.number(),
+          shareType: z.enum(["individual", "joint", "shared"]),
+        })
+      )
+      .mutation(({ input, ctx }) => {
+        logAuditAction({
+          workspaceId: input.workspaceId,
+          userId: ctx.user.id,
+          action: "share_account",
+          entityType: "account",
+          entityId: input.accountId,
+          changes: JSON.stringify({ shareType: input.shareType }),
+        });
+        return createSharedAccount(input as any);
+      }),
+    listByWorkspace: protectedProcedure
+      .input(z.object({ workspaceId: z.number() }))
+      .query(({ input }) => getSharedAccountsByWorkspace(input.workspaceId)),
+  }),
+  transactionResponsibility: router({
+    add: protectedProcedure
+      .input(
+        z.object({
+          transactionId: z.number(),
+          userId: z.number(),
+          percentage: z.number().optional(),
+          notes: z.string().optional(),
+        })
+      )
+      .mutation(({ input, ctx }) => {
+        logAuditAction({
+          workspaceId: 0, // TODO: get from transaction
+          userId: ctx.user.id,
+          action: "add_responsibility",
+          entityType: "transaction",
+          entityId: input.transactionId,
+          changes: JSON.stringify({ userId: input.userId, percentage: input.percentage }),
+        });
+        return addTransactionResponsibility(input as any);
+      }),
+    list: protectedProcedure
+      .input(z.object({ transactionId: z.number() }))
+      .query(({ input }) => getTransactionResponsibilities(input.transactionId)),
+    remove: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(({ input, ctx }) => {
+        logAuditAction({
+          workspaceId: 0,
+          userId: ctx.user.id,
+          action: "remove_responsibility",
+          entityType: "responsibility",
+          entityId: input.id,
+          changes: JSON.stringify({}),
+        });
+        return removeTransactionResponsibility(input.id);
+      }),
+  }),
+  auditLog: router({
+    list: protectedProcedure
+      .input(z.object({ workspaceId: z.number(), limit: z.number().optional() }))
+      .query(({ input }) => getAuditLogByWorkspace(input.workspaceId, input.limit)),
   }),
 });
 

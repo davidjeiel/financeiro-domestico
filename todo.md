@@ -427,3 +427,56 @@
 - [ ] Adicionar indicadores visuais de responsável
 - [ ] Escrever testes para colaboração
 - [ ] Publicar site permanentemente
+
+
+## Fase 51: Implementação de Workspaces e Compartilhamento
+
+- [ ] Procedures tRPC para workspaces (criar, listar, atualizar, deletar)
+- [ ] Procedures tRPC para membros (adicionar, remover, atualizar role)
+- [ ] Procedures tRPC para convites (criar, aceitar, rejeitar)
+- [ ] Procedures tRPC para contas compartilhadas
+- [ ] Interface de gerenciamento de workspaces
+- [ ] Diálogo de criação de novo workspace
+- [ ] Interface de gerenciamento de membros
+- [ ] Sistema de convites por email
+- [ ] Interface de compartilhamento de contas
+- [ ] Indicadores visuais de responsável
+- [ ] Testes para workspaces
+- [ ] Publicar site permanentemente
+
+
+## Fase 52: Procedures tRPC para Workspaces
+
+- [x] Adicionar imports de funções de workspaces em routers.ts
+- [x] Criar procedures para workspace.list (listar workspaces do usuário)
+- [x] Criar procedures para workspace.getById (obter workspace por ID)
+- [x] Criar procedures para workspace.create (criar novo workspace)
+- [x] Criar procedures para workspace.update (atualizar workspace)
+- [x] Criar procedures para workspace.members.list (listar membros)
+- [x] Criar procedures para workspace.members.add (adicionar membro com convite)
+- [x] Criar procedures para workspace.members.updateRole (atualizar role)
+- [x] Criar procedures para workspace.members.remove (remover membro)
+- [x] Criar procedures para workspace.invites.getPending (obter convites pendentes)
+- [x] Criar procedures para workspace.invites.accept (aceitar convite)
+- [x] Criar procedures para sharedAccount (criar e listar contas compartilhadas)
+- [x] Criar procedures para transactionResponsibility (adicionar, listar, remover)
+- [x] Criar procedures para auditLog (listar log de auditoria)
+- [x] Corrigir funções de banco de dados para retornar objetos criados/atualizados
+- [x] Criar testes para procedures de workspaces (16 testes)
+- [x] Todos os 93 testes passando
+- [x] TypeScript compilando sem erros
+- [x] Servidor rodando normalmente
+
+## Fase 53: Interface Frontend para Workspaces
+
+- [ ] Criar página WorkspacesPage.tsx com listagem de workspaces
+- [ ] Implementar modal de criação de novo workspace
+- [ ] Implementar modal de edição de workspace
+- [ ] Criar página de gerenciamento de membros (WorkspaceMembersPage.tsx)
+- [ ] Implementar interface de convite de membros por email
+- [ ] Implementar interface de aceitação de convites
+- [ ] Criar página de compartilhamento de contas (SharedAccountsPage.tsx)
+- [ ] Implementar indicadores visuais de responsável em transações
+- [ ] Integrar workspaces na navegação principal
+- [ ] Testar fluxos de colaboração
+- [ ] Publicar site permanentemente
