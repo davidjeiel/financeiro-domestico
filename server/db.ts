@@ -1,7 +1,7 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
-import { InsertUser, users, competencies, creditCards, transactions, invoices, typologies, savedFilters, recurringTransactions, installments, installmentTransactions, accounts, Account, InsertAccount, InsertCreditCard, InsertTransaction, InsertTypology, InsertRecurringTransaction, InsertInstallment, InsertInstallmentTransaction } from "../drizzle/schema";
+import { InsertUser, users, competencies, creditCards, transactions, invoices, typologies, savedFilters, recurringTransactions, installments, installmentTransactions, accounts, Account, InsertAccount, InsertCreditCard, InsertTransaction, InsertTypology, InsertRecurringTransaction, InsertInstallment, InsertInstallmentTransaction, workspaces, Workspace, InsertWorkspace, workspaceMembers, WorkspaceMember, InsertWorkspaceMember, workspaceInvites, WorkspaceInvite, InsertWorkspaceInvite, sharedAccounts, SharedAccount, InsertSharedAccount, transactionResponsibilities, TransactionResponsibility, InsertTransactionResponsibility, auditLog, AuditLog, InsertAuditLog } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { calculateInvoiceDates } from './competencyLogic';
 
@@ -767,4 +767,157 @@ export async function deleteAccount(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   return db.update(accounts).set({ isActive: 0 }).where(eq(accounts.id, id));
+}
+
+
+// ===== FUNCIONALIDADES COLABORATIVAS =====
+
+// Workspaces
+export async function createWorkspace(data: InsertWorkspace) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(workspaces).values(data);
+  return result;
+}
+
+export async function getWorkspacesByUser(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // Workspaces onde o usuário é owner ou membro
+  return db.select().from(workspaces)
+    .where(eq(workspaces.ownerId, userId));
+}
+
+export async function getWorkspaceById(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.select().from(workspaces).where(eq(workspaces.id, id));
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function updateWorkspace(id: number, data: Partial<InsertWorkspace>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(workspaces).set(data).where(eq(workspaces.id, id));
+}
+
+// Workspace Members
+export async function addWorkspaceMember(data: InsertWorkspaceMember) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(workspaceMembers).values(data);
+}
+
+export async function getWorkspaceMembers(workspaceId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.select().from(workspaceMembers).where(eq(workspaceMembers.workspaceId, workspaceId));
+}
+
+export async function updateWorkspaceMemberRole(memberId: number, role: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(workspaceMembers).set({ role: role as any }).where(eq(workspaceMembers.id, memberId));
+}
+
+export async function removeWorkspaceMember(memberId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(workspaceMembers).where(eq(workspaceMembers.id, memberId));
+}
+
+// Workspace Invites
+export async function createWorkspaceInvite(data: InsertWorkspaceInvite) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(workspaceInvites).values(data);
+}
+
+export async function getWorkspaceInviteByToken(token: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.select().from(workspaceInvites).where(eq(workspaceInvites.token, token));
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getPendingInvitesByEmail(email: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.select().from(workspaceInvites)
+    .where(and(eq(workspaceInvites.email, email), eq(workspaceInvites.status, "pending" as any)));
+}
+
+export async function acceptWorkspaceInvite(inviteId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const invite = await db.select().from(workspaceInvites).where(eq(workspaceInvites.id, inviteId));
+  if (invite.length === 0) throw new Error("Invite not found");
+  
+  const inv = invite[0];
+  
+  // Adicionar como membro
+  await db.insert(workspaceMembers).values({
+    workspaceId: inv.workspaceId,
+    userId,
+    role: inv.role as any,
+    status: "active" as any,
+    invitedBy: inv.invitedBy,
+    invitedAt: inv.createdAt,
+  });
+  
+  // Marcar convite como aceito
+  return db.update(workspaceInvites).set({
+    status: "accepted" as any,
+    acceptedAt: new Date(),
+    acceptedBy: userId,
+  }).where(eq(workspaceInvites.id, inviteId));
+}
+
+// Shared Accounts
+export async function createSharedAccount(data: InsertSharedAccount) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(sharedAccounts).values(data);
+}
+
+export async function getSharedAccountsByWorkspace(workspaceId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.select().from(sharedAccounts).where(eq(sharedAccounts.workspaceId, workspaceId));
+}
+
+// Transaction Responsibilities
+export async function addTransactionResponsibility(data: InsertTransactionResponsibility) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(transactionResponsibilities).values(data);
+}
+
+export async function getTransactionResponsibilities(transactionId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.select().from(transactionResponsibilities).where(eq(transactionResponsibilities.transactionId, transactionId));
+}
+
+export async function removeTransactionResponsibility(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(transactionResponsibilities).where(eq(transactionResponsibilities.id, id));
+}
+
+// Audit Log
+export async function logAuditAction(data: InsertAuditLog) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(auditLog).values(data);
+}
+
+export async function getAuditLogByWorkspace(workspaceId: number, limit = 100) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.select().from(auditLog)
+    .where(eq(auditLog.workspaceId, workspaceId))
+    .orderBy(desc(auditLog.createdAt))
+    .limit(limit);
 }

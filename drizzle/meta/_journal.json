@@ -71,6 +71,13 @@
       "when": 1782266723258,
       "tag": "0009_optimal_wild_child",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1782515268108,
+      "tag": "0010_shocking_naoko",
+      "breakpoints": true
     }
   ]
 }

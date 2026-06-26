@@ -416,3 +416,14 @@
 - [x] Criar página AccountsManagement.tsx com interface completa
 - [x] Implementar criar, editar, deletar e ajustar saldo de contas
 - [x] Validar todos os testes (71 testes passando)
+
+
+## Fase 50: Funcionalidades Colaborativas
+
+- [ ] Criar tabelas de workspaces, membros e permissões no banco
+- [ ] Implementar procedures de gerenciamento de workspaces
+- [ ] Criar interface de convites e gerenciamento de membros
+- [ ] Implementar separação de contas (individual/conjunta/compartilhada)
+- [ ] Adicionar indicadores visuais de responsável
+- [ ] Escrever testes para colaboração
+- [ ] Publicar site permanentemente

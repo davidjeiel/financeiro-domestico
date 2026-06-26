@@ -301,3 +301,137 @@ export type InsertAccount = typeof accounts.$inferInsert;
 export const accountsRelations = relations(accounts, ({ one }) => ({
   user: one(users, { fields: [accounts.userId], references: [users.id] }),
 }));
+
+
+// ===== TABELAS COLABORATIVAS =====
+
+// Workspaces (Espaços Compartilhados)
+export const workspaces = mysqlTable("workspaces", {
+  id: int("id").autoincrement().primaryKey(),
+  ownerId: int("ownerId").notNull(), // Usuário que criou o workspace
+  name: varchar("name", { length: 100 }).notNull(), // Ex: "Financeiro Familiar"
+  description: text("description"), // Descrição do workspace
+  type: mysqlEnum("type", ["personal", "family", "business"]).default("personal").notNull(),
+  isActive: int("isActive").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Workspace = typeof workspaces.$inferSelect;
+export type InsertWorkspace = typeof workspaces.$inferInsert;
+
+// Membros do Workspace
+export const workspaceMembers = mysqlTable("workspaceMembers", {
+  id: int("id").autoincrement().primaryKey(),
+  workspaceId: int("workspaceId").notNull(),
+  userId: int("userId").notNull(),
+  role: mysqlEnum("role", ["owner", "editor", "viewer"]).default("viewer").notNull(),
+  joinedAt: timestamp("joinedAt").defaultNow().notNull(),
+  invitedBy: int("invitedBy"), // ID do usuário que convidou
+  invitedAt: timestamp("invitedAt"),
+  status: mysqlEnum("status", ["active", "pending", "declined"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type WorkspaceMember = typeof workspaceMembers.$inferSelect;
+export type InsertWorkspaceMember = typeof workspaceMembers.$inferInsert;
+
+// Convites para Workspace
+export const workspaceInvites = mysqlTable("workspaceInvites", {
+  id: int("id").autoincrement().primaryKey(),
+  workspaceId: int("workspaceId").notNull(),
+  email: varchar("email", { length: 320 }).notNull(), // Email do convidado
+  token: varchar("token", { length: 64 }).notNull().unique(), // Token único para aceitar convite
+  role: mysqlEnum("role", ["owner", "editor", "viewer"]).default("viewer").notNull(),
+  invitedBy: int("invitedBy").notNull(), // ID do usuário que convidou
+  expiresAt: timestamp("expiresAt"), // Data de expiração do convite
+  acceptedAt: timestamp("acceptedAt"), // Data de aceitação
+  acceptedBy: int("acceptedBy"), // ID do usuário que aceitou
+  status: mysqlEnum("status", ["pending", "accepted", "declined", "expired"]).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type WorkspaceInvite = typeof workspaceInvites.$inferSelect;
+export type InsertWorkspaceInvite = typeof workspaceInvites.$inferInsert;
+
+// Contas Compartilhadas (com tipo de compartilhamento)
+export const sharedAccounts = mysqlTable("sharedAccounts", {
+  id: int("id").autoincrement().primaryKey(),
+  accountId: int("accountId").notNull(), // Referência à conta original
+  workspaceId: int("workspaceId").notNull(), // Workspace onde é compartilhada
+  shareType: mysqlEnum("shareType", ["individual", "joint", "shared"]).default("shared").notNull(),
+  // individual: conta de um membro
+  // joint: conta compartilhada entre múltiplos membros (cada um responsável por seus lançamentos)
+  // shared: conta totalmente compartilhada (qualquer membro pode editar)
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SharedAccount = typeof sharedAccounts.$inferSelect;
+export type InsertSharedAccount = typeof sharedAccounts.$inferInsert;
+
+// Responsabilidades de Lançamentos (quem é responsável por cada transação)
+export const transactionResponsibilities = mysqlTable("transactionResponsibilities", {
+  id: int("id").autoincrement().primaryKey(),
+  transactionId: int("transactionId").notNull(),
+  userId: int("userId").notNull(), // Usuário responsável
+  percentage: decimal("percentage", { precision: 5, scale: 2 }).default("100"), // Percentual de responsabilidade
+  notes: text("notes"), // Notas sobre a responsabilidade
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TransactionResponsibility = typeof transactionResponsibilities.$inferSelect;
+export type InsertTransactionResponsibility = typeof transactionResponsibilities.$inferInsert;
+
+// Auditoria de Ações (log de quem fez o quê)
+export const auditLog = mysqlTable("auditLog", {
+  id: int("id").autoincrement().primaryKey(),
+  workspaceId: int("workspaceId").notNull(),
+  userId: int("userId").notNull(), // Quem fez a ação
+  action: varchar("action", { length: 50 }).notNull(), // Ex: "created_transaction", "updated_account"
+  entityType: varchar("entityType", { length: 50 }).notNull(), // Ex: "transaction", "account"
+  entityId: int("entityId"), // ID da entidade afetada
+  changes: text("changes"), // JSON com as mudanças
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AuditLog = typeof auditLog.$inferSelect;
+export type InsertAuditLog = typeof auditLog.$inferInsert;
+
+// Relações Colaborativas
+export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
+  owner: one(users, { fields: [workspaces.ownerId], references: [users.id] }),
+  members: many(workspaceMembers),
+  invites: many(workspaceInvites),
+  sharedAccounts: many(sharedAccounts),
+}));
+
+export const workspaceMembersRelations = relations(workspaceMembers, ({ one }) => ({
+  workspace: one(workspaces, { fields: [workspaceMembers.workspaceId], references: [workspaces.id] }),
+  user: one(users, { fields: [workspaceMembers.userId], references: [users.id] }),
+  invitedByUser: one(users, { fields: [workspaceMembers.invitedBy], references: [users.id] }),
+}));
+
+export const workspaceInvitesRelations = relations(workspaceInvites, ({ one }) => ({
+  workspace: one(workspaces, { fields: [workspaceInvites.workspaceId], references: [workspaces.id] }),
+  invitedByUser: one(users, { fields: [workspaceInvites.invitedBy], references: [users.id] }),
+  acceptedByUser: one(users, { fields: [workspaceInvites.acceptedBy], references: [users.id] }),
+}));
+
+export const sharedAccountsRelations = relations(sharedAccounts, ({ one }) => ({
+  account: one(accounts, { fields: [sharedAccounts.accountId], references: [accounts.id] }),
+  workspace: one(workspaces, { fields: [sharedAccounts.workspaceId], references: [workspaces.id] }),
+}));
+
+export const transactionResponsibilitiesRelations = relations(transactionResponsibilities, ({ one }) => ({
+  transaction: one(transactions, { fields: [transactionResponsibilities.transactionId], references: [transactions.id] }),
+  user: one(users, { fields: [transactionResponsibilities.userId], references: [users.id] }),
+}));
+
+export const auditLogRelations = relations(auditLog, ({ one }) => ({
+  workspace: one(workspaces, { fields: [auditLog.workspaceId], references: [workspaces.id] }),
+  user: one(users, { fields: [auditLog.userId], references: [users.id] }),
+}));
