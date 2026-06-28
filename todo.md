@@ -476,9 +476,9 @@
 - [x] Implementar interface de convite de membros por email
 - [ ] Implementar interface de aceitação de convites
 - [x] Criar página de compartilhamento de contas (SharedAccountsPage.tsx)
-- [ ] Implementar indicadores visuais de responsável em transações
+- [x] Implementar indicadores visuais de responsável em transações
 - [x] Integrar workspaces na navegação principal
-- [ ] Testar fluxos de colaboração
+- [x] Testar fluxos de colaboração
 - [ ] Publicar site permanentemente
 - [x] Todos os 92 testes passando
 - [x] TypeScript compilando sem erros
