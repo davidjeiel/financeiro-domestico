@@ -16,6 +16,7 @@ import RecurringAndInstallments from "@/pages/RecurringAndInstallments";
 import AccountsManagement from "@/pages/AccountsManagement";
 import CategoriesManagement from "@/pages/CategoriesManagement";
 import { WorkspacesPage } from "@/pages/WorkspacesPage";
+import { SharedAccountsPage } from "@/pages/SharedAccountsPage";
 import { Route, Router, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -42,6 +43,7 @@ function AppRouter() {
         <Route path={"/accounts"} component={AccountsManagement} />
         <Route path={"/categories"} component={CategoriesManagement} />
         <Route path={"/workspaces"} component={WorkspacesPage} />
+        <Route path={"/shared-accounts"} component={SharedAccountsPage} />
         <Route path={"/settings"} component={Settings} />
         <Route path={"/404"} component={NotFound} />
         {/* Final fallback route */}

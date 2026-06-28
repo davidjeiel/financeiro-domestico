@@ -152,6 +152,7 @@ export default function DashboardLayoutCustom({
           <NavLink href="/competency-config" icon="📋" label="Competência" open={sidebarOpen} />
           <NavLink href="/recurring-installments" icon="🔄" label="Fixos/Parcelados" open={sidebarOpen} />
           <NavLink href="/workspaces" icon="👥" label="Workspaces" open={sidebarOpen} />
+          <NavLink href="/shared-accounts" icon="🔗" label="Contas Compartilhadas" open={sidebarOpen} />
         </nav>
 
         {/* User Profile */}

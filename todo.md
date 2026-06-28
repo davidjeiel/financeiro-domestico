@@ -475,7 +475,7 @@
 - [x] Criar página de gerenciamento de membros (WorkspaceMembersPage.tsx)
 - [x] Implementar interface de convite de membros por email
 - [ ] Implementar interface de aceitação de convites
-- [ ] Criar página de compartilhamento de contas (SharedAccountsPage.tsx)
+- [x] Criar página de compartilhamento de contas (SharedAccountsPage.tsx)
 - [ ] Implementar indicadores visuais de responsável em transações
 - [x] Integrar workspaces na navegação principal
 - [ ] Testar fluxos de colaboração
