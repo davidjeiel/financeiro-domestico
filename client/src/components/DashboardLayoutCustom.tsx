@@ -151,6 +151,7 @@ export default function DashboardLayoutCustom({
           <NavLink href="/filters" icon="🔍" label="Filtros" open={sidebarOpen} />
           <NavLink href="/competency-config" icon="📋" label="Competência" open={sidebarOpen} />
           <NavLink href="/recurring-installments" icon="🔄" label="Fixos/Parcelados" open={sidebarOpen} />
+          <NavLink href="/workspaces" icon="👥" label="Workspaces" open={sidebarOpen} />
         </nav>
 
         {/* User Profile */}
