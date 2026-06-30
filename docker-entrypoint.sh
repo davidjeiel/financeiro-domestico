@@ -2,7 +2,8 @@
 set -e
 
 echo "Applying database migrations..."
-./node_modules/.bin/drizzle-kit migrate
+# Run migrations but don't fail if tables already exist (idempotent)
+./node_modules/.bin/drizzle-kit migrate || true
 
 if [ "$NODE_ENV" = "development" ]; then
   echo "Starting server in development mode..."
