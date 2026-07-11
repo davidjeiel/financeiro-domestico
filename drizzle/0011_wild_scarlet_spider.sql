@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `timezone` varchar(64) DEFAULT 'America/Sao_Paulo' NOT NULL;

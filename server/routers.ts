@@ -63,6 +63,8 @@ import {
   removeTransactionResponsibility,
   logAuditAction,
   getAuditLogByWorkspace,
+  updateUserTimezone,
+  getUserTimezone,
 } from "./db";
 import { randomBytes } from "crypto";
 import { GoogleSheetsManager } from "./googleSheetsIntegration";
@@ -78,6 +80,14 @@ export const appRouter = router({
         success: true,
       } as const;
     }),
+    updateTimezone: protectedProcedure
+      .input(z.object({ timezone: z.string().min(1) }))
+      .mutation(({ ctx, input }) =>
+        updateUserTimezone(ctx.user.id, input.timezone)
+      ),
+    getTimezone: protectedProcedure.query(({ ctx }) =>
+      getUserTimezone(ctx.user.id)
+    ),
   }),
 
   competency: router({

@@ -25,6 +25,8 @@ export const users = mysqlTable("users", {
   // Configurações de competência padrão
   competencyStartDay: int("competencyStartDay").default(1).notNull(), // Dia de início (1-31)
   competencyEndDay: int("competencyEndDay").default(0).notNull(), // Dia de fim (0 = último dia do mês)
+  // Timezone do usuário (IANA timezone string, ex: "America/Sao_Paulo")
+  timezone: varchar("timezone", { length: 64 }).default("America/Sao_Paulo").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

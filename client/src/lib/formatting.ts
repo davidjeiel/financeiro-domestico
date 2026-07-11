@@ -62,16 +62,16 @@ export function formatPercentage(value: number): string {
 
 
 /**
- * Converte uma data para string no formato YYYY-MM-DD usando o timezone de São Paulo
- * Isso garante que a data seja sempre correta independente do timezone do navegador
+ * Converte uma data para string no formato YYYY-MM-DD usando um timezone especificado
+ * @param date - Data a converter (padrão: data atual)
+ * @param timezone - Timezone IANA (padrão: 'America/Sao_Paulo')
  */
-export function getLocalDateStringSaoPaulo(date: Date = new Date()): string {
-  // Usa o timezone de São Paulo (America/Sao_Paulo)
+export function getLocalDateString(date: Date = new Date(), timezone: string = 'America/Sao_Paulo'): string {
   const formatter = new Intl.DateTimeFormat('pt-BR', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-    timeZone: 'America/Sao_Paulo'
+    timeZone: timezone
   });
   
   const parts = formatter.formatToParts(date);
@@ -80,4 +80,13 @@ export function getLocalDateStringSaoPaulo(date: Date = new Date()): string {
   const year = parts.find(p => p.type === 'year')?.value || '2024';
   
   return `${year}-${month}-${day}`;
+}
+
+/**
+ * Converte uma data para string no formato YYYY-MM-DD usando o timezone de São Paulo
+ * Isso garante que a data seja sempre correta independente do timezone do navegador
+ * @deprecated Use getLocalDateString com timezone específico
+ */
+export function getLocalDateStringSaoPaulo(date: Date = new Date()): string {
+  return getLocalDateString(date, 'America/Sao_Paulo');
 }

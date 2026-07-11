@@ -958,3 +958,24 @@ export async function getAuditLogByWorkspace(workspaceId: number, limit = 100) {
     .orderBy(desc(auditLog.createdAt))
     .limit(limit);
 }
+
+
+export async function updateUserTimezone(userId: number, timezone: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.update(users).set({
+    timezone: timezone,
+  }).where(eq(users.id, userId));
+}
+
+export async function getUserTimezone(userId: number): Promise<string> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const user = await db.select({
+    timezone: users.timezone,
+  }).from(users).where(eq(users.id, userId)).limit(1);
+
+  return user.length > 0 ? user[0].timezone : "America/Sao_Paulo";
+}
