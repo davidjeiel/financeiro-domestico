@@ -78,8 +78,8 @@ export const transactions = mysqlTable("transactions", {
   category: varchar("category", { length: 50 }).notNull(),
   description: text("description"),
   amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
-  transactionDate: timestamp("transactionDate").notNull(), // Data da transação
-  dueDate: timestamp("dueDate"), // Data de vencimento (para despesas)
+  transactionDate: date("transactionDate").notNull(), // Data da transação (sem hora)
+  dueDate: date("dueDate"), // Data de vencimento (para despesas, sem hora)
   installments: int("installments").default(1), // Número de parcelas
   currentInstallment: int("currentInstallment").default(1), // Parcela atual
   notes: text("notes"),
