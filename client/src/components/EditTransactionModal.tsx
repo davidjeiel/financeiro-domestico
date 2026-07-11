@@ -120,8 +120,8 @@ export default function EditTransactionModal({
         category: formData.category,
         description: formData.description,
         amount: formData.amount,
-        transactionDate: new Date(formData.transactionDate),
-        dueDate: formData.dueDate ? new Date(formData.dueDate) : undefined,
+        transactionDate: formData.transactionDate, // Enviar como string YYYY-MM-DD
+        dueDate: formData.dueDate, // Enviar como string YYYY-MM-DD
         notes: formData.notes,
       });
 

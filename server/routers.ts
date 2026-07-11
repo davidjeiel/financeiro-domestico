@@ -168,14 +168,28 @@ export const appRouter = router({
           category: z.string().min(1),
           description: z.string().optional(),
           amount: z.string(),
-          transactionDate: z.date(),
-          dueDate: z.date().optional(),
+          transactionDate: z.string(), // Formato YYYY-MM-DD
+          dueDate: z.string().optional(), // Formato YYYY-MM-DD
           installments: z.number().optional(),
           notes: z.string().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const tx = await createTransaction({ userId: ctx.user.id, ...input });
+        // Converter strings YYYY-MM-DD para Date (meia-noite local)
+        const [year, month, day] = input.transactionDate.split('-').map(Number);
+        const transactionDate = new Date(year, month - 1, day);
+        
+        const dueDate = input.dueDate ? (() => {
+          const [y, m, d] = input.dueDate.split('-').map(Number);
+          return new Date(y, m - 1, d);
+        })() : undefined;
+        
+        const tx = await createTransaction({ 
+          userId: ctx.user.id, 
+          ...input,
+          transactionDate,
+          dueDate,
+        });
         if (input.type === "credit_card" && input.creditCardId) {
           await upsertInvoiceForCreditCard(ctx.user.id, input.creditCardId, input.competencyId);
         }
@@ -191,14 +205,27 @@ export const appRouter = router({
           category: z.string().optional(),
           description: z.string().optional(),
           amount: z.string().optional(),
-          transactionDate: z.date().optional(),
-          dueDate: z.date().optional(),
+          transactionDate: z.string().optional(), // Formato YYYY-MM-DD
+          dueDate: z.string().optional(), // Formato YYYY-MM-DD
           installments: z.number().optional(),
           notes: z.string().optional(),
         })
       )
       .mutation(({ input }) => {
-        const { id, ...updates } = input;
+        const { id, transactionDate, dueDate, ...rest } = input;
+        
+        const updates: any = { ...rest };
+        
+        if (transactionDate) {
+          const [year, month, day] = transactionDate.split('-').map(Number);
+          updates.transactionDate = new Date(year, month - 1, day);
+        }
+        
+        if (dueDate) {
+          const [y, m, d] = dueDate.split('-').map(Number);
+          updates.dueDate = new Date(y, m - 1, d);
+        }
+        
         return updateTransaction(id, updates);
       }),
     delete: protectedProcedure

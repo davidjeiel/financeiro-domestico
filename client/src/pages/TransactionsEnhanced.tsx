@@ -291,18 +291,14 @@ export default function TransactionsEnhanced() {
         return;
       }
 
-      // Corrigir timezone: data.transactionDate eh uma string YYYY-MM-DD
-      // Criar data no formato UTC para evitar problemas de timezone
-      const [year, month, day] = data.transactionDate.split('-').map(Number);
-      const transactionDate = new Date(Date.UTC(year, month - 1, day));
-
+      // Enviar data como string YYYY-MM-DD (sem conversão para Date)
       await createMutation.mutateAsync({
         competencyId: activeCompetency.id,
         type: data.type,
         category: data.category,
         description: data.description || "",
         amount: amountNum.toString(),
-        transactionDate: transactionDate,
+        transactionDate: data.transactionDate, // Enviar como string
         creditCardId: data.creditCardId ? parseInt(data.creditCardId) : undefined,
         notes: data.notes || "",
       });
