@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency, formatDate } from "@/lib/formatting";
+import { formatCurrency, formatDate, getLocalDateStringSaoPaulo } from "@/lib/formatting";
 import { Plus, Loader2, Filter, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -223,8 +223,7 @@ export default function TransactionsEnhanced() {
 
   // Função para obter data local no formato YYYY-MM-DD
   const getLocalDateString = () => {
-    const today = new Date();
-    return today.toLocaleDateString('pt-BR').split('/').reverse().join('-');
+    return getLocalDateStringSaoPaulo();
   };
 
   const {

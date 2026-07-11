@@ -59,3 +59,25 @@ export function formatPercentage(value: number): string {
     maximumFractionDigits: 1,
   }).format(value);
 }
+
+
+/**
+ * Converte uma data para string no formato YYYY-MM-DD usando o timezone de São Paulo
+ * Isso garante que a data seja sempre correta independente do timezone do navegador
+ */
+export function getLocalDateStringSaoPaulo(date: Date = new Date()): string {
+  // Usa o timezone de São Paulo (America/Sao_Paulo)
+  const formatter = new Intl.DateTimeFormat('pt-BR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'America/Sao_Paulo'
+  });
+  
+  const parts = formatter.formatToParts(date);
+  const day = parts.find(p => p.type === 'day')?.value || '01';
+  const month = parts.find(p => p.type === 'month')?.value || '01';
+  const year = parts.find(p => p.type === 'year')?.value || '2024';
+  
+  return `${year}-${month}-${day}`;
+}
