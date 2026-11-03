@@ -41,6 +41,8 @@ export const tables = {
       role: text("user"),
       competencyStartDay: int(1),
       competencyEndDay: int(0),
+      // Timezone IANA do usuário (ex: "America/Sao_Paulo")
+      timezone: text("America/Sao_Paulo"),
       ...timestamps,
       lastSignedIn: date(NOW),
     },
@@ -249,6 +251,7 @@ export type User = {
   role: "user" | "admin";
   competencyStartDay: number;
   competencyEndDay: number;
+  timezone: string;
   lastSignedIn: Date;
 } & Timestamps;
 

@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency, formatDate } from "@/lib/formatting";
+import { formatCurrency, formatDate, getLocalDateStringSaoPaulo } from "@/lib/formatting";
 import { Plus, Loader2, Filter, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -223,8 +223,7 @@ export default function TransactionsEnhanced() {
 
   // Função para obter data local no formato YYYY-MM-DD
   const getLocalDateString = () => {
-    const today = new Date();
-    return today.toLocaleDateString('pt-BR').split('/').reverse().join('-');
+    return getLocalDateStringSaoPaulo();
   };
 
   const {
@@ -292,18 +291,14 @@ export default function TransactionsEnhanced() {
         return;
       }
 
-      // Corrigir timezone: data.transactionDate eh uma string YYYY-MM-DD
-      // Criar data no formato UTC para evitar problemas de timezone
-      const [year, month, day] = data.transactionDate.split('-').map(Number);
-      const transactionDate = new Date(Date.UTC(year, month - 1, day));
-
+      // Enviar data como string YYYY-MM-DD (sem conversão para Date)
       await createMutation.mutateAsync({
         competencyId: activeCompetency.id,
         type: data.type,
         category: data.category,
         description: data.description || "",
         amount: amountNum.toString(),
-        transactionDate: transactionDate,
+        transactionDate: data.transactionDate, // Enviar como string
         creditCardId: data.creditCardId ? parseInt(data.creditCardId) : undefined,
         notes: data.notes || "",
       });

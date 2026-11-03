@@ -130,7 +130,7 @@ export default function Transactions() {
         category: data.category,
         description: data.description,
         amount: data.amount,
-        transactionDate: new Date(data.transactionDate),
+        transactionDate: data.transactionDate, // Enviar como string YYYY-MM-DD
         creditCardId: data.creditCardId ? parseInt(data.creditCardId) : undefined,
         notes: data.notes,
       });

@@ -71,7 +71,9 @@ export async function getCurrentUser(): Promise<User | null> {
     return null;
   }
   try {
-    return (await ensureLoaded()).user;
+    const { store, user } = await ensureLoaded();
+    // Lê da memória para refletir alterações feitas depois do login (ex: timezone).
+    return store.find("users", u => u.id === user.id) ?? user;
   } catch (error) {
     if (error instanceof GoogleAuthError) {
       loaded = null;

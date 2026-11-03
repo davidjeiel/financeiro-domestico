@@ -554,3 +554,16 @@ export async function getAuditLogByWorkspace(workspaceId: number, limit = 100) {
     .sort(byNewest)
     .slice(0, limit);
 }
+
+// ─── Preferências do usuário ─────────────────────────────────────────────────
+
+export async function updateUserTimezone(userId: number, timezone: string) {
+  const s = getStore();
+  s.update("users", u => u.id === userId, { timezone });
+  await s.commit();
+  return { success: true } as const;
+}
+
+export async function getUserTimezone(userId: number): Promise<string> {
+  return getStore().find("users", u => u.id === userId)?.timezone ?? "America/Sao_Paulo";
+}
