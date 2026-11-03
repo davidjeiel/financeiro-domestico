@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DashboardLayoutCustom from "@/components/DashboardLayoutCustom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,16 +12,32 @@ export function SharedAccountsPage() {
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<number | null>(null);
+  const [workspaceFilterId, setWorkspaceFilterId] = useState<number | null>(null);
   const [shareType, setShareType] = useState("shared");
 
   const { data: accounts, isLoading: accountsLoading } = trpc.account.list.useQuery();
   const { data: workspaces, isLoading: workspacesLoading } = trpc.workspace.list.useQuery();
   const { data: sharedAccounts, isLoading: sharedLoading, refetch: refetchShared } = trpc.sharedAccount.listByWorkspace.useQuery(
-    { workspaceId: selectedWorkspaceId || 0 },
-    { enabled: false }
+    { workspaceId: workspaceFilterId || 0 },
+    { enabled: !!workspaceFilterId }
   );
 
-  const createShareMutation = trpc.sharedAccount.create.useMutation();
+  useEffect(() => {
+    if (workspaces && workspaces.length > 0) {
+      if (workspaceFilterId === null) {
+        setWorkspaceFilterId(workspaces[0].id);
+      }
+      if (selectedWorkspaceId === null) {
+        setSelectedWorkspaceId(workspaces[0].id);
+      }
+    }
+  }, [selectedWorkspaceId, workspaceFilterId, workspaces]);
+
+  const createShareMutation = trpc.sharedAccount.create.useMutation({
+    onSuccess: () => {
+      refetchShared();
+    },
+  });
 
   const handleShareAccount = async () => {
     if (!selectedAccountId || !selectedWorkspaceId) {
@@ -36,13 +52,12 @@ export function SharedAccountsPage() {
         shareType: shareType as "individual" | "joint" | "shared",
       });
       toast.success("Conta compartilhada com sucesso");
+      setWorkspaceFilterId(selectedWorkspaceId);
       setIsShareOpen(false);
       setSelectedAccountId(null);
-      setSelectedWorkspaceId(null);
       setShareType("shared");
-      refetchShared();
     } catch (error) {
-      toast.error("Falha ao compartilhar conta");
+      toast.error((error as any)?.message || "Falha ao compartilhar conta");
     }
   };
 
@@ -73,93 +88,124 @@ export function SharedAccountsPage() {
   return (
     <DashboardLayoutCustom title="Contas Compartilhadas">
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col lg:flex-row justify-between items-start gap-4">
           <div>
             <h1 className="text-3xl font-bold">Contas Compartilhadas</h1>
             <p className="text-muted-foreground">Gerencie contas compartilhadas entre workspaces</p>
           </div>
-          <Dialog open={isShareOpen} onOpenChange={setIsShareOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Compartilhar Conta
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Compartilhar Conta</DialogTitle>
-                <DialogDescription>
-                  Selecione uma conta e um workspace para compartilhar
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium">Conta</label>
-                  <Select
-                    value={selectedAccountId?.toString() || ""}
-                    onValueChange={(value) => setSelectedAccountId(parseInt(value, 10))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione uma conta" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {accounts?.map((account) => (
-                        <SelectItem key={account.id} value={account.id.toString()}>
-                          {account.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full lg:w-auto">
+            <div className="min-w-[220px]">
+              <label className="text-sm font-medium">Filtrar Workspace</label>
+              <Select
+                value={workspaceFilterId?.toString() || ""}
+                onValueChange={(value) => setWorkspaceFilterId(parseInt(value, 10))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={workspacesLoading ? "Carregando..." : "Selecione um workspace"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {workspaces?.map((workspace) => (
+                    <SelectItem key={workspace.id} value={workspace.id.toString()}>
+                      {workspace.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-                <div>
-                  <label className="text-sm font-medium">Workspace</label>
-                  <Select
-                    value={selectedWorkspaceId?.toString() || ""}
-                    onValueChange={(value) => setSelectedWorkspaceId(parseInt(value, 10))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um workspace" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {workspaces?.map((workspace) => (
-                        <SelectItem key={workspace.id} value={workspace.id.toString()}>
-                          {workspace.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium">Tipo de Compartilhamento</label>
-                  <Select value={shareType} onValueChange={setShareType}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="individual">Individual</SelectItem>
-                      <SelectItem value="shared">Compartilhada</SelectItem>
-                      <SelectItem value="joint">Conjunta</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    <strong>Compartilhada:</strong> Todos veem e podem editar
-                    <br />
-                    <strong>Conjunta:</strong> Responsabilidades divididas entre membros
-                  </p>
-                </div>
-
-                <Button
-                  onClick={handleShareAccount}
-                  className="w-full"
-                  disabled={createShareMutation.isPending}
-                >
-                  {createShareMutation.isPending ? "Compartilhando..." : "Compartilhar"}
+            <Dialog
+              open={isShareOpen}
+              onOpenChange={(open) => {
+                setIsShareOpen(open);
+                if (open && workspaceFilterId) {
+                  setSelectedWorkspaceId(workspaceFilterId);
+                }
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Compartilhar Conta
                 </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Compartilhar Conta</DialogTitle>
+                  <DialogDescription>
+                    Selecione uma conta e um workspace para compartilhar
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium">Conta</label>
+                    <Select
+                      value={selectedAccountId?.toString() || ""}
+                      onValueChange={(value) => setSelectedAccountId(parseInt(value, 10))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione uma conta" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts?.map((account) => (
+                          <SelectItem key={account.id} value={account.id.toString()}>
+                            {account.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium">Workspace</label>
+                    <Select
+                      value={selectedWorkspaceId?.toString() || ""}
+                      onValueChange={(value) => setSelectedWorkspaceId(parseInt(value, 10))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione um workspace" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {workspaces?.map((workspace) => (
+                          <SelectItem key={workspace.id} value={workspace.id.toString()}>
+                            {workspace.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium">Tipo de Compartilhamento</label>
+                    <Select value={shareType} onValueChange={setShareType}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="individual">Individual</SelectItem>
+                        <SelectItem value="shared">Compartilhada</SelectItem>
+                        <SelectItem value="joint">Conjunta</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      <strong>Compartilhada:</strong> Todos veem e podem editar
+                      <br />
+                      <strong>Conjunta:</strong> Responsabilidades divididas entre membros
+                    </p>
+                  </div>
+
+                  <Button
+                    onClick={handleShareAccount}
+                    className="w-full"
+                    disabled={createShareMutation.isPending}
+                  >
+                    {createShareMutation.isPending ? "Compartilhando..." : "Compartilhar"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         {sharedLoading ? (
