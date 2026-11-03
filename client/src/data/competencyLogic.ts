@@ -7,7 +7,7 @@
  * 3. Allocating expenses to the correct billing period
  */
 
-import { Transaction, CreditCard, Invoice } from "../drizzle/schema";
+import { Transaction, CreditCard, Invoice } from "./schema";
 
 /**
  * Determine which competency a transaction belongs to based on its date

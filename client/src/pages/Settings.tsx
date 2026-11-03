@@ -5,13 +5,11 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Trash2, Edit2, Save, X, Check } from "lucide-react";
+import { Plus, Trash2, Edit2, Save, X, ExternalLink, RefreshCw } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import ErrorModal from "@/components/ErrorModal";
-import LoadingOverlay from "@/components/LoadingOverlay";
 
 const typologySchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
@@ -49,15 +47,15 @@ export default function Settings() {
   const [linkTitle, setLinkTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
 
-  // Google Sheets
-  const [sheetId, setSheetId] = useState("");
-  const [isConnectingSheets, setIsConnectingSheets] = useState(false);
-  const [sheetsConnected, setSheetsConnected] = useState(false);
-  const [sheetsError, setSheetsError] = useState<{
-    type: "invalid_sheet_id" | "auth_failed" | "network_error" | "permission_denied" | "unknown";
-    message: string;
-    details?: string;
-  } | null>(null);
+  // Planilha Google onde os dados ficam salvos
+  const { data: spreadsheet } = trpc.spreadsheet.info.useQuery();
+  const reloadMutation = trpc.spreadsheet.reload.useMutation({
+    onSuccess: async () => {
+      await utils.invalidate();
+      toast.success("Dados recarregados da planilha");
+    },
+    onError: error => toast.error(`Erro ao recarregar: ${error.message}`),
+  });
 
   const {
     register,
@@ -120,66 +118,6 @@ export default function Settings() {
     }
   };
 
-  const handleConnectGoogleSheets = async () => {
-    if (!sheetId.trim()) {
-      setSheetsError({
-        type: "invalid_sheet_id",
-        message: "Por favor, insira um ID de planilha válido",
-      });
-      return;
-    }
-
-    setIsConnectingSheets(true);
-    setSheetsError(null);
-
-    try {
-      // Simular validação do ID
-      if (sheetId.length < 20) {
-        setSheetsError({
-          type: "invalid_sheet_id",
-          message: "O ID da planilha parece ser inválido",
-          details: "IDs de planilhas do Google Sheets geralmente têm mais de 20 caracteres",
-        });
-        setIsConnectingSheets(false);
-        return;
-      }
-
-      // Simular conexão
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Simular sucesso
-      setSheetsConnected(true);
-      toast.success("Conectado ao Google Sheets com sucesso!");
-      setSheetId("");
-    } catch (error: any) {
-      let errorType: "invalid_sheet_id" | "auth_failed" | "network_error" | "permission_denied" | "unknown" = "unknown";
-      let message = "Erro ao conectar com Google Sheets";
-      let details = "";
-
-      if (error.message?.includes("auth")) {
-        errorType = "auth_failed";
-        message = "Falha na autenticação com Google";
-      } else if (error.message?.includes("network")) {
-        errorType = "network_error";
-        message = "Erro de conexão com Google Sheets";
-      } else if (error.message?.includes("permission")) {
-        errorType = "permission_denied";
-        message = "Você não tem permissão para acessar esta planilha";
-      } else if (error.message?.includes("invalid")) {
-        errorType = "invalid_sheet_id";
-        message = "ID da planilha inválido";
-      }
-
-      setSheetsError({
-        type: errorType,
-        message,
-        details: error.message,
-      });
-    } finally {
-      setIsConnectingSheets(false);
-    }
-  };
-
   const getTypeLabel = (type: string) => {
     switch (type) {
       case "income":
@@ -219,22 +157,6 @@ export default function Settings() {
 
   return (
     <DashboardLayoutCustom title="Configurações">
-      <LoadingOverlay
-        isVisible={isConnectingSheets}
-        message="Conectando ao Google Sheets"
-        details="Aguarde enquanto validamos sua planilha..."
-        status="loading"
-      />
-
-      <ErrorModal
-        isOpen={!!sheetsError}
-        onClose={() => setSheetsError(null)}
-        errorType={sheetsError?.type}
-        errorMessage={sheetsError?.message}
-        details={sheetsError?.details}
-        onRetry={handleConnectGoogleSheets}
-      />
-
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="typologies">Tipologias</TabsTrigger>
@@ -511,62 +433,42 @@ export default function Settings() {
         <TabsContent value="sheets" className="space-y-6">
           <Card className="p-6">
             <h2 className="text-xl font-semibold text-foreground mb-6">
-              Integração com Google Sheets
+              Planilha Google
             </h2>
             <div className="space-y-4">
-              {sheetsConnected && (
-                <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center gap-3">
-                  <Check className="w-5 h-5 text-green-600" />
-                  <p className="text-sm text-green-600 font-medium">
-                    Conectado ao Google Sheets com sucesso!
-                  </p>
-                </div>
-              )}
-
+              <p className="text-sm text-muted-foreground">
+                Todos os seus dados (lançamentos, cartões, faturas, categorias etc.) ficam
+                salvos na planilha <strong>Financeiro Doméstico</strong> do seu Google Drive,
+                uma aba por tipo de registro. Não há banco de dados nem servidor.
+              </p>
               <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                <p className="text-sm text-blue-600 font-medium mb-2">Como conectar:</p>
-                <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                  <li>Crie uma nova planilha no Google Sheets</li>
-                  <li>Copie o ID da URL (entre /d/ e /edit)</li>
-                  <li>Cole o ID abaixo e clique em Conectar</li>
-                  <li>Autorize o acesso quando solicitado</li>
-                </ol>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
-                  ID da Planilha Google
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: 1BxiMVs0XRA5nFMKUVfIvWJlsvaTreeqrZIHbSzOqVQ"
-                  className="input-elegant w-full"
-                  value={sheetId}
-                  onChange={(e) => setSheetId(e.target.value)}
-                  disabled={isConnectingSheets}
-                />
-                <p className="text-xs text-muted-foreground mt-2">
-                  Encontre o ID na URL: https://docs.google.com/spreadsheets/d/{'{ID}'}/edit
+                <p className="text-sm text-muted-foreground">
+                  Você pode consultar a planilha a qualquer momento. Evite renomear abas ou a
+                  primeira linha de cada aba: o aplicativo usa esses nomes para ler os dados.
+                  Se editar a planilha diretamente, clique em “Recarregar dados”.
                 </p>
               </div>
-
-              <Button
-                onClick={handleConnectGoogleSheets}
-                disabled={isConnectingSheets || !sheetId.trim()}
-                className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                {isConnectingSheets ? (
-                  <>
-                    <div className="w-4 h-4 mr-2 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
-                    Conectando...
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-4 h-4 mr-2" />
-                    Conectar Google Sheets
-                  </>
+              <div className="flex flex-col sm:flex-row gap-3">
+                {spreadsheet?.url && (
+                  <Button asChild className="flex-1">
+                    <a href={spreadsheet.url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      Abrir planilha
+                    </a>
+                  </Button>
                 )}
-              </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => reloadMutation.mutate()}
+                  disabled={reloadMutation.isPending}
+                >
+                  <RefreshCw
+                    className={`w-4 h-4 mr-2 ${reloadMutation.isPending ? "animate-spin" : ""}`}
+                  />
+                  Recarregar dados
+                </Button>
+              </div>
             </div>
           </Card>
         </TabsContent>

@@ -1,23 +1,4 @@
 services:
-  db:
-    image: mysql:8
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: financeiro
-      MYSQL_USER: fiscaluser
-      MYSQL_PASSWORD: fiscal123
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-
   app:
     build:
       context: .
@@ -28,12 +9,4 @@ services:
     env_file:
       - .env.local
     environment:
-      # Sobrescreve o DATABASE_URL do .env.local para usar o hostname do serviço 'db'
-      DATABASE_URL: mysql://fiscaluser:fiscal123@db:3306/financeiro
       NODE_ENV: development
-    depends_on:
-      db:
-        condition: service_healthy
-
-volumes:
-  mysql_data:

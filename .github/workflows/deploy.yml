@@ -42,11 +42,9 @@ jobs:
         env:
           # Base path = /<nome-do-repositório>/
           VITE_BASE_URL: /financeiro-domestico/
-          # ID da aplicação para o build estático
-          VITE_APP_ID: financeiro-pages
-          # OAuth: preencha as secrets do repositório para habilitar login com Google.
-          # Se vazios, o build usa a tela de login local (apenas para teste — não há backend).
-          VITE_OAUTH_PORTAL_URL: ${{ secrets.VITE_OAUTH_PORTAL_URL }}
+          # OAuth Client ID do Google (login + gravação na planilha do usuário).
+          # Cadastre-o em Settings → Secrets and variables → Actions → Variables.
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
 
       - name: Disable Jekyll
         run: touch dist/public/.nojekyll

@@ -1,7 +1,8 @@
-import { COOKIE_NAME } from "@shared/const";
-import { getSessionCookieOptions } from "./_core/cookies";
-import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+/**
+ * Router tRPC executado no próprio navegador (via `unstable_localLink`).
+ * Os dados ficam na planilha Google do usuário (ver ./db.ts).
+ */
+import { publicProcedure, protectedProcedure, router } from "./trpc";
 import { z } from "zod";
 import {
   getOrCreateCurrentCompetency,
@@ -23,9 +24,6 @@ import {
   getTypologiesByUserAndType,
   updateTypology,
   deleteTypology,
-  updateUserGoogleSheets,
-  getUserGoogleSheetsConfig,
-  disconnectGoogleSheets,
   getSavedFilters,
   createSavedFilter,
   getSavedFilter,
@@ -37,7 +35,6 @@ import {
   updateTransactionLink,
   deleteTransactionLink,
   setTransactionLinks,
-  TransactionLink,
   createAccount,
   getUserAccounts,
   getAccountById,
@@ -48,7 +45,6 @@ import {
   getWorkspacesByUser,
   getWorkspaceById,
   updateWorkspace,
-  addWorkspaceMember,
   getWorkspaceMembers,
   updateWorkspaceMemberRole,
   removeWorkspaceMember,
@@ -64,19 +60,29 @@ import {
   logAuditAction,
   getAuditLogByWorkspace,
 } from "./db";
-import { randomBytes } from "crypto";
-import { GoogleSheetsManager } from "./googleSheetsIntegration";
+import { getSpreadsheetUrl, reload, signOut } from "./session";
+
+function randomToken(bytes = 32) {
+  const buf = crypto.getRandomValues(new Uint8Array(bytes));
+  return Array.from(buf, b => b.toString(16).padStart(2, "0")).join("");
+}
 
 export const appRouter = router({
-  system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+    logout: publicProcedure.mutation(() => {
+      signOut();
       return {
         success: true,
       } as const;
+    }),
+  }),
+
+  spreadsheet: router({
+    info: protectedProcedure.query(() => ({ url: getSpreadsheetUrl() })),
+    reload: protectedProcedure.mutation(async () => {
+      await reload();
+      return { success: true } as const;
     }),
   }),
 
@@ -223,71 +229,6 @@ export const appRouter = router({
       .mutation(({ input }) =>
         updateInvoicePayment(input.invoiceId, input.paidAmount)
       ),
-  }),
-
-  googleSheets: router({
-    config: protectedProcedure.query(({ ctx }) =>
-      getUserGoogleSheetsConfig(ctx.user.id)
-    ),
-    connect: protectedProcedure
-      .input(
-        z.object({
-          googleSheetsId: z.string().min(1),
-          accessToken: z.string().min(1),
-          refreshToken: z.string().optional(),
-        })
-      )
-      .mutation(({ ctx, input }) =>
-        updateUserGoogleSheets(
-          ctx.user.id,
-          input.googleSheetsId,
-          input.accessToken,
-          input.refreshToken
-        )
-      ),
-    disconnect: protectedProcedure.mutation(({ ctx }) =>
-      disconnectGoogleSheets(ctx.user.id)
-    ),
-    syncTransactions: protectedProcedure
-      .input(
-        z.object({
-          googleSheetsId: z.string().min(1),
-          accessToken: z.string().min(1),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        try {
-          const competencies = await getUserCompetencies(ctx.user.id);
-          const allTransactions: any[] = [];
-          
-          for (const competency of competencies) {
-            const transactions = await getCompetencyTransactions(competency.id);
-            allTransactions.push(...transactions);
-          }
-
-          const manager = new GoogleSheetsManager(input.accessToken);
-          const headers = ['ID', 'Data', 'Descricao', 'Categoria', 'Tipo', 'Valor', 'Competencia'];
-          const data = [
-            headers,
-            ...allTransactions.map(t => [
-              t.id,
-              new Date(t.transactionDate).toLocaleDateString('pt-BR'),
-              t.description || '',
-              t.category,
-              t.type,
-              t.amount,
-              t.competencyId,
-            ]),
-          ];
-
-          await manager.writeSheetData(input.googleSheetsId, 'Transacoes!A1', data);
-          
-          return { success: true, message: 'Transacoes sincronizadas com sucesso!' };
-        } catch (error: any) {
-          console.error('Erro ao sincronizar transacoes:', error);
-          throw new Error(`Erro ao sincronizar: ${error.message}`);
-        }
-      }),
   }),
 
   typology: router({
@@ -493,8 +434,8 @@ export const appRouter = router({
           userId: ctx.user.id,
           name: input.name,
           type: input.type || "checking",
-          balance: ((input.balance || 0).toString()) as any,
-          initialBalance: ((input.initialBalance || 0).toString()) as any,
+          balance: (input.balance || 0).toFixed(2),
+          initialBalance: (input.initialBalance || 0).toFixed(2),
           color: input.color || "#3B82F6",
           isActive: 1,
         })
@@ -576,7 +517,7 @@ export const appRouter = router({
           })
         )
         .mutation(async ({ input, ctx }) => {
-          const token = randomBytes(32).toString("hex");
+          const token = randomToken();
           const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 dias
           
           await logAuditAction({
@@ -688,7 +629,10 @@ export const appRouter = router({
           entityId: input.transactionId,
           changes: JSON.stringify({ userId: input.userId, percentage: input.percentage }),
         });
-        return addTransactionResponsibility(input as any);
+        return addTransactionResponsibility({
+          ...input,
+          percentage: input.percentage?.toFixed(2),
+        });
       }),
     list: protectedProcedure
       .input(z.object({ transactionId: z.number() }))

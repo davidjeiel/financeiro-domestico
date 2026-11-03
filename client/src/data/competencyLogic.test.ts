@@ -11,7 +11,7 @@ import {
   groupTransactionsByCategory,
   calculateCategoryTotals,
 } from "./competencyLogic";
-import { CreditCard, Transaction } from "../drizzle/schema";
+import { CreditCard, Transaction } from "./schema";
 
 describe("competencyLogic", () => {
   describe("getCompetencyForTransaction", () => {

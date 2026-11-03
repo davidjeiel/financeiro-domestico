@@ -1,12 +1,11 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Loader2, TrendingUp, CreditCard, BarChart3, Shield } from "lucide-react";
-import { getLoginUrl } from "@/const";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
 
 export default function Home() {
-  const { user, loading, isAuthenticated } = useAuth();
+  const { loading, isAuthenticated, login, error } = useAuth();
   const [, navigate] = useLocation();
 
   useEffect(() => {
@@ -39,9 +38,7 @@ export default function Home() {
               Ir para Dashboard
             </Button>
           ) : (
-            <a href={getLoginUrl()}>
-              <Button variant="default">Entrar</Button>
-            </a>
+            <Button variant="default" onClick={login}>Entrar</Button>
           )}
         </div>
       </nav>
@@ -57,11 +54,10 @@ export default function Home() {
             competências mensais, controle seus cartões de crédito com precisão e visualize
             seus gastos através de relatórios inteligentes.
           </p>
-          <a href={getLoginUrl()}>
-            <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90">
-              Começar Agora
-            </Button>
-          </a>
+          <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={login}>
+            Começar Agora
+          </Button>
+          {error && <p className="text-sm text-destructive mt-4">{error.message}</p>}
         </div>
       </section>
 
@@ -90,7 +86,7 @@ export default function Home() {
             <FeatureCard
               icon={<Shield className="w-8 h-8" />}
               title="Seguro e Privado"
-              description="Autenticação Google segura e dados sincronizados com Google Drive"
+              description="Login com Google e seus dados guardados em uma planilha no seu próprio Google Drive"
             />
           </div>
         </div>
@@ -105,11 +101,9 @@ export default function Home() {
           <p className="text-lg text-muted-foreground mb-8">
             Comece agora mesmo com sua conta Google e tenha acesso a todas as funcionalidades.
           </p>
-          <a href={getLoginUrl()}>
-            <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90">
-              Entrar com Google
-            </Button>
-          </a>
+          <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={login}>
+            Entrar com Google
+          </Button>
         </div>
       </section>
 
