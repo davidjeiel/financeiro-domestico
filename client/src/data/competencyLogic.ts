@@ -9,6 +9,61 @@
 
 import { Transaction, CreditCard, Invoice } from "./schema";
 
+export type RecurrenceFrequency =
+  | "daily"
+  | "weekly"
+  | "biweekly"
+  | "monthly"
+  | "quarterly"
+  | "annual";
+
+export function generateRecurringDates(
+  startDate: Date,
+  endDate: Date,
+  frequency: RecurrenceFrequency
+): Date[] {
+  const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+  if (
+    Number.isNaN(start.getTime()) ||
+    Number.isNaN(end.getTime()) ||
+    end < start
+  ) {
+    throw new RangeError("A data limite deve ser igual ou posterior à data inicial.");
+  }
+
+  const dayStep =
+    frequency === "daily" ? 1 : frequency === "weekly" ? 7 : frequency === "biweekly" ? 14 : null;
+  const monthStep =
+    frequency === "monthly" ? 1 : frequency === "quarterly" ? 3 : frequency === "annual" ? 12 : null;
+  const dates: Date[] = [];
+
+  for (let occurrence = 0; ; occurrence++) {
+    let date: Date;
+    if (dayStep !== null) {
+      date = new Date(
+        start.getFullYear(),
+        start.getMonth(),
+        start.getDate() + occurrence * dayStep
+      );
+    } else if (monthStep !== null) {
+      const monthIndex =
+        start.getFullYear() * 12 + start.getMonth() + occurrence * monthStep;
+      const year = Math.floor(monthIndex / 12);
+      const month = monthIndex % 12;
+      const day = Math.min(start.getDate(), new Date(year, month + 1, 0).getDate());
+      date = new Date(year, month, day);
+    } else {
+      throw new Error(`Frequência recorrente inválida: ${frequency}`);
+    }
+
+    if (date > end) break;
+    dates.push(date);
+  }
+
+  return dates;
+}
+
 /**
  * Determine which competency a transaction belongs to based on its date
  * and the credit card's cutoff day (if applicable)

@@ -12,6 +12,7 @@ import {
   createCreditCard,
   getCompetencyTransactions,
   createTransaction,
+  createRecurringTransactions,
   getTransactionById,
   updateTransaction,
   deleteTransaction,
@@ -63,6 +64,41 @@ import {
   getUserTimezone,
 } from "./db";
 import { getSpreadsheetUrl, reload, signOut } from "./session";
+
+const dateOnlySchema = z.string().refine(value => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}, "Data inválida");
+
+const recurringTransactionSchema = z
+  .object({
+    type: z.enum(["income", "expense", "credit_card"]),
+    category: z.string().min(1),
+    description: z.string().optional(),
+    amount: z.string().refine(value => Number.isFinite(Number(value)) && Number(value) > 0),
+    creditCardId: z.number().optional(),
+    notes: z.string().optional(),
+    frequency: z.enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"]),
+    startDate: dateOnlySchema,
+    endDate: dateOnlySchema,
+  })
+  .superRefine((input, context) => {
+    if (input.endDate < input.startDate) {
+      context.addIssue({
+        code: "custom",
+        path: ["endDate"],
+        message: "A data limite deve ser igual ou posterior à data inicial.",
+      });
+    }
+    if (input.type === "credit_card" && !input.creditCardId) {
+      context.addIssue({
+        code: "custom",
+        path: ["creditCardId"],
+        message: "Selecione um cartão de crédito.",
+      });
+    }
+  });
 
 function randomToken(bytes = 32) {
   const buf = crypto.getRandomValues(new Uint8Array(bytes));
@@ -200,6 +236,20 @@ export const appRouter = router({
           await upsertInvoiceForCreditCard(ctx.user.id, input.creditCardId, input.competencyId);
         }
         return tx;
+      }),
+    createRecurring: protectedProcedure
+      .input(recurringTransactionSchema)
+      .mutation(({ ctx, input }) => {
+        const toLocalDate = (value: string) => {
+          const [year, month, day] = value.split("-").map(Number);
+          return new Date(year, month - 1, day);
+        };
+
+        return createRecurringTransactions(ctx.user.id, {
+          ...input,
+          startDate: toLocalDate(input.startDate),
+          endDate: toLocalDate(input.endDate),
+        });
       }),
     update: protectedProcedure
       .input(

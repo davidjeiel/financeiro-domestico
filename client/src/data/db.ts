@@ -2,7 +2,12 @@
  * Operações de dados do aplicativo, gravadas na planilha Google do usuário.
  * Mantém as mesmas funções da antiga camada MySQL (server/db.ts).
  */
-import { calculateInvoiceDates } from "./competencyLogic";
+import {
+  calculateInvoiceDates,
+  generateRecurringDates,
+  getCompetencyForTransaction,
+  type RecurrenceFrequency,
+} from "./competencyLogic";
 import { getStore } from "./session";
 import type { SheetStore } from "./sheetStore";
 import type {
@@ -84,6 +89,89 @@ export async function getCompetencyTransactions(competencyId: number) {
 export async function createTransaction(data: Insert<"transactions">) {
   const s = getStore();
   const created = s.insert("transactions", data);
+  await s.commit();
+  return created;
+}
+
+export async function createRecurringTransactions(
+  userId: number,
+  data: {
+    type: TransactionType;
+    category: string;
+    description?: string;
+    amount: string;
+    creditCardId?: number;
+    notes?: string;
+    frequency: RecurrenceFrequency;
+    startDate: Date;
+    endDate: Date;
+  }
+) {
+  const s = getStore();
+  const creditCard = data.type === "credit_card" && data.creditCardId
+    ? s.find(
+        "creditCards",
+        card => card.id === data.creditCardId && card.userId === userId && card.isActive === 1
+      )
+    : null;
+
+  if (data.type === "credit_card" && !creditCard) {
+    throw new Error("Selecione um cartão de crédito ativo.");
+  }
+
+  const competencies = new Map<string, number>();
+  const created: Transaction[] = [];
+  const invoiceCompetencies = new Set<number>();
+
+  for (const transactionDate of generateRecurringDates(
+    data.startDate,
+    data.endDate,
+    data.frequency
+  )) {
+    const { year, month } = getCompetencyForTransaction(transactionDate, creditCard);
+    const competencyKey = `${year}-${month}`;
+    let competencyId = competencies.get(competencyKey);
+
+    if (competencyId === undefined) {
+      let competency = s.find(
+        "competencies",
+        item => item.userId === userId && item.year === year && item.month === month
+      );
+      if (!competency) {
+        competency = s.insert("competencies", {
+          userId,
+          year,
+          month,
+          name: competencyName(year, month),
+        });
+      }
+      competencyId = competency.id;
+      competencies.set(competencyKey, competencyId);
+    }
+
+    created.push(
+      s.insert("transactions", {
+        userId,
+        competencyId,
+        creditCardId: creditCard?.id,
+        type: data.type,
+        category: data.category,
+        description: data.description ?? "",
+        amount: data.amount,
+        transactionDate,
+        notes: data.notes ?? "",
+      })
+    );
+
+    if (creditCard) invoiceCompetencies.add(competencyId);
+  }
+
+  if (creditCard) {
+    invoiceCompetencies.forEach(competencyId =>
+      recalcInvoice(s, userId, creditCard.id, competencyId)
+    );
+  }
+
   await s.commit();
   return created;
 }

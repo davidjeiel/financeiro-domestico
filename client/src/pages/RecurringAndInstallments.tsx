@@ -7,17 +7,21 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Plus, Trash2, Edit2, Calendar, DollarSign } from "lucide-react";
 
 const recurringSchema = z.object({
   description: z.string().min(1, "Descrição obrigatória"),
   type: z.enum(["income", "expense"]),
-  amount: z.string().min(1, "Valor obrigatório"),
+  amount: z.string().min(1, "Valor obrigatório").refine(value => Number(value) > 0, "Valor deve ser positivo"),
   category: z.string().optional(),
-  frequency: z.enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"]),
+  frequency: z.enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"]),
   startDate: z.string().min(1, "Data inicial obrigatória"),
-  endDate: z.string().optional(),
+  endDate: z.string().min(1, "Data limite obrigatória"),
+}).refine(data => data.endDate >= data.startDate, {
+  path: ["endDate"],
+  message: "A data limite deve ser igual ou posterior à data inicial",
 });
 
 const installmentSchema = z.object({
@@ -31,9 +35,16 @@ const installmentSchema = z.object({
 type RecurringFormData = z.infer<typeof recurringSchema>;
 type InstallmentFormData = z.infer<typeof installmentSchema>;
 
+function formatInputDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString("pt-BR");
+}
+
 export default function RecurringAndInstallments() {
   const [recurringTransactions, setRecurringTransactions] = useState<any[]>([]);
   const [installments, setInstallments] = useState<any[]>([]);
+  const createRecurringMutation = trpc.transaction.createRecurring.useMutation();
+  const utils = trpc.useUtils();
 
   const recurringForm = useForm<RecurringFormData>({
     resolver: zodResolver(recurringSchema),
@@ -45,17 +56,30 @@ export default function RecurringAndInstallments() {
 
   const onRecurringSubmit = async (data: RecurringFormData) => {
     try {
+      const created = await createRecurringMutation.mutateAsync({
+        type: data.type,
+        category: data.category?.trim() || "Outros",
+        description: data.description,
+        amount: Number(data.amount).toString(),
+        frequency: data.frequency,
+        startDate: data.startDate,
+        endDate: data.endDate,
+      });
       const newRecurring = {
         id: Date.now(),
         ...data,
         amount: parseFloat(data.amount),
         isActive: true,
+        occurrenceCount: created.length,
       };
-      setRecurringTransactions([...recurringTransactions, newRecurring]);
-      toast.success("Débito/Crédito fixo criado com sucesso!");
+      setRecurringTransactions(current => [...current, newRecurring]);
+      utils.transaction.list.invalidate();
+      utils.invoice.list.invalidate();
+      toast.success(`${created.length} lançamentos recorrentes criados.`);
       recurringForm.reset();
     } catch (error) {
-      toast.error("Erro ao criar débito/crédito fixo");
+      console.error("Erro ao criar débito/crédito fixo:", error);
+      toast.error(error instanceof Error ? error.message : "Erro ao criar débito/crédito fixo");
     }
   };
 
@@ -88,7 +112,7 @@ export default function RecurringAndInstallments() {
     biweekly: "Quinzenalmente",
     monthly: "Mensalmente",
     quarterly: "Trimestralmente",
-    yearly: "Anualmente",
+    annual: "Anualmente",
   };
 
   return (
@@ -148,7 +172,7 @@ export default function RecurringAndInstallments() {
                     <option value="biweekly">Quinzenalmente</option>
                     <option value="monthly">Mensalmente</option>
                     <option value="quarterly">Trimestralmente</option>
-                    <option value="yearly">Anualmente</option>
+                    <option value="annual">Anualmente</option>
                   </select>
                 </div>
 
@@ -162,12 +186,21 @@ export default function RecurringAndInstallments() {
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">Data Final (Opcional)</label>
+                  <label className="text-sm font-medium text-foreground mb-2 block">
+                    Data limite <span className="text-red-600">*</span>
+                  </label>
                   <Input
                     {...recurringForm.register("endDate")}
                     type="date"
+                    min={recurringForm.watch("startDate") || undefined}
+                    required
                     className="input-elegant"
                   />
+                  {recurringForm.formState.errors.endDate && (
+                    <p className="text-red-600 text-sm mt-1">
+                      {recurringForm.formState.errors.endDate.message}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -180,9 +213,13 @@ export default function RecurringAndInstallments() {
                 </div>
               </div>
 
-              <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+              <Button
+                type="submit"
+                disabled={createRecurringMutation.isPending}
+                className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+              >
                 <Plus className="w-4 h-4 mr-2" />
-                Criar Débito/Crédito Fixo
+                {createRecurringMutation.isPending ? "Gerando lançamentos..." : "Criar Débito/Crédito Fixo"}
               </Button>
             </form>
           </Card>
@@ -216,8 +253,12 @@ export default function RecurringAndInstallments() {
                         <span>{frequencyLabels[recurring.frequency as keyof typeof frequencyLabels]}</span>
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
-                          {new Date(recurring.startDate).toLocaleDateString("pt-BR")}
+                          {formatInputDate(recurring.startDate)}
                         </span>
+                        <span>
+                          até {formatInputDate(recurring.endDate)}
+                        </span>
+                        <span>{recurring.occurrenceCount} lançamentos gerados</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">

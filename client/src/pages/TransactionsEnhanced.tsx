@@ -12,6 +12,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import type { Transaction } from "@/data/schema";
 import AddCategoryModal from "@/components/AddCategoryModal";
 import LoadingOverlay from "@/components/LoadingOverlay";
 // BulkTransactionActions removido - usando BulkEditModal e BulkDeleteModal
@@ -35,9 +36,33 @@ const transactionSchema = z.object({
   transactionDate: z.string().min(1, "Data é obrigatória"),
   creditCardId: z.string().optional(),
   accountId: z.string().optional(),
-  frequency: z.enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"]).optional(),
+  frequency: z.enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"]).optional().or(z.literal("")),
+  endDate: z.string().optional(),
   installments: z.string().optional(),
   notes: z.string().optional(),
+}).superRefine((data, context) => {
+  if (data.transactionType !== "recurring") return;
+
+  if (!data.frequency) {
+    context.addIssue({
+      code: "custom",
+      path: ["frequency"],
+      message: "Frequência obrigatória",
+    });
+  }
+  if (!data.endDate) {
+    context.addIssue({
+      code: "custom",
+      path: ["endDate"],
+      message: "Data limite obrigatória",
+    });
+  } else if (data.endDate < data.transactionDate) {
+    context.addIssue({
+      code: "custom",
+      path: ["endDate"],
+      message: "A data limite deve ser igual ou posterior à data inicial",
+    });
+  }
 });
 
 type TransactionFormData = z.infer<typeof transactionSchema>;
@@ -124,6 +149,7 @@ export default function TransactionsEnhanced() {
   };
   
   const createMutation = trpc.transaction.create.useMutation();
+  const createRecurringMutation = trpc.transaction.createRecurring.useMutation();
   const utils = trpc.useUtils();
   const queryClient = useQueryClient();
   const markAsPaidMutation = trpc.transaction.markAsPaid.useMutation({
@@ -272,11 +298,6 @@ export default function TransactionsEnhanced() {
   };
 
   const onSubmit = async (data: TransactionFormData) => {
-    if (!activeCompetency) {
-      toast.error("Competência não carregada");
-      return;
-    }
-
     // Validar se cartão foi selecionado quando tipo é credit_card
     if (data.type === "credit_card" && !data.creditCardId) {
       toast.error("Selecione um cartão de crédito");
@@ -292,35 +313,60 @@ export default function TransactionsEnhanced() {
       }
 
       // Enviar data como string YYYY-MM-DD (sem conversão para Date)
-      await createMutation.mutateAsync({
-        competencyId: activeCompetency.id,
+      const transactionData = {
         type: data.type,
         category: data.category,
         description: data.description || "",
         amount: amountNum.toString(),
-        transactionDate: data.transactionDate, // Enviar como string
         creditCardId: data.creditCardId ? parseInt(data.creditCardId) : undefined,
         notes: data.notes || "",
-      });
+      };
 
-      toast.success("Movimentação criada com sucesso!");
+      let createdTransactions: Transaction[];
+      if (data.transactionType === "recurring") {
+        if (!data.frequency || !data.endDate) {
+          toast.error("Informe a frequência e a data limite");
+          return;
+        }
+        createdTransactions = await createRecurringMutation.mutateAsync({
+          ...transactionData,
+          frequency: data.frequency,
+          startDate: data.transactionDate,
+          endDate: data.endDate,
+        });
+      } else {
+        if (!activeCompetency) {
+          toast.error("Competência não carregada");
+          return;
+        }
+        createdTransactions = [
+          await createMutation.mutateAsync({
+            ...transactionData,
+            competencyId: activeCompetency.id,
+            transactionDate: data.transactionDate,
+          }),
+        ];
+      }
+
+      toast.success(
+        data.transactionType === "recurring"
+          ? `${createdTransactions.length} lançamentos recorrentes criados.`
+          : "Movimentação criada com sucesso!"
+      );
       
       // Salvar links se houver
-      if (newTransactionLinks.length > 0) {
-        const lastTransaction = (await utils.transaction.list.getData({ competencyId: activeCompetency!.id }))?.[0];
-        if (lastTransaction) {
-          for (const link of newTransactionLinks) {
-            try {
-              await trpc.transactionLinks.add.useMutation().mutateAsync({
-                transactionId: lastTransaction.id,
-                link: {
-                  url: link.url,
-                  title: link.title,
-                },
-              });
-            } catch (linkError) {
-              console.error("Erro ao salvar link:", linkError);
-            }
+      if (newTransactionLinks.length > 0 && createdTransactions[0]) {
+        for (const link of newTransactionLinks) {
+          try {
+            await trpc.transactionLinks.add.useMutation().mutateAsync({
+              transactionId: createdTransactions[0].id,
+              link: {
+                url: link.url,
+                title: link.title,
+              },
+            });
+          } catch (linkError) {
+            console.error("Erro ao salvar link:", linkError);
           }
         }
       }
@@ -333,7 +379,8 @@ export default function TransactionsEnhanced() {
       setSelectedType("expense");
       setNewTransactionLinks([]);
       setOpen(false);
-      utils.transaction.list.invalidate({ competencyId: activeCompetency.id });
+      utils.transaction.list.invalidate();
+      utils.invoice.list.invalidate();
     } catch (error: any) {
       console.error("Erro ao criar movimentação:", error);
       const errorMessage = error?.message || "Erro ao criar movimentação";
@@ -612,23 +659,40 @@ export default function TransactionsEnhanced() {
 
                 {/* Recurring Options */}
                 {watchTransactionType === "recurring" && (
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-2 block">
-                      Frequência <span className="text-red-600">*</span>
-                    </label>
-                    <select
-                      {...register("frequency")}
-                      className="input-elegant w-full"
-                    >
-                      <option value="">Selecione a frequência</option>
-                      {Object.entries(FREQUENCIES).map(([key, label]) => (
-                        <option key={key} value={key}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                    {errors.frequency && <p className="text-red-600 text-sm mt-1">{errors.frequency.message}</p>}
-                  </div>
+                  <>
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-2 block">
+                        Frequência <span className="text-red-600">*</span>
+                      </label>
+                      <select
+                        {...register("frequency")}
+                        className="input-elegant w-full"
+                        required
+                      >
+                        <option value="">Selecione a frequência</option>
+                        {Object.entries(FREQUENCIES).map(([key, label]) => (
+                          <option key={key} value={key}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                      {errors.frequency && <p className="text-red-600 text-sm mt-1">{errors.frequency.message}</p>}
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-2 block">
+                        Data limite <span className="text-red-600">*</span>
+                      </label>
+                      <input
+                        {...register("endDate")}
+                        type="date"
+                        min={watch("transactionDate") || undefined}
+                        className="input-elegant w-full"
+                        required
+                      />
+                      {errors.endDate && <p className="text-red-600 text-sm mt-1">{errors.endDate.message}</p>}
+                    </div>
+                  </>
                 )}
 
                 {/* Installment Options */}
@@ -739,16 +803,16 @@ export default function TransactionsEnhanced() {
                     variant="outline"
                     onClick={() => setOpen(false)}
                     className="flex-1"
-                    disabled={createMutation.isPending}
+                    disabled={createMutation.isPending || createRecurringMutation.isPending}
                   >
                     Cancelar
                   </Button>
                   <Button
                     type="submit"
                     className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
-                    disabled={createMutation.isPending}
+                    disabled={createMutation.isPending || createRecurringMutation.isPending}
                   >
-                    {createMutation.isPending ? (
+                    {createMutation.isPending || createRecurringMutation.isPending ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                         Salvando...

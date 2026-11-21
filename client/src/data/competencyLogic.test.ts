@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  generateRecurringDates,
   getCompetencyForTransaction,
   calculateInvoiceDates,
   calculateInvoiceTotal,
@@ -14,6 +15,87 @@ import {
 import { CreditCard, Transaction } from "./schema";
 
 describe("competencyLogic", () => {
+  describe("generateRecurringDates", () => {
+    it("includes the end date when it matches the recurrence", () => {
+      const dates = generateRecurringDates(
+        new Date(2026, 0, 1),
+        new Date(2026, 0, 3),
+        "daily"
+      );
+
+      expect(dates).toEqual([
+        new Date(2026, 0, 1),
+        new Date(2026, 0, 2),
+        new Date(2026, 0, 3),
+      ]);
+    });
+
+    it("keeps the original day when recurring monthly from the end of a month", () => {
+      const dates = generateRecurringDates(
+        new Date(2026, 0, 31),
+        new Date(2026, 2, 31),
+        "monthly"
+      );
+
+      expect(dates).toEqual([
+        new Date(2026, 0, 31),
+        new Date(2026, 1, 28),
+        new Date(2026, 2, 31),
+      ]);
+    });
+
+    it("supports weekly and biweekly intervals", () => {
+      expect(
+        generateRecurringDates(
+          new Date(2026, 0, 1),
+          new Date(2026, 0, 15),
+          "weekly"
+        )
+      ).toEqual([new Date(2026, 0, 1), new Date(2026, 0, 8), new Date(2026, 0, 15)]);
+
+      expect(
+        generateRecurringDates(
+          new Date(2026, 0, 1),
+          new Date(2026, 0, 29),
+          "biweekly"
+        )
+      ).toEqual([new Date(2026, 0, 1), new Date(2026, 0, 15), new Date(2026, 0, 29)]);
+    });
+
+    it("supports quarterly and annual intervals", () => {
+      expect(
+        generateRecurringDates(
+          new Date(2026, 10, 30),
+          new Date(2027, 7, 30),
+          "quarterly"
+        )
+      ).toEqual([
+        new Date(2026, 10, 30),
+        new Date(2027, 1, 28),
+        new Date(2027, 4, 30),
+        new Date(2027, 7, 30),
+      ]);
+
+      expect(
+        generateRecurringDates(
+          new Date(2024, 1, 29),
+          new Date(2026, 1, 28),
+          "annual"
+        )
+      ).toEqual([
+        new Date(2024, 1, 29),
+        new Date(2025, 1, 28),
+        new Date(2026, 1, 28),
+      ]);
+    });
+
+    it("rejects a limit date before the start date", () => {
+      expect(() =>
+        generateRecurringDates(new Date(2026, 0, 2), new Date(2026, 0, 1), "weekly")
+      ).toThrow("A data limite deve ser igual ou posterior à data inicial.");
+    });
+  });
+
   describe("getCompetencyForTransaction", () => {
     it("should return current month for cash transaction", () => {
       const date = new Date(2026, 2, 15); // March 15, 2026
