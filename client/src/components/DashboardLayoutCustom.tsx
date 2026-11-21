@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Menu, X, LogOut, Settings } from "lucide-react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 
 interface DashboardLayoutCustomProps {
   children: React.ReactNode;
@@ -149,7 +149,7 @@ function NavLink({ href, icon, label, open }: NavLinkProps) {
   const isActive = location === href;
 
   return (
-    <a
+    <Link
       href={href}
       className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
         isActive
@@ -159,6 +159,6 @@ function NavLink({ href, icon, label, open }: NavLinkProps) {
     >
       <span className="text-xl">{icon}</span>
       {open && <span className="text-sm font-medium">{label}</span>}
-    </a>
+    </Link>
   );
 }
