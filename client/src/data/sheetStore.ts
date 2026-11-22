@@ -20,10 +20,12 @@ import {
 } from "./schema";
 
 const SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets";
-const DRIVE_API = "https://www.googleapis.com/drive/v3/files";
-const APP_PROPERTY_KEY = "financeiroDomestico";
-const APP_PROPERTY_VALUE = "v1";
-const SPREADSHEET_TITLE = "Financeiro Doméstico";
+export const DRIVE_API = "https://www.googleapis.com/drive/v3/files";
+export const APP_PROPERTY_KEY = "financeiroDomestico";
+export const APP_PROPERTY_VALUE = "v1";
+/** `appProperties.kind` das planilhas de áreas de trabalho compartilhadas. */
+export const SHARED_KIND = "shared";
+export const SPREADSHEET_TITLE = "Financeiro Doméstico";
 const CACHE_KEY = "fd.spreadsheetId";
 
 type Cell = string | number | boolean | null;
@@ -112,7 +114,23 @@ export class SheetStore {
   /** Garante que todas as abas existem e carrega os dados para a memória. */
   async load() {
     await this.ensureSheets();
+    await this.read();
+    // Cabeçalhos ausentes/desatualizados são reescritos já no carregamento.
+    await this.commit();
+  }
 
+  /**
+   * Relê a planilha (sem recriar abas), depois de gravar o que estiver pendente.
+   * Usado nas áreas compartilhadas para enxergar o que outra pessoa gravou.
+   */
+  async refresh() {
+    await this.writeChain;
+    if (this.dirty.size > 0) await this.commit();
+    await this.read();
+    await this.commit();
+  }
+
+  private async read() {
     const params = new URLSearchParams({
       valueRenderOption: "UNFORMATTED_VALUE",
       dateTimeRenderOption: "SERIAL_NUMBER",
@@ -150,9 +168,6 @@ export class SheetStore {
         sheetCols: values.reduce((max, line) => Math.max(max, line.length), 0),
       });
     });
-
-    // Cabeçalhos ausentes/desatualizados são reescritos já no carregamento.
-    await this.commit();
   }
 
   private async ensureSheets() {
@@ -327,19 +342,24 @@ export async function findOrCreateSpreadsheet(ownerSub: string): Promise<string>
   }
   if (cached && (await spreadsheetExists(cached))) return cached;
 
+  type FileInfo = { id: string; ownedByMe?: boolean; appProperties?: Record<string, string> };
+
   const q =
     `appProperties has { key='${APP_PROPERTY_KEY}' and value='${APP_PROPERTY_VALUE}' }` +
     ` and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`;
-  const list = await googleFetch<{ files: { id: string }[] }>(
+  const list = await googleFetch<{ files: FileInfo[] }>(
     `${DRIVE_API}?${new URLSearchParams({
       q,
       spaces: "drive",
       orderBy: "createdTime",
-      fields: "files(id)",
+      fields: "files(id,ownedByMe,appProperties)",
     })}`
   );
 
-  let id = list.files[0]?.id;
+  // A planilha pessoal é a do próprio usuário que não é uma área compartilhada.
+  let id = list.files.find(
+    f => f.ownedByMe !== false && f.appProperties?.kind !== SHARED_KIND
+  )?.id;
   if (!id) {
     const created = await googleFetch<{ id: string }>(`${DRIVE_API}?fields=id`, {
       method: "POST",

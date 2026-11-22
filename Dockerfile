@@ -17,6 +17,10 @@ COPY . .
 # O Client ID do Google é embutido no build (é público, não é segredo).
 ARG VITE_GOOGLE_CLIENT_ID
 ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
+ARG VITE_GOOGLE_API_KEY
+ENV VITE_GOOGLE_API_KEY=$VITE_GOOGLE_API_KEY
+ARG VITE_GOOGLE_APP_ID
+ENV VITE_GOOGLE_APP_ID=$VITE_GOOGLE_APP_ID
 RUN pnpm build
 
 # ---- runtime stage: arquivos estáticos servidos pelo nginx ----

@@ -248,3 +248,86 @@ export async function googleFetch<T = unknown>(
 export function getProfile() {
   return googleFetch<GoogleProfile>("https://www.googleapis.com/oauth2/v3/userinfo");
 }
+
+// ─── Google Picker ───────────────────────────────────────────────────────────
+//
+// Com o escopo `drive.file`, o app só enxerga arquivos que ele criou *para o
+// usuário logado* ou que o usuário escolheu no Google Picker. Por isso, quem
+// recebe uma área compartilhada precisa selecioná-la uma vez no Picker.
+
+const PICKER_SRC = "https://apis.google.com/js/api.js";
+const apiKey = import.meta.env.VITE_GOOGLE_API_KEY as string | undefined;
+/** Número do projeto no Google Cloud (necessário para o Picker liberar o arquivo). */
+const appId = import.meta.env.VITE_GOOGLE_APP_ID as string | undefined;
+
+export function isPickerConfigured() {
+  return Boolean(clientId && apiKey && appId);
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type GapiWindow = { gapi?: { load: (lib: string, cb: () => void) => void }; google?: any };
+const pickerWindow = () => window as unknown as GapiWindow;
+
+let pickerPromise: Promise<void> | null = null;
+
+function loadPicker(): Promise<void> {
+  if (pickerWindow().google?.picker) return Promise.resolve();
+  if (!pickerPromise) {
+    pickerPromise = new Promise<void>((resolve, reject) => {
+      const ready = () => pickerWindow().gapi!.load("picker", () => resolve());
+      if (pickerWindow().gapi) return ready();
+      const script = document.createElement("script");
+      script.src = PICKER_SRC;
+      script.async = true;
+      script.onload = ready;
+      script.onerror = () => {
+        pickerPromise = null;
+        reject(new Error("Não foi possível carregar o seletor de arquivos do Google"));
+      };
+      document.head.appendChild(script);
+    });
+  }
+  return pickerPromise;
+}
+
+/**
+ * Abre o Google Picker para o usuário escolher uma planilha compartilhada com
+ * ele. Retorna o id escolhido, ou `null` se cancelar.
+ */
+export async function pickSharedSpreadsheet(fileId?: string): Promise<string | null> {
+  if (!isPickerConfigured()) {
+    throw new Error(
+      "Seletor do Google não configurado (VITE_GOOGLE_API_KEY e VITE_GOOGLE_APP_ID). Veja o README."
+    );
+  }
+  const token = await getAccessToken();
+  await loadPicker();
+  const picker = pickerWindow().google.picker;
+
+  const view = new picker.DocsView(picker.ViewId.SPREADSHEETS)
+    .setMode(picker.DocsViewMode.LIST)
+    .setIncludeFolders(false);
+  if (fileId && typeof view.setFileIds === "function") view.setFileIds(fileId);
+  else view.setQuery("Financeiro Doméstico");
+
+  return new Promise<string | null>(resolve => {
+    new picker.PickerBuilder()
+      .setTitle("Escolha a área de trabalho compartilhada com você")
+      .setLocale("pt-BR")
+      .setAppId(appId!)
+      .setDeveloperKey(apiKey!)
+      .setOAuthToken(token)
+      .addView(view)
+      .setCallback((data: any) => {
+        const action = data[picker.Response.ACTION];
+        if (action === picker.Action.PICKED) {
+          resolve(data[picker.Response.DOCUMENTS]?.[0]?.[picker.Document.ID] ?? null);
+        } else if (action === picker.Action.CANCEL) {
+          resolve(null);
+        }
+      })
+      .build()
+      .setVisible(true);
+  });
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */

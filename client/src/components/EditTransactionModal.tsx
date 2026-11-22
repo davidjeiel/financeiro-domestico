@@ -12,6 +12,7 @@ import { trpc } from '@/lib/trpc';
 import { formatCurrency, formatDate } from '@/lib/formatting';
 import { Plus } from 'lucide-react';
 import TransactionLinksManager from '@/components/TransactionLinksManager';
+import { ResponsibleSelect } from '@/components/workspace/ResponsibleSelect';
 
 interface EditTransactionModalProps {
   isOpen: boolean;
@@ -33,6 +34,7 @@ export default function EditTransactionModal({
     dueDate: '',
     notes: '',
     category: '__placeholder__',
+    responsibleUserId: null as number | null,
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -65,6 +67,7 @@ export default function EditTransactionModal({
         dueDate: formatDateForInput(transaction.dueDate),
         notes: transaction.notes || '',
         category: transaction.category || '__placeholder__',
+        responsibleUserId: transaction.responsibleUserId ?? null,
       });
     }
   }, [transaction]);
@@ -123,6 +126,7 @@ export default function EditTransactionModal({
         transactionDate: formData.transactionDate, // Enviar como string YYYY-MM-DD
         dueDate: formData.dueDate, // Enviar como string YYYY-MM-DD
         notes: formData.notes,
+        responsibleUserId: formData.responsibleUserId,
       });
 
       await utils.transaction.list.invalidate();
@@ -208,6 +212,19 @@ export default function EditTransactionModal({
                   type="date"
                   value={formData.dueDate}
                   onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                />
+              </div>
+
+              {/* Responsável */}
+              <div>
+                <Label htmlFor="responsibleUserId">
+                  {transaction?.type === 'income' ? 'Quem recebe' : 'Responsável pelo pagamento'}
+                </Label>
+                <ResponsibleSelect
+                  id="responsibleUserId"
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                  value={formData.responsibleUserId}
+                  onChange={(value) => setFormData({ ...formData, responsibleUserId: value })}
                 />
               </div>
 

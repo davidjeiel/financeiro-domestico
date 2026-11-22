@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { trpc } from '@/lib/trpc';
+import { ResponsibleSelect } from '@/components/workspace/ResponsibleSelect';
 import { Plus } from 'lucide-react';
 
 interface BulkEditModalProps {
@@ -30,6 +31,7 @@ export default function BulkEditModal({
     transactionDate: '',
     dueDate: '',
     notes: '',
+    responsibleUserId: null as number | null,
   });
 
   const [updateFields, setUpdateFields] = useState({
@@ -37,6 +39,7 @@ export default function BulkEditModal({
     transactionDate: false,
     dueDate: false,
     notes: false,
+    responsibleUserId: false,
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -57,12 +60,14 @@ export default function BulkEditModal({
         transactionDate: '',
         dueDate: '',
         notes: '',
+        responsibleUserId: null,
       });
       setUpdateFields({
         category: false,
         transactionDate: false,
         dueDate: false,
         notes: false,
+        responsibleUserId: false,
       });
       setShowNewCategoryInput(false);
       setNewCategoryName('');
@@ -126,11 +131,15 @@ export default function BulkEditModal({
         if (updateFields.category && formData.category !== '__placeholder__') {
           updates.category = formData.category;
         }
+        // O router espera datas no formato YYYY-MM-DD.
         if (updateFields.transactionDate) {
-          updates.transactionDate = new Date(formData.transactionDate);
+          updates.transactionDate = formData.transactionDate;
         }
         if (updateFields.dueDate) {
-          updates.dueDate = new Date(formData.dueDate);
+          updates.dueDate = formData.dueDate;
+        }
+        if (updateFields.responsibleUserId) {
+          updates.responsibleUserId = formData.responsibleUserId;
         }
         if (updateFields.notes) {
           updates.notes = formData.notes;
@@ -264,6 +273,29 @@ export default function BulkEditModal({
                   </div>
                 </div>
               )
+            )}
+          </div>
+
+          {/* Responsável */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="updateResponsible"
+                checked={updateFields.responsibleUserId}
+                onCheckedChange={(checked) =>
+                  setUpdateFields({ ...updateFields, responsibleUserId: checked as boolean })
+                }
+              />
+              <Label htmlFor="updateResponsible" className="cursor-pointer">
+                Atualizar Responsável pelo pagamento
+              </Label>
+            </div>
+            {updateFields.responsibleUserId && (
+              <ResponsibleSelect
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                value={formData.responsibleUserId}
+                onChange={(value) => setFormData({ ...formData, responsibleUserId: value })}
+              />
             )}
           </div>
 

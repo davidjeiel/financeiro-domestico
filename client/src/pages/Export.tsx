@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Download, FileText, Sheet } from "lucide-react";
 import { exportToXLSX, exportToCSV, prepareExportData } from "@/lib/exportHelpers";
+import { usePeople } from "@/components/workspace/useWorkspaces";
 import { toast } from "sonner";
 
 export default function Export() {
@@ -15,6 +16,7 @@ export default function Export() {
     { enabled: !!currentCompetency }
   );
 
+  const { byId: peopleById } = usePeople();
   const [isExporting, setIsExporting] = useState(false);
 
   const handleExportXLSX = async () => {
@@ -27,6 +29,8 @@ export default function Export() {
           ...t,
           description: t.description || undefined,
           notes: t.notes || undefined,
+          responsible:
+            t.responsibleUserId != null ? peopleById.get(t.responsibleUserId)?.name : undefined,
         })),
         currentCompetency.name,
         currentCompetency.year,
@@ -53,6 +57,8 @@ export default function Export() {
           ...t,
           description: t.description || undefined,
           notes: t.notes || undefined,
+          responsible:
+            t.responsibleUserId != null ? peopleById.get(t.responsibleUserId)?.name : undefined,
         })),
         currentCompetency.name,
         currentCompetency.year,

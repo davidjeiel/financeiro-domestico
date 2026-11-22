@@ -44,19 +44,6 @@ import {
   updateAccount,
   updateAccountBalance,
   deleteAccount,
-  createWorkspace,
-  getWorkspacesByUser,
-  getWorkspaceById,
-  updateWorkspace,
-  getWorkspaceMembers,
-  updateWorkspaceMemberRole,
-  removeWorkspaceMember,
-  createWorkspaceInvite,
-  getWorkspaceInviteByToken,
-  getPendingInvitesByEmail,
-  acceptWorkspaceInvite,
-  createSharedAccount,
-  getSharedAccountsByWorkspace,
   addTransactionResponsibility,
   getTransactionResponsibilities,
   removeTransactionResponsibility,
@@ -64,8 +51,32 @@ import {
   getAuditLogByWorkspace,
   updateUserTimezone,
   getUserTimezone,
+  listPeople,
+  addGuestPerson,
+  upsertInvitedPerson,
+  updatePerson,
+  removePerson,
+  assertResponsible,
 } from "./db";
-import { getSpreadsheetUrl, reload, signOut } from "./session";
+import {
+  getActiveWorkspace,
+  getDataUserId,
+  getPersonalWorkspaceId,
+  getSpreadsheetUrl,
+  getStore,
+  reload,
+  signOut,
+  switchWorkspace,
+} from "./session";
+import {
+  createSharedWorkspaceFile,
+  joinLink,
+  listSharedWorkspaces,
+  renameWorkspaceFile,
+  shareWorkspaceFile,
+  unshareWorkspaceFile,
+  type WorkspaceRef,
+} from "./workspaces";
 
 const dateOnlySchema = z.string().refine(value => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -84,6 +95,7 @@ const recurringTransactionSchema = z
     frequency: z.enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"]),
     startDate: dateOnlySchema,
     endDate: dateOnlySchema,
+    responsibleUserId: z.number().int().nullable().optional(),
   })
   .superRefine((input, context) => {
     if (input.endDate < input.startDate) {
@@ -136,15 +148,15 @@ export const appRouter = router({
 
   competency: router({
     current: protectedProcedure.query(({ ctx }) =>
-      getOrCreateCurrentCompetency(ctx.user.id)
+      getOrCreateCurrentCompetency(getDataUserId())
     ),
     list: protectedProcedure.query(({ ctx }) =>
-      getUserCompetencies(ctx.user.id)
+      getUserCompetencies(getDataUserId())
     ),
     getByYearMonth: protectedProcedure
       .input(z.object({ year: z.number().int(), month: z.number().int().min(1).max(12) }))
       .query(({ ctx, input }) =>
-        getOrCreateCompetencyByYearMonth(ctx.user.id, input.year, input.month)
+        getOrCreateCompetencyByYearMonth(getDataUserId(), input.year, input.month)
       ),
   }),
 
@@ -152,13 +164,13 @@ export const appRouter = router({
     eventsForYear: protectedProcedure
       .input(z.object({ year: z.number().int() }))
       .query(({ ctx, input }) =>
-        getCalendarEventsForYear(ctx.user.id, input.year)
+        getCalendarEventsForYear(getDataUserId(), input.year)
       ),
   }),
 
   creditCard: router({
     list: protectedProcedure.query(({ ctx }) =>
-      getUserCreditCards(ctx.user.id)
+      getUserCreditCards(getDataUserId())
     ),
     create: protectedProcedure
       .input(
@@ -173,7 +185,7 @@ export const appRouter = router({
       )
       .mutation(({ ctx, input }) =>
         createCreditCard({
-          userId: ctx.user.id,
+          userId: getDataUserId(),
           ...input,
         })
       ),
@@ -198,7 +210,7 @@ export const appRouter = router({
       )
       .query(({ ctx, input }) =>
         input.startDate || input.endDate
-          ? getUserTransactionsByDateRange(ctx.user.id, input.startDate, input.endDate)
+          ? getUserTransactionsByDateRange(getDataUserId(), input.startDate, input.endDate)
           : getCompetencyTransactions(input.competencyId)
       ),
     listWithFilters: protectedProcedure
@@ -240,9 +252,11 @@ export const appRouter = router({
           dueDate: z.string().optional(), // Formato YYYY-MM-DD
           installments: z.number().optional(),
           notes: z.string().optional(),
+          responsibleUserId: z.number().int().nullable().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
+        assertResponsible(input.responsibleUserId);
         // Converter strings YYYY-MM-DD para Date (meia-noite local)
         const [year, month, day] = input.transactionDate.split('-').map(Number);
         const transactionDate = new Date(year, month - 1, day);
@@ -252,29 +266,37 @@ export const appRouter = router({
           return new Date(y, m - 1, d);
         })() : undefined;
         
-        const tx = await createTransaction({ 
-          userId: ctx.user.id, 
+        const tx = await createTransaction({
+          userId: getDataUserId(),
           ...input,
           transactionDate,
           dueDate,
+          // Sem responsável informado, fica com quem lançou.
+          responsibleUserId:
+            input.responsibleUserId === undefined ? ctx.user.id : input.responsibleUserId,
+          createdBy: ctx.user.id,
         });
         if (input.type === "credit_card" && input.creditCardId) {
-          await upsertInvoiceForCreditCard(ctx.user.id, input.creditCardId, input.competencyId);
+          await upsertInvoiceForCreditCard(getDataUserId(), input.creditCardId, input.competencyId);
         }
         return tx;
       }),
     createRecurring: protectedProcedure
       .input(recurringTransactionSchema)
       .mutation(({ ctx, input }) => {
+        assertResponsible(input.responsibleUserId);
         const toLocalDate = (value: string) => {
           const [year, month, day] = value.split("-").map(Number);
           return new Date(year, month - 1, day);
         };
 
-        return createRecurringTransactions(ctx.user.id, {
+        return createRecurringTransactions(getDataUserId(), {
           ...input,
           startDate: toLocalDate(input.startDate),
           endDate: toLocalDate(input.endDate),
+          responsibleUserId:
+            input.responsibleUserId === undefined ? ctx.user.id : input.responsibleUserId,
+          createdBy: ctx.user.id,
         });
       }),
     update: protectedProcedure
@@ -291,9 +313,11 @@ export const appRouter = router({
           dueDate: z.string().optional(), // Formato YYYY-MM-DD
           installments: z.number().optional(),
           notes: z.string().optional(),
+          responsibleUserId: z.number().int().nullable().optional(),
         })
       )
       .mutation(({ input }) => {
+        assertResponsible(input.responsibleUserId);
         const { id, transactionDate, dueDate, ...rest } = input;
         
         const updates: any = { ...rest };
@@ -335,7 +359,7 @@ export const appRouter = router({
     sync: protectedProcedure
       .input(z.object({ competencyId: z.number() }))
       .mutation(({ ctx, input }) =>
-        syncInvoicesForCompetency(ctx.user.id, input.competencyId)
+        syncInvoicesForCompetency(getDataUserId(), input.competencyId)
       ),
     pay: protectedProcedure
       .input(z.object({ invoiceId: z.number(), paidAmount: z.number().min(0) }))
@@ -346,12 +370,12 @@ export const appRouter = router({
 
   typology: router({
     list: protectedProcedure.query(({ ctx }) =>
-      getTypologiesByUser(ctx.user.id)
+      getTypologiesByUser(getDataUserId())
     ),
     listByType: protectedProcedure
       .input(z.object({ type: z.enum(["income", "expense", "credit_card"]) }))
       .query(({ ctx, input }) =>
-        getTypologiesByUserAndType(ctx.user.id, input.type)
+        getTypologiesByUserAndType(getDataUserId(), input.type)
       ),
     create: protectedProcedure
       .input(
@@ -367,7 +391,7 @@ export const appRouter = router({
       )
       .mutation(({ ctx, input }) =>
         createTypology({
-          userId: ctx.user.id,
+          userId: getDataUserId(),
           name: input.name,
           type: input.type,
           description: input.description,
@@ -408,7 +432,7 @@ export const appRouter = router({
 
   savedFilter: router({
     list: protectedProcedure.query(({ ctx }) =>
-      getSavedFilters(ctx.user.id)
+      getSavedFilters(getDataUserId())
     ),
     get: protectedProcedure
       .input(z.object({ id: z.number() }))
@@ -429,7 +453,7 @@ export const appRouter = router({
         })
       )
       .mutation(({ ctx, input }) =>
-        createSavedFilter(ctx.user.id, input)
+        createSavedFilter(getDataUserId(), input)
       ),
     update: protectedProcedure
       .input(
@@ -456,7 +480,7 @@ export const appRouter = router({
       ),
     deleteAll: protectedProcedure
       .mutation(({ ctx }) =>
-        deleteAllSavedFilters(ctx.user.id)
+        deleteAllSavedFilters(getDataUserId())
       ),
   }),
 
@@ -525,7 +549,7 @@ export const appRouter = router({
 
   account: router({
     list: protectedProcedure.query(({ ctx }) =>
-      getUserAccounts(ctx.user.id)
+      getUserAccounts(getDataUserId())
     ),
     get: protectedProcedure
       .input(z.object({ id: z.number() }))
@@ -544,7 +568,7 @@ export const appRouter = router({
       )
       .mutation(({ ctx, input }) =>
         createAccount({
-          userId: ctx.user.id,
+          userId: getDataUserId(),
           name: input.name,
           type: input.type || "checking",
           balance: (input.balance || 0).toFixed(2),
@@ -583,145 +607,130 @@ export const appRouter = router({
       ),
   }),
   workspace: router({
-    list: protectedProcedure.query(({ ctx }) => getWorkspacesByUser(ctx.user.id)),
-    getById: protectedProcedure
-      .input(z.object({ id: z.number() }))
-      .query(({ input }) => getWorkspaceById(input.id)),
+    /** Área pessoal + áreas compartilhadas acessíveis, com a ativa marcada. */
+    list: protectedProcedure.query(async () => {
+      const active = getActiveWorkspace();
+      const personalId = getPersonalWorkspaceId();
+      const shared = await listSharedWorkspaces();
+      const personal: WorkspaceRef | null = personalId
+        ? {
+            id: personalId,
+            name: "Pessoal",
+            kind: "personal",
+            ownedByMe: true,
+            ownerName: null,
+            ownerEmail: null,
+            url: `https://docs.google.com/spreadsheets/d/${personalId}/edit`,
+          }
+        : null;
+      // A ativa pode ainda não aparecer na busca do Drive logo após ser liberada.
+      if (active?.kind === "shared" && !shared.some(w => w.id === active.id)) {
+        shared.unshift(active);
+      }
+      return {
+        activeId: active?.id ?? personalId,
+        workspaces: [...(personal ? [personal] : []), ...shared].map(w => ({
+          ...w,
+          isActive: w.id === (active?.id ?? personalId),
+        })),
+      };
+    }),
+    active: protectedProcedure.query(({ ctx }) => {
+      const active = getActiveWorkspace();
+      return active
+        ? { ...active, meId: ctx.user.id, joinLink: active.kind === "shared" ? joinLink(active.id) : null }
+        : null;
+    }),
     create: protectedProcedure
+      .input(z.object({ name: z.string().trim().min(1, "Informe um nome").max(80) }))
+      .mutation(async ({ input }) => {
+        const file = await createSharedWorkspaceFile(input.name);
+        return switchWorkspace(file.id);
+      }),
+    renameActive: protectedProcedure
+      .input(z.object({ name: z.string().trim().min(1).max(80) }))
+      .mutation(async ({ input }) => {
+        const active = getActiveWorkspace();
+        if (!active || active.kind !== "shared") {
+          throw new Error("Só é possível renomear áreas compartilhadas.");
+        }
+        await renameWorkspaceFile(active.id, input.name);
+        await reload();
+        return getActiveWorkspace();
+      }),
+    /** Troca a área ativa. `id` nulo volta para a área pessoal. */
+    switch: protectedProcedure
+      .input(z.object({ id: z.string().min(1).nullable() }))
+      .mutation(({ input }) => switchWorkspace(input.id)),
+  }),
+
+  people: router({
+    list: protectedProcedure.query(({ ctx }) =>
+      listPeople().map(p => ({ ...p, isMe: p.id === ctx.user.id }))
+    ),
+    addGuest: protectedProcedure
       .input(
         z.object({
-          name: z.string().min(1),
-          description: z.string().optional(),
-          type: z.enum(["personal", "family", "business"]),
+          name: z.string().trim().min(1, "Informe um nome").max(60),
+          color: z.string().optional(),
         })
       )
-      .mutation(({ input, ctx }) =>
-        createWorkspace({
-          ownerId: ctx.user.id,
-          name: input.name,
-          description: input.description,
-          type: input.type as any,
-          isActive: 1,
+      .mutation(({ input }) => addGuestPerson(input.name, input.color)),
+    invite: protectedProcedure
+      .input(
+        z.object({
+          email: z.string().trim().email("E-mail inválido"),
+          name: z.string().trim().max(60).optional(),
         })
-      ),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const active = getActiveWorkspace();
+        if (!active || active.kind !== "shared") {
+          throw new Error(
+            "Convites só podem ser feitos em uma área de trabalho compartilhada. Crie uma em Áreas de trabalho."
+          );
+        }
+        const person = await upsertInvitedPerson(input.email, input.name);
+        const inviter = ctx.user.name || ctx.user.email || "Alguém";
+        await shareWorkspaceFile(
+          active.id,
+          input.email,
+          `${inviter} convidou você para a área "${active.name}" no Financeiro Doméstico. ` +
+            `Para entrar, abra: ${joinLink(active.id)}`
+        );
+        await logAuditAction({
+          workspaceId: 0,
+          userId: ctx.user.id,
+          action: "invite_person",
+          entityType: "user",
+          entityId: person.id,
+          changes: JSON.stringify({ email: input.email }),
+        });
+        return { person, joinLink: joinLink(active.id) };
+      }),
     update: protectedProcedure
       .input(
         z.object({
-          id: z.number(),
-          name: z.string().optional(),
-          description: z.string().optional(),
-          type: z.enum(["personal", "family", "business"]).optional(),
+          id: z.number().int(),
+          name: z.string().trim().min(1).max(60).optional(),
+          color: z.string().optional(),
         })
       )
-      .mutation(({ input }) => {
-        const { id, ...updates } = input;
-        return updateWorkspace(id, updates as any);
+      .mutation(({ input }) => updatePerson(input.id, input)),
+    remove: protectedProcedure
+      .input(z.object({ id: z.number().int() }))
+      .mutation(async ({ ctx, input }) => {
+        if (input.id === ctx.user.id) throw new Error("Você não pode remover a si mesmo.");
+        if (input.id === getDataUserId()) {
+          throw new Error("O dono da área de trabalho não pode ser removido.");
+        }
+        const person = getStore().find("users", u => u.id === input.id);
+        const active = getActiveWorkspace();
+        if (person?.email && active?.kind === "shared" && person.status !== "guest") {
+          await unshareWorkspaceFile(active.id, person.email);
+        }
+        return removePerson(input.id);
       }),
-    members: router({
-      list: protectedProcedure
-        .input(z.object({ workspaceId: z.number() }))
-        .query(({ input }) => getWorkspaceMembers(input.workspaceId)),
-      add: protectedProcedure
-        .input(
-          z.object({
-            workspaceId: z.number(),
-            email: z.string().email(),
-            role: z.enum(["owner", "editor", "viewer"]),
-          })
-        )
-        .mutation(async ({ input, ctx }) => {
-          const token = randomToken();
-          const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 dias
-          
-          await logAuditAction({
-            workspaceId: input.workspaceId,
-            userId: ctx.user.id,
-            action: "invite_member",
-            entityType: "workspace",
-            entityId: input.workspaceId,
-            changes: JSON.stringify({ email: input.email, role: input.role }),
-          });
-          
-          return createWorkspaceInvite({
-            workspaceId: input.workspaceId,
-            email: input.email,
-            token,
-            role: input.role as any,
-            invitedBy: ctx.user.id,
-            expiresAt,
-            status: "pending" as any,
-          });
-        }),
-      updateRole: protectedProcedure
-        .input(
-          z.object({
-            memberId: z.number(),
-            role: z.enum(["owner", "editor", "viewer"]),
-          })
-        )
-        .mutation(({ input, ctx }) => {
-          logAuditAction({
-            workspaceId: 0, // TODO: get from member
-            userId: ctx.user.id,
-            action: "update_member_role",
-            entityType: "member",
-            entityId: input.memberId,
-            changes: JSON.stringify({ role: input.role }),
-          });
-          return updateWorkspaceMemberRole(input.memberId, input.role);
-        }),
-      remove: protectedProcedure
-        .input(z.object({ memberId: z.number() }))
-        .mutation(({ input, ctx }) => {
-          logAuditAction({
-            workspaceId: 0, // TODO: get from member
-            userId: ctx.user.id,
-            action: "remove_member",
-            entityType: "member",
-            entityId: input.memberId,
-            changes: JSON.stringify({}),
-          });
-          return removeWorkspaceMember(input.memberId);
-        }),
-    }),
-    invites: router({
-      getPending: protectedProcedure
-        .input(z.object({ email: z.string().email() }))
-        .query(({ input }) => getPendingInvitesByEmail(input.email)),
-      accept: protectedProcedure
-        .input(z.object({ token: z.string() }))
-        .mutation(async ({ input, ctx }) => {
-          const invite = await getWorkspaceInviteByToken(input.token);
-          if (!invite) throw new Error("Invite not found or expired");
-          if (invite.email !== ctx.user.email) throw new Error("Email mismatch");
-          
-          return acceptWorkspaceInvite(invite.id, ctx.user.id);
-        }),
-    }),
-  }),
-  sharedAccount: router({
-    create: protectedProcedure
-      .input(
-        z.object({
-          accountId: z.number(),
-          workspaceId: z.number(),
-          shareType: z.enum(["individual", "joint", "shared"]),
-        })
-      )
-      .mutation(({ input, ctx }) => {
-        logAuditAction({
-          workspaceId: input.workspaceId,
-          userId: ctx.user.id,
-          action: "share_account",
-          entityType: "account",
-          entityId: input.accountId,
-          changes: JSON.stringify({ shareType: input.shareType }),
-        });
-        return createSharedAccount(input as any);
-      }),
-    listByWorkspace: protectedProcedure
-      .input(z.object({ workspaceId: z.number() }))
-      .query(({ input }) => getSharedAccountsByWorkspace(input.workspaceId)),
   }),
   transactionResponsibility: router({
     add: protectedProcedure

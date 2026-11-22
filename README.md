@@ -12,6 +12,7 @@ Aplicação web para controle de finanças pessoais. Organiza receitas, despesas
 
 - [Como funciona](#como-funciona)
 - [Configurando o login Google](#configurando-o-login-google)
+- [Áreas de trabalho compartilhadas](#áreas-de-trabalho-compartilhadas)
 - [Desenvolvimento](#desenvolvimento)
 - [Deploy no GitHub Pages](#deploy-no-github-pages)
 - [Scripts disponíveis](#scripts-disponíveis)
@@ -46,6 +47,36 @@ A lógica que antes ficava no servidor (router tRPC) agora roda no navegador via
    - `http://localhost:3000` (desenvolvimento)
    - `https://davidjeiel.github.io` (GitHub Pages)
 5. Copie o Client ID para a variável `VITE_GOOGLE_CLIENT_ID`.
+6. *(Para áreas compartilhadas)* Ative também a **Google Picker API**, crie uma **Chave de API** em **Credenciais** (restrinja às mesmas origens e às APIs Picker/Drive) e anote o **Número do projeto** (Painel do projeto). Eles vão nas variáveis `VITE_GOOGLE_API_KEY` e `VITE_GOOGLE_APP_ID`.
+
+---
+
+## Áreas de trabalho compartilhadas
+
+Cada **área de trabalho** é uma planilha própria:
+
+- **Pessoal** — a planilha *Financeiro Doméstico* de cada usuário (como sempre foi).
+- **Compartilhada** — uma planilha *Financeiro Doméstico — &lt;nome&gt;* criada em **Áreas e pessoas → Nova área compartilhada**. Todos os participantes leem e gravam a mesma planilha, então veem os mesmos lançamentos, cartões, faturas e categorias.
+
+A área ativa é escolhida no seletor da barra lateral.
+
+**Convidando alguém**
+
+1. Na área compartilhada, em **Áreas e pessoas**, informe o e-mail Google da pessoa e clique em **Convidar**.
+2. O app compartilha a planilha pelo Google Drive (permissão de edição) e o Google envia um e-mail com o link `…/join/<id>`.
+3. A pessoa abre o link, entra com a conta Google e, na primeira vez, seleciona a planilha na janela do Google (**Google Picker**). Isso é exigido pelo escopo `drive.file`: o app só acessa arquivos criados por ele para aquele usuário ou escolhidos no Picker.
+
+**Responsável pelo pagamento**
+
+Todo lançamento (receita, despesa ou cartão) tem o campo **Responsável pelo pagamento** (em receitas, **Quem recebe**). O padrão é quem está lançando. As opções são as pessoas da área:
+
+- participantes que já entraram;
+- convidados que ainda não abriram a área;
+- **pessoas sem acesso** (ex.: um filho, a diarista), que só servem para indicar responsabilidade — funcionam também na área pessoal.
+
+Na lista de lançamentos há a coluna **Responsável** (com filtro e ordenação) e, acima dela, o total que cada pessoa paga/recebe no período; clicar em uma pessoa filtra os lançamentos dela. A edição individual, a edição em lote e a exportação (CSV/XLSX) também incluem o responsável.
+
+**Colunas novas na planilha**: `Lancamentos.responsibleUserId` e `Lancamentos.createdBy`; `Usuarios.status` e `Usuarios.color`. Planilhas existentes são atualizadas automaticamente no primeiro acesso.
 
 ---
 
@@ -83,7 +114,7 @@ URL de acesso: **https://davidjeiel.github.io/financeiro-domestico/**
 ### Primeira vez
 
 1. Em **Settings → Pages**, selecione **GitHub Actions** como *Source*.
-2. Em **Settings → Secrets and variables → Actions → Variables**, crie a variável `VITE_GOOGLE_CLIENT_ID` com o Client ID.
+2. Em **Settings → Secrets and variables → Actions → Variables**, crie a variável `VITE_GOOGLE_CLIENT_ID` com o Client ID (e, para áreas compartilhadas, `VITE_GOOGLE_API_KEY` e `VITE_GOOGLE_APP_ID`).
 3. Confirme que `https://davidjeiel.github.io` está nas origens autorizadas do Client ID.
 4. Faça um push na `main` (ou rode manualmente em **Actions → Deploy to GitHub Pages → Run workflow**).
 
@@ -127,8 +158,8 @@ VITE_BASE_URL: /financeiro-domestico/   # GitHub Pages padrão
 | `/settings` | Configurações da conta |
 | `/accounts` | Contas bancárias |
 | `/categories` | Categorias (tipologias) |
-| `/workspaces` | Workspaces |
-| `/shared-accounts` | Contas compartilhadas |
+| `/workspaces` | Áreas de trabalho e pessoas (responsáveis, convites) |
+| `/join/:id` | Link de convite para uma área compartilhada |
 | `/settings` → aba Google Sheets | Link da planilha e recarregar dados |
 
 ---
@@ -143,7 +174,8 @@ financeiro-domestico/
 │   │   ├── sheetStore.ts  # Leitura/gravação das abas da planilha
 │   │   ├── schema.ts      # Tabelas (abas), colunas e tipos
 │   │   ├── db.ts          # Operações de dados (competências, lançamentos…)
-│   │   ├── session.ts     # Liga o login à planilha e ao usuário
+│   │   ├── session.ts     # Liga o login à planilha da área ativa e ao usuário
+│   │   ├── workspaces.ts  # Áreas compartilhadas: criar, listar, compartilhar no Drive
 │   │   └── router.ts      # Router tRPC executado localmente
 │   ├── pages/           # Páginas da aplicação
 │   ├── components/      # Componentes reutilizáveis
@@ -157,6 +189,8 @@ financeiro-domestico/
 
 ### Limitações
 
-- Os dados de cada usuário ficam na planilha dele. **Workspaces, convites e contas compartilhadas** continuam funcionando dentro da planilha do usuário, mas um convite não chega a outra conta Google (não há servidor central para isso).
+- Em áreas compartilhadas o app relê a planilha antes de cada gravação (e a cada ~20 s nas consultas), mas duas gravações exatamente simultâneas ainda podem se sobrepor — a última prevalece. Use **Recarregar dados** se algo parecer desatualizado.
+- Para entrar em uma área criada por outra pessoa, o site precisa ter `VITE_GOOGLE_API_KEY` e `VITE_GOOGLE_APP_ID` configurados (Google Picker).
+- Remover alguém da área retira a permissão da planilha no Drive; os lançamentos antigos continuam mostrando o nome da pessoa.
 - Se o app estiver aberto em duas abas ao mesmo tempo, a última gravação prevalece; use **Recarregar dados** para sincronizar.
 - O token do Google dura cerca de 1 hora; depois disso o app pede um novo automaticamente (pode ser preciso entrar de novo).

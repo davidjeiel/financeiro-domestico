@@ -10,6 +10,7 @@ export interface ExportData {
     type: string;
     amount: number;
     notes?: string;
+    responsible?: string;
   }>;
   competency: {
     name: string;
@@ -32,6 +33,7 @@ export function exportToXLSX(data: ExportData, filename?: string) {
       'Categoria': t.category,
       'Tipo': t.type,
       'Valor': t.amount,
+      'Responsável': t.responsible || '',
       'Notas': t.notes || '',
     }))
   );
@@ -88,6 +90,7 @@ export function exportToCSV(data: ExportData, filename?: string) {
     'Categoria': t.category,
     'Tipo': t.type,
     'Valor': t.amount,
+    'Responsável': t.responsible || '',
     'Notas': t.notes || '',
   }));
 
@@ -165,6 +168,7 @@ export function prepareExportData(
     type: 'income' | 'expense' | 'credit_card';
     amount: string | number;
     notes?: string;
+    responsible?: string;
   }>,
   competencyName: string,
   year: number,
@@ -179,6 +183,7 @@ export function prepareExportData(
       type: getTypeLabel(t.type),
       amount: typeof t.amount === 'string' ? parseFloat(t.amount) : t.amount,
       notes: t.notes,
+      responsible: t.responsible,
     })),
     competency: {
       name: competencyName,
