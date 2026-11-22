@@ -17,6 +17,17 @@ export type RecurrenceFrequency =
   | "quarterly"
   | "annual";
 
+export function filterTransactionsByDateRange<T extends Pick<Transaction, "transactionDate">>(
+  transactions: T[],
+  startDate?: string,
+  endDate?: string
+): T[] {
+  return transactions.filter(transaction => {
+    const date = transaction.transactionDate.toISOString().slice(0, 10);
+    return (!startDate || date >= startDate) && (!endDate || date <= endDate);
+  });
+}
+
 export function generateRecurringDates(
   startDate: Date,
   endDate: Date,

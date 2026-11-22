@@ -11,6 +11,8 @@ import {
   getUserCreditCards,
   createCreditCard,
   getCompetencyTransactions,
+  getUserTransactionsByDateRange,
+  getCalendarEventsForYear,
   createTransaction,
   createRecurringTransactions,
   getTransactionById,
@@ -146,6 +148,14 @@ export const appRouter = router({
       ),
   }),
 
+  calendar: router({
+    eventsForYear: protectedProcedure
+      .input(z.object({ year: z.number().int() }))
+      .query(({ ctx, input }) =>
+        getCalendarEventsForYear(ctx.user.id, input.year)
+      ),
+  }),
+
   creditCard: router({
     list: protectedProcedure.query(({ ctx }) =>
       getUserCreditCards(ctx.user.id)
@@ -171,9 +181,25 @@ export const appRouter = router({
 
   transaction: router({
     list: protectedProcedure
-      .input(z.object({ competencyId: z.number() }))
-      .query(({ input }) =>
-        getCompetencyTransactions(input.competencyId)
+      .input(
+        z.object({
+          competencyId: z.number(),
+          startDate: dateOnlySchema.optional(),
+          endDate: dateOnlySchema.optional(),
+        }).superRefine((input, context) => {
+          if (input.startDate && input.endDate && input.endDate < input.startDate) {
+            context.addIssue({
+              code: "custom",
+              path: ["endDate"],
+              message: "A data final deve ser igual ou posterior à data inicial.",
+            });
+          }
+        })
+      )
+      .query(({ ctx, input }) =>
+        input.startDate || input.endDate
+          ? getUserTransactionsByDateRange(ctx.user.id, input.startDate, input.endDate)
+          : getCompetencyTransactions(input.competencyId)
       ),
     listWithFilters: protectedProcedure
       .input(

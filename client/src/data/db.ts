@@ -4,6 +4,7 @@
  */
 import {
   calculateInvoiceDates,
+  filterTransactionsByDateRange,
   generateRecurringDates,
   getCompetencyForTransaction,
   type RecurrenceFrequency,
@@ -84,6 +85,43 @@ export async function getCompetencyTransactions(competencyId: number) {
   return getStore()
     .select("transactions", t => t.competencyId === competencyId)
     .sort((a, b) => b.transactionDate.getTime() - a.transactionDate.getTime());
+}
+
+export function getUserTransactionsByDateRange(
+  userId: number,
+  startDate?: string,
+  endDate?: string
+) {
+  return filterTransactionsByDateRange(
+    getStore().select("transactions", transaction => transaction.userId === userId),
+    startDate,
+    endDate
+  ).sort((a, b) => b.transactionDate.getTime() - a.transactionDate.getTime());
+}
+
+export function getCalendarEventsForYear(userId: number, year: number) {
+  const start = new Date(year, 0, 1);
+  const end = new Date(year + 1, 0, 1);
+  const store = getStore();
+
+  return {
+    transactions: store.select(
+      "transactions",
+      transaction =>
+        transaction.userId === userId &&
+        transaction.transactionDate instanceof Date &&
+        transaction.transactionDate >= start &&
+        transaction.transactionDate < end
+    ),
+    invoices: store.select(
+      "invoices",
+      invoice =>
+        invoice.userId === userId &&
+        invoice.dueDate instanceof Date &&
+        invoice.dueDate >= start &&
+        invoice.dueDate < end
+    ),
+  };
 }
 
 export async function createTransaction(data: Insert<"transactions">) {

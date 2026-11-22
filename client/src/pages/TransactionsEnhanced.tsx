@@ -99,6 +99,8 @@ export default function TransactionsEnhanced() {
   const activeCompetency = navCompetency ?? currentCompetency;
   const isCurrentPeriod =
     navYear === currentCompetency?.year && navMonth === currentCompetency?.month;
+  const [filterStartDate, setFilterStartDate] = useState<string>("");
+  const [filterEndDate, setFilterEndDate] = useState<string>("");
 
   const goPrev = () => {
     if (navYear === null || navMonth === null) return;
@@ -117,7 +119,11 @@ export default function TransactionsEnhanced() {
   };
 
   const { data: transactions, isLoading } = trpc.transaction.list.useQuery(
-    { competencyId: activeCompetency?.id || 0 },
+    {
+      competencyId: activeCompetency?.id || 0,
+      startDate: filterStartDate || undefined,
+      endDate: filterEndDate || undefined,
+    },
     { enabled: !!activeCompetency }
   );
   const { data: creditCards } = trpc.creditCard.list.useQuery();
@@ -177,8 +183,6 @@ export default function TransactionsEnhanced() {
     { id: 'actions', label: 'Ações', visible: true },
   ];
 
-  const [filterStartDate, setFilterStartDate] = useState<string>("");
-  const [filterEndDate, setFilterEndDate] = useState<string>("");
   const [advancedFilters, setAdvancedFilters] = useState<TransactionFilters>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('transactionAdvancedFilters');
@@ -400,12 +404,7 @@ export default function TransactionsEnhanced() {
   }
 
   // ── Filtering & sorting (hoisted so totals can be rendered outside the Card) ──
-  let filteredTransactions = (transactions ?? []).filter(t => {
-    const txDate = new Date(t.transactionDate).toISOString().split('T')[0];
-    if (filterStartDate && txDate < filterStartDate) return false;
-    if (filterEndDate && txDate > filterEndDate) return false;
-    return true;
-  });
+  let filteredTransactions = [...(transactions ?? [])];
 
   if (columnFilters.transactionDate)
     filteredTransactions = filteredTransactions.filter(t =>

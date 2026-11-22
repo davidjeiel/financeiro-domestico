@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   generateRecurringDates,
+  filterTransactionsByDateRange,
   getCompetencyForTransaction,
   calculateInvoiceDates,
   calculateInvoiceTotal,
@@ -15,6 +16,22 @@ import {
 import { CreditCard, Transaction } from "./schema";
 
 describe("competencyLogic", () => {
+  describe("filterTransactionsByDateRange", () => {
+    it("includes the full date range across month boundaries", () => {
+      const transactions = [
+        { type: "expense", transactionDate: new Date("2026-11-19T12:00:00Z") },
+        { type: "expense", transactionDate: new Date("2026-11-20T12:00:00Z") },
+        { type: "credit_card", transactionDate: new Date("2026-12-05T12:00:00Z") },
+        { type: "income", transactionDate: new Date("2026-12-19T12:00:00Z") },
+        { type: "expense", transactionDate: new Date("2026-12-20T12:00:00Z") },
+      ];
+
+      expect(filterTransactionsByDateRange(transactions, "2026-11-20", "2026-12-19")).toEqual(
+        transactions.slice(1, 4)
+      );
+    });
+  });
+
   describe("generateRecurringDates", () => {
     it("includes the end date when it matches the recurrence", () => {
       const dates = generateRecurringDates(

@@ -10,63 +10,68 @@ import "react-calendar/dist/Calendar.css";
 
 type DateType = Date | null;
 
-export default function Calendar() {
-  const { data: currentCompetency } = trpc.competency.current.useQuery();
-  const { data: transactions, isLoading } = trpc.transaction.list.useQuery(
-    { competencyId: currentCompetency?.id || 0 },
-    { enabled: !!currentCompetency }
-  );
-  const { data: invoices } = trpc.invoice.list.useQuery(
-    { competencyId: currentCompetency?.id || 0 },
-    { enabled: !!currentCompetency }
-  );
+function dateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 
+export default function Calendar() {
+  const [activeStartDate, setActiveStartDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [viewType, setViewType] = useState<"month" | "year">("month");
+  const { data: calendarEvents, isLoading } = trpc.calendar.eventsForYear.useQuery({
+    year: activeStartDate.getFullYear(),
+  });
+
+  const title =
+    viewType === "year"
+      ? String(activeStartDate.getFullYear())
+      : new Intl.DateTimeFormat("pt-BR", {
+          month: "long",
+          year: "numeric",
+        })
+          .format(activeStartDate)
+          .replace(/^./, char => char.toUpperCase());
 
   // Create a map of dates with their events
   const dateEvents = useMemo(() => {
     const events: Record<string, Array<{ type: string; title: string; amount: string; status?: string }>> = {};
 
-    if (transactions) {
-      transactions.forEach((t) => {
-        const dateKey = new Date(t.transactionDate).toISOString().split("T")[0];
-        if (!events[dateKey]) events[dateKey] = [];
-        events[dateKey].push({
+    if (calendarEvents) {
+      calendarEvents.transactions.forEach((transaction) => {
+        const key = dateKey(new Date(transaction.transactionDate));
+        if (!events[key]) events[key] = [];
+        events[key].push({
           type: "transaction",
-          title: t.description || t.category,
-          amount: formatCurrency(t.amount),
-          status: t.type,
+          title: transaction.description || transaction.category,
+          amount: formatCurrency(transaction.amount),
+          status: transaction.type,
         });
       });
-    }
 
-    if (invoices) {
-      invoices.forEach((inv) => {
-        const dateKey = new Date(inv.dueDate).toISOString().split("T")[0];
-        if (!events[dateKey]) events[dateKey] = [];
-        events[dateKey].push({
+      calendarEvents.invoices.forEach((invoice) => {
+        const key = dateKey(new Date(invoice.dueDate));
+        if (!events[key]) events[key] = [];
+        events[key].push({
           type: "invoice",
-          title: `Fatura #${inv.id}`,
-          amount: formatCurrency(inv.totalAmount),
-          status: inv.status,
+          title: `Fatura #${invoice.id}`,
+          amount: formatCurrency(invoice.totalAmount),
+          status: invoice.status,
         });
       });
     }
 
     return events;
-  }, [transactions, invoices]);
+  }, [calendarEvents]);
 
   // Get events for selected date
   const selectedDateKey = selectedDate instanceof Date
-    ? selectedDate.toISOString().split("T")[0]
+    ? dateKey(selectedDate)
     : null;
 
   const selectedDateEvents = selectedDateKey ? dateEvents[selectedDateKey] || [] : [];
 
   const tileClassName = ({ date }: { date: Date }) => {
-    const dateKey = date.toISOString().split("T")[0];
-    const hasEvents = dateEvents[dateKey];
+    const hasEvents = dateEvents[dateKey(date)];
     if (hasEvents) {
       return "has-events";
     }
@@ -74,8 +79,7 @@ export default function Calendar() {
   };
 
   const tileContent = ({ date }: { date: Date }) => {
-    const dateKey = date.toISOString().split("T")[0];
-    const events = dateEvents[dateKey];
+    const events = dateEvents[dateKey(date)];
     if (events && events.length > 0) {
       return (
         <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-1">
@@ -110,7 +114,7 @@ export default function Calendar() {
           <Card className="lg:col-span-2 p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-foreground">
-                {currentCompetency?.name}
+                {title}
               </h2>
               <div className="flex gap-2">
                 <button
@@ -210,6 +214,18 @@ export default function Calendar() {
               onChange={(value) => {
                 if (value instanceof Date) {
                   setSelectedDate(value);
+                  setActiveStartDate(value);
+                }
+              }}
+              activeStartDate={activeStartDate}
+              onActiveStartDateChange={({ activeStartDate: nextActiveStartDate }) => {
+                if (nextActiveStartDate) {
+                  setActiveStartDate(nextActiveStartDate);
+                  setSelectedDate(current =>
+                    current?.getFullYear() === nextActiveStartDate.getFullYear()
+                      ? current
+                      : nextActiveStartDate
+                  );
                 }
               }}
               value={selectedDate}
