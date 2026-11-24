@@ -157,7 +157,7 @@ VITE_BASE_URL: /financeiro-domestico/   # GitHub Pages padrão
 |---|---|
 | `/` | Landing page pública |
 | `/dashboard` | Resumo financeiro do mês atual |
-| `/lancamentos` | Lista e cadastro de movimentações |
+| `/lancamentos` | Lista e cadastro de movimentações — visão **Competência** (cartão no mês da fatura) ou **Mensal** (pela data do lançamento); a última escolha fica salva |
 | `/cards` | Gerenciamento de cartões de crédito |
 | `/invoices` | Faturas dos cartões por competência |
 | `/calendar` | Visão calendário das movimentações |

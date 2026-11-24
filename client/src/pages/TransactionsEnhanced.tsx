@@ -30,6 +30,12 @@ import { ResponsibleSelect } from "@/components/workspace/ResponsibleSelect";
 import { PersonBadge } from "@/components/workspace/PersonBadge";
 import { usePeople } from "@/components/workspace/useWorkspaces";
 import { IncomeLinksEditor, type IncomeLink } from "@/components/allocation/IncomeLinksEditor";
+import {
+  monthRange,
+  readViewMode,
+  saveViewMode,
+  type ViewMode,
+} from "@/lib/transactionView";
 
 const transactionSchema = z.object({
   type: z.enum(["income", "expense", "credit_card"]),
@@ -83,6 +89,13 @@ const FREQUENCIES = {
 export default function TransactionsEnhanced() {
   const { data: currentCompetency } = trpc.competency.current.useQuery();
 
+  // Visão escolhida pelo usuário; a última escolha fica salva no navegador.
+  const [viewMode, setViewMode] = useState<ViewMode>(readViewMode);
+  const changeViewMode = (mode: ViewMode) => {
+    setViewMode(mode);
+    saveViewMode(mode);
+  };
+
   // Period navigation state — null until currentCompetency loads
   const [navYear, setNavYear] = useState<number | null>(null);
   const [navMonth, setNavMonth] = useState<number | null>(null);
@@ -122,11 +135,19 @@ export default function TransactionsEnhanced() {
     setNavMonth(currentCompetency.month);
   };
 
+  // Na visão mensal, o período é o mês do calendário (pela data do lançamento),
+  // a menos que o usuário tenha escolhido um intervalo de datas nos filtros.
+  const hasCustomRange = !!filterStartDate || !!filterEndDate;
+  const navRange =
+    viewMode === "monthly" && navYear !== null && navMonth !== null
+      ? monthRange(navYear, navMonth)
+      : null;
+
   const { data: transactions, isLoading } = trpc.transaction.list.useQuery(
     {
       competencyId: activeCompetency?.id || 0,
-      startDate: filterStartDate || undefined,
-      endDate: filterEndDate || undefined,
+      startDate: hasCustomRange ? filterStartDate || undefined : navRange?.start,
+      endDate: hasCustomRange ? filterEndDate || undefined : navRange?.end,
     },
     { enabled: !!activeCompetency }
   );
@@ -553,12 +574,41 @@ export default function TransactionsEnhanced() {
         {/* Toolbar: period navigation + new transaction */}
         <div className="flex items-center justify-between gap-4">
           {/* Period navigation */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              role="radiogroup"
+              aria-label="Exibir lançamentos por"
+              className="inline-flex rounded-md border border-border p-0.5 bg-muted/40"
+            >
+              {([
+                ["competency", "Competência", "Agrupa pela competência (cartões entram no mês da fatura)"],
+                ["monthly", "Mensal", "Agrupa pelo mês da data de cada lançamento"],
+              ] as const).map(([mode, label, hint]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  role="radio"
+                  aria-checked={viewMode === mode}
+                  title={hint}
+                  onClick={() => changeViewMode(mode)}
+                  className={`px-3 py-1 text-sm rounded transition-colors ${
+                    viewMode === mode
+                      ? "bg-background shadow-sm font-medium text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <Button variant="outline" size="icon" onClick={goPrev} title="Período anterior">
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <span className="text-base font-semibold min-w-[160px] text-center select-none">
-              {activeCompetency?.name ?? "..."}
+            <span className="min-w-[160px] text-center select-none leading-tight">
+              <span className="block text-base font-semibold">{activeCompetency?.name ?? "..."}</span>
+              <span className="block text-xs text-muted-foreground">
+                {viewMode === "monthly" ? "mês do calendário" : "competência"}
+              </span>
             </span>
             <Button variant="outline" size="icon" onClick={goNext} title="Próximo período">
               <ChevronRight className="w-4 h-4" />
@@ -1003,6 +1053,13 @@ export default function TransactionsEnhanced() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-foreground">
               Movimentações - {activeCompetency?.name}
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                {hasCustomRange
+                  ? "(período dos filtros)"
+                  : viewMode === "monthly"
+                    ? "(por data do lançamento)"
+                    : "(por competência)"}
+              </span>
             </h2>
             <div className="flex items-center gap-2">
               <Button
