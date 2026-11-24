@@ -13,6 +13,7 @@ import { formatCurrency, formatDate } from '@/lib/formatting';
 import { Plus } from 'lucide-react';
 import TransactionLinksManager from '@/components/TransactionLinksManager';
 import { ResponsibleSelect } from '@/components/workspace/ResponsibleSelect';
+import { useActiveWorkspaceId } from '@/components/workspace/useWorkspaces';
 import {
   IncomeCommitments,
   IncomeLinksEditor,
@@ -55,9 +56,10 @@ export default function EditTransactionModal({
   const { data: typologies = [], isLoading: isLoadingTypologies, refetch: refetchTypologies } = trpc.typology.list.useQuery();
   const updateMutation = trpc.transaction.update.useMutation();
   const setAllocationsMutation = trpc.allocation.set.useMutation();
+  const workspaceId = useActiveWorkspaceId();
   const { data: allocation } = trpc.allocation.forTransaction.useQuery(
-    { transactionId: transactionId || 0 },
-    { enabled: isOpen && transactionId !== null }
+    { transactionId: transactionId || 0, workspaceId: workspaceId ?? '' },
+    { enabled: isOpen && transactionId !== null && !!workspaceId }
   );
   // Receitas que pagam esta despesa (editadas aqui, gravadas ao salvar).
   const [incomeLinks, setIncomeLinks] = useState<IncomeLink[]>([]);
@@ -158,7 +160,11 @@ export default function EditTransactionModal({
 
       if (incomeLinksDirty && transaction?.type !== 'income') {
         try {
-          await setAllocationsMutation.mutateAsync({ expenseId: transactionId || 0, links: incomeLinks });
+          await setAllocationsMutation.mutateAsync({
+            expenseId: transactionId || 0,
+            links: incomeLinks,
+            workspaceId: workspaceId ?? '',
+          });
         } catch (error) {
           utils.transaction.list.invalidate();
           toast.error(

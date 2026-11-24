@@ -123,6 +123,20 @@ const recurringTransactionSchema = z
     }
   });
 
+/**
+ * Os ids de lançamento são de cada planilha. Quem vincula informa a área em
+ * que estava; se ela não for a ativa (ex.: tela aberta antes de trocar de
+ * área), o vínculo é recusado em vez de cair numa receita de mesmo id.
+ */
+function assertActiveWorkspace(workspaceId: string | undefined) {
+  const active = getActiveWorkspace();
+  if (workspaceId !== undefined && workspaceId !== active?.id) {
+    throw new Error(
+      "A área de trabalho mudou desde que esta tela foi aberta. Recarregue e escolha uma receita da área ativa."
+    );
+  }
+}
+
 const allocationLinkSchema = z.object({
   incomeId: z.number().int(),
   amount: z
@@ -271,11 +285,14 @@ export const appRouter = router({
           responsibleUserId: z.number().int().nullable().optional(),
           // Receitas que pagam esta despesa (opcional).
           incomeLinks: z.array(allocationLinkSchema).optional(),
+          // Área em que as receitas vinculadas foram escolhidas.
+          workspaceId: z.string().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
         assertResponsible(input.responsibleUserId);
-        const { incomeLinks, ...txInput } = input;
+        if (input.incomeLinks?.length) assertActiveWorkspace(input.workspaceId);
+        const { incomeLinks, workspaceId: _workspaceId, ...txInput } = input;
         // Converter strings YYYY-MM-DD para Date (meia-noite local)
         const [year, month, day] = input.transactionDate.split('-').map(Number);
         const transactionDate = new Date(year, month - 1, day);
@@ -760,16 +777,30 @@ export const appRouter = router({
     totals: protectedProcedure.query(() =>
       Object.fromEntries(Array.from(allocationTotals(getStore()).entries()).map(([id, c]) => [id, (c / 100).toFixed(2)]))
     ),
+    // `workspaceId` entra na chave do cache: dados de uma área nunca aparecem em outra.
     forTransaction: protectedProcedure
-      .input(z.object({ transactionId: z.number().int() }))
-      .query(({ input }) => allocationsOf(getStore(), input.transactionId)),
+      .input(z.object({ transactionId: z.number().int(), workspaceId: z.string() }))
+      .query(({ input }) => {
+        assertActiveWorkspace(input.workspaceId);
+        return allocationsOf(getStore(), input.transactionId);
+      }),
     incomeOptions: protectedProcedure
-      .input(z.object({ expenseId: z.number().int().optional() }))
-      .query(({ input }) => incomeOptions(getStore(), getDataUserId(), input.expenseId)),
+      .input(z.object({ expenseId: z.number().int().optional(), workspaceId: z.string() }))
+      .query(({ input }) => {
+        assertActiveWorkspace(input.workspaceId);
+        return incomeOptions(getStore(), getDataUserId(), input.expenseId);
+      }),
     /** Substitui as receitas vinculadas a uma despesa. Lista vazia remove os vínculos. */
     set: protectedProcedure
-      .input(z.object({ expenseId: z.number().int(), links: z.array(allocationLinkSchema) }))
+      .input(
+        z.object({
+          expenseId: z.number().int(),
+          links: z.array(allocationLinkSchema),
+          workspaceId: z.string(),
+        })
+      )
       .mutation(async ({ ctx, input }) => {
+        assertActiveWorkspace(input.workspaceId);
         const s = getStore();
         setAllocations(s, input.expenseId, input.links, ctx.user.id);
         await s.commit();

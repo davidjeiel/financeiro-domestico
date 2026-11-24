@@ -108,8 +108,25 @@ describe("vínculos despesa ↔ receita", () => {
   it("só aceita despesa ↔ receita", async () => {
     const { s, salario, luz, freela } = await setup();
     expect(() => setAllocations(s, salario.id, [{ incomeId: freela.id, amount: "10" }], 1)).toThrow(/Só despesas/);
-    expect(() => setAllocations(s, luz.id, [{ incomeId: luz.id, amount: "10" }], 1)).toThrow(/receita válida/);
+    expect(() => setAllocations(s, luz.id, [{ incomeId: luz.id, amount: "10" }], 1)).toThrow(/área de trabalho ativa/);
     expect(() => setAllocations(s, luz.id, [{ incomeId: salario.id, amount: "0" }], 1)).toThrow(/maior que zero/);
+  });
+
+  it("recusa receita que não é da mesma área (outro dono dos dados)", async () => {
+    const { s, luz } = await setup();
+    const alheia = s.insert("transactions", {
+      userId: 2,
+      competencyId: 1,
+      type: "income",
+      category: "X",
+      description: "Salário de outra área",
+      amount: "1000.00",
+      transactionDate: new Date(2026, 2, 5),
+    });
+    expect(() => setAllocations(s, luz.id, [{ incomeId: alheia.id, amount: "10" }], 1)).toThrow(
+      /área de trabalho ativa/
+    );
+    expect(incomeOptions(s, 1).some(o => o.id === alheia.id)).toBe(false);
   });
 
   it("limpa vínculos ao excluir ou trocar o tipo do lançamento", async () => {

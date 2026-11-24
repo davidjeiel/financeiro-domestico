@@ -46,6 +46,7 @@ export function validateAllocations(
 ): { incomeId: number; cents: number }[] {
   const expense = s.find("transactions", t => t.id === expenseId);
   if (!expense) throw new Error("Lançamento não encontrado.");
+  // Os ids são por planilha: a receita precisa ser desta mesma área (mesmo dono dos dados).
   if (!isExpense(expense)) {
     throw new Error("Só despesas e compras no cartão podem ser vinculadas a receitas.");
   }
@@ -73,8 +74,8 @@ export function validateAllocations(
 
   for (const [incomeId, cents] of Array.from(merged.entries())) {
     const income = s.find("transactions", t => t.id === incomeId);
-    if (!income || income.type !== "income") {
-      throw new Error("Escolha uma receita válida para o vínculo.");
+    if (!income || income.type !== "income" || income.userId !== expense.userId) {
+      throw new Error("Escolha uma receita da área de trabalho ativa para o vínculo.");
     }
     const available = toCents(income.amount) - (committedElsewhere.get(incomeId) ?? 0);
     if (cents > available) {
