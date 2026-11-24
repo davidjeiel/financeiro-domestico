@@ -17,7 +17,8 @@ export default function BulkActionsFAB({
   }
 
   return (
-    <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-40">
+    // Fica acima do botão flutuante "Nova Movimentação".
+    <div className="fixed bottom-24 right-6 flex flex-col gap-3 z-40">
       {/* Badge com contagem */}
       <div className="flex justify-end">
         <div className="bg-primary text-primary-foreground px-4 py-2 rounded-full text-sm font-semibold">
