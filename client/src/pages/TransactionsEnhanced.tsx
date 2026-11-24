@@ -17,6 +17,7 @@ import AddCategoryModal from "@/components/AddCategoryModal";
 import LoadingOverlay from "@/components/LoadingOverlay";
 // BulkTransactionActions removido - usando BulkEditModal e BulkDeleteModal
 import BulkActionsFAB from "@/components/BulkActionsFAB";
+import { CalculatorPopover } from "@/components/CalculatorPopover";
 import BulkEditModal from "@/components/BulkEditModal";
 import BulkDeleteModal from "@/components/BulkDeleteModal";
 import EditTransactionModal from "@/components/EditTransactionModal";
@@ -181,6 +182,10 @@ export default function TransactionsEnhanced() {
   const createMutation = trpc.transaction.create.useMutation();
   const createRecurringMutation = trpc.transaction.createRecurring.useMutation();
   const createInstallmentsMutation = trpc.transaction.createInstallments.useMutation();
+  const isSaving =
+    createMutation.isPending ||
+    createRecurringMutation.isPending ||
+    createInstallmentsMutation.isPending;
   const utils = trpc.useUtils();
   const queryClient = useQueryClient();
   const markAsPaidMutation = trpc.transaction.markAsPaid.useMutation({
@@ -303,6 +308,7 @@ export default function TransactionsEnhanced() {
     reset,
     watch,
     setValue,
+    setFocus,
     formState: { errors },
   } = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
@@ -360,7 +366,12 @@ export default function TransactionsEnhanced() {
     setValue("type", newType);
   };
 
+  // "Salvar e nova": grava e deixa o formulário aberto para o próximo lançamento.
+  const continueAfterSave = React.useRef(false);
+
   const onSubmit = async (data: TransactionFormData) => {
+    const keepOpen = continueAfterSave.current;
+    continueAfterSave.current = false;
     // Validar se cartão foi selecionado quando tipo é credit_card
     if (data.type === "credit_card" && !data.creditCardId) {
       toast.error("Selecione um cartão de crédito");
@@ -463,6 +474,29 @@ export default function TransactionsEnhanced() {
         }
       }
       
+      utils.transaction.list.invalidate();
+      if (keepOpen) {
+        // Mantém tipo, forma, data, cartão e categoria; limpa o resto.
+        reset({
+          type: data.type,
+          transactionType: data.transactionType,
+          transactionDate: data.transactionDate,
+          creditCardId: data.creditCardId,
+          category: data.category,
+          frequency: data.frequency,
+          endDate: data.endDate,
+          installments: data.installments,
+          description: "",
+          amount: "",
+          notes: "",
+        });
+        setNewTransactionLinks([]);
+        setNewIncomeLinks([]);
+        setTimeout(() => setFocus("amount"), 0);
+        utils.allocation.invalidate();
+        utils.invoice.invalidate();
+        return;
+      }
       reset({
         type: "expense",
         transactionType: "simple",
@@ -471,7 +505,6 @@ export default function TransactionsEnhanced() {
       setSelectedType("expense");
       setNewTransactionLinks([]);
       setOpen(false);
-      utils.transaction.list.invalidate();
       utils.allocation.invalidate();
       utils.invoice.invalidate();
       utils.invoice.invalidate();
@@ -834,7 +867,7 @@ export default function TransactionsEnhanced() {
         status="loading"
       />
 
-      <div className="space-y-4">
+      <div className="space-y-4 pb-24">
         {/* Toolbar: period navigation + new transaction */}
         <div className="flex items-center justify-between gap-4">
           {/* Period navigation */}
@@ -887,10 +920,15 @@ export default function TransactionsEnhanced() {
 
           {/* Add Transaction Dialog */}
           <Dialog open={open} onOpenChange={setOpen}>
+            {/* Botão flutuante: fica visível ao rolar a tela */}
             <DialogTrigger asChild>
-              <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-                <Plus className="w-4 h-4 mr-2" />
-                Nova Movimentação
+              <Button
+                className="fixed bottom-6 right-6 z-40 h-14 rounded-full px-5 shadow-lg hover:shadow-xl bg-primary text-primary-foreground hover:bg-primary/90"
+                title="Nova movimentação"
+                aria-label="Nova movimentação"
+              >
+                <Plus className="w-6 h-6 sm:mr-2" />
+                <span className="hidden sm:inline">Nova Movimentação</span>
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl flex flex-col max-h-[90vh] gap-0 p-0 bg-card text-card-foreground border-border">
@@ -1052,14 +1090,22 @@ export default function TransactionsEnhanced() {
                   <label className="text-sm font-medium text-foreground mb-2 block">
                     {watchTransactionType === "installment" ? "Valor total da compra" : "Valor"} <span className="text-red-600">*</span>
                   </label>
-                  <input
-                    {...register("amount")}
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    placeholder="0.00"
-                    className="input-elegant w-full"
-                  />
+                  <div className="relative">
+                    <input
+                      {...register("amount")}
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      placeholder="0.00"
+                      className="input-elegant w-full pr-10"
+                    />
+                    <CalculatorPopover
+                      value={watchAmount}
+                      onApply={value =>
+                        setValue("amount", value, { shouldValidate: true, shouldDirty: true })
+                      }
+                    />
+                  </div>
                   {errors.amount && <p className="text-red-600 text-sm mt-1">{errors.amount.message}</p>}
                 </div>
 
@@ -1232,16 +1278,32 @@ export default function TransactionsEnhanced() {
                     variant="outline"
                     onClick={() => setOpen(false)}
                     className="flex-1"
-                    disabled={createMutation.isPending || createRecurringMutation.isPending}
+                    disabled={isSaving}
                   >
                     Cancelar
                   </Button>
                   <Button
                     type="submit"
-                    className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
-                    disabled={createMutation.isPending || createRecurringMutation.isPending}
+                    variant="secondary"
+                    className="flex-1"
+                    title="Salva e deixa o formulário aberto para lançar outra"
+                    onClick={() => {
+                      continueAfterSave.current = true;
+                    }}
+                    disabled={isSaving}
                   >
-                    {createMutation.isPending || createRecurringMutation.isPending ? (
+                    <Plus className="w-4 h-4 mr-1" />
+                    Salvar e nova
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                    onClick={() => {
+                      continueAfterSave.current = false;
+                    }}
+                    disabled={isSaving}
+                  >
+                    {isSaving ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                         Salvando...
