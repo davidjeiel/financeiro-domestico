@@ -16,6 +16,24 @@ export default function Dashboard() {
     );
 
   const { data: creditCards } = trpc.creditCard.list.useQuery();
+  const { data: invoices } = trpc.invoice.listAll.useQuery();
+
+  // Fatura de cada cartão que vence no mês atual (é o que sai do caixa neste mês).
+  const monthInvoiceByCard = useMemo(() => {
+    const now = new Date();
+    const map = new Map<number, { total: number; paid: number; dueDate: Date }>();
+    for (const inv of invoices ?? []) {
+      const due = new Date(inv.dueDate);
+      if (due.getFullYear() !== now.getFullYear() || due.getMonth() !== now.getMonth()) continue;
+      const prev = map.get(inv.creditCardId);
+      map.set(inv.creditCardId, {
+        total: (prev?.total ?? 0) + Number(inv.totalAmount || 0),
+        paid: (prev?.paid ?? 0) + Number(inv.paidAmount || 0),
+        dueDate: due,
+      });
+    }
+    return map;
+  }, [invoices]);
 
   // Calculate summary
   const summary = useMemo(() => {
@@ -178,11 +196,7 @@ export default function Dashboard() {
                           Corte: dia {card.cutoffDay} | Vencimento: dia {card.dueDay}
                         </p>
                       </div>
-                      {card.limit && (
-                        <p className="text-sm font-semibold text-foreground">
-                          Limite: {formatCurrency(card.limit)}
-                        </p>
-                      )}
+                      <CardInvoiceSummary invoice={monthInvoiceByCard.get(card.id)} />
                     </div>
                   </div>
                 ))}
@@ -249,5 +263,40 @@ function SummaryCard({ title, amount, amountPaid }: SummaryCardProps) {
         )}
       </div>
     </Card>
+  );
+}
+
+/** Valor da fatura do cartão que vence no mês atual, com a situação do pagamento. */
+function CardInvoiceSummary({
+  invoice,
+}: {
+  invoice: { total: number; paid: number; dueDate: Date } | undefined;
+}) {
+  if (!invoice) {
+    return (
+      <div className="text-right">
+        <p className="text-xs text-muted-foreground">Fatura do mês</p>
+        <p className="text-sm font-semibold text-foreground">{formatCurrency(0)}</p>
+        <p className="text-xs text-muted-foreground">sem fatura neste mês</p>
+      </div>
+    );
+  }
+  const open = Math.max(invoice.total - invoice.paid, 0);
+  const status =
+    invoice.total <= 0
+      ? null
+      : invoice.paid <= 0
+        ? { label: "Aberta", className: "text-muted-foreground" }
+        : open < 0.005
+          ? { label: "Paga", className: "text-green-600" }
+          : { label: `Falta ${formatCurrency(open)}`, className: "text-amber-600" };
+  return (
+    <div className="text-right">
+      <p className="text-xs text-muted-foreground">
+        Fatura do mês · vence {invoice.dueDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+      </p>
+      <p className="text-sm font-semibold text-foreground">{formatCurrency(invoice.total)}</p>
+      {status && <p className={`text-xs ${status.className}`}>{status.label}</p>}
+    </div>
   );
 }
