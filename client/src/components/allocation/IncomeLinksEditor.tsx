@@ -1,6 +1,8 @@
 import { trpc } from "@/lib/trpc";
 import { formatCurrency } from "@/lib/formatting";
 import { Link2, Plus, Trash2 } from "lucide-react";
+import { skipToken } from "@tanstack/react-query";
+import { useActiveWorkspaceId } from "@/components/workspace/useWorkspaces";
 
 export type IncomeLink = { incomeId: number; amount: string };
 
@@ -24,7 +26,12 @@ export function IncomeLinksEditor({
   value: IncomeLink[];
   onChange: (links: IncomeLink[]) => void;
 }) {
-  const { data: options = [], isLoading } = trpc.allocation.incomeOptions.useQuery({ expenseId });
+  // Só receitas da área ativa (a área faz parte da consulta e é conferida ao gravar).
+  const workspaceId = useActiveWorkspaceId();
+  const { data: options = [], isLoading: loadingOptions } = trpc.allocation.incomeOptions.useQuery(
+    workspaceId ? { expenseId, workspaceId } : skipToken
+  );
+  const isLoading = !workspaceId || loadingOptions;
 
   const expenseCents = cents(expenseAmount);
   const linkedCents = value.reduce((sum, l) => sum + cents(l.amount), 0);
@@ -129,7 +136,10 @@ export function IncomeLinksEditor({
 
 /** Para receitas: quais despesas ela paga, quanto está comprometido e quanto sobra. */
 export function IncomeCommitments({ incomeId }: { incomeId: number }) {
-  const { data } = trpc.allocation.forTransaction.useQuery({ transactionId: incomeId });
+  const workspaceId = useActiveWorkspaceId();
+  const { data } = trpc.allocation.forTransaction.useQuery(
+    workspaceId ? { transactionId: incomeId, workspaceId } : skipToken
+  );
   if (!data || data.role !== "income") return null;
   const remaining = Number(data.remaining);
 

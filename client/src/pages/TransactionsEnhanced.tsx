@@ -28,7 +28,7 @@ import { ColumnHeader } from "@/components/ColumnHeader";
 import { FilterPriorityManager } from "@/components/FilterPriorityManager";
 import { ResponsibleSelect } from "@/components/workspace/ResponsibleSelect";
 import { PersonBadge } from "@/components/workspace/PersonBadge";
-import { usePeople } from "@/components/workspace/useWorkspaces";
+import { useActiveWorkspaceId, usePeople } from "@/components/workspace/useWorkspaces";
 import { IncomeLinksEditor, type IncomeLink } from "@/components/allocation/IncomeLinksEditor";
 import { InvoicePaymentDialog, type InvoiceToPay } from "@/components/invoice/InvoicePaymentDialog";
 import {
@@ -319,6 +319,9 @@ export default function TransactionsEnhanced() {
   const watchInstallments = watch("installments");
   // Receitas que pagam a nova despesa (só em lançamentos simples).
   const [newIncomeLinks, setNewIncomeLinks] = useState<IncomeLink[]>([]);
+  const activeWorkspaceId = useActiveWorkspaceId();
+  // Trocou de área: vínculos escolhidos na área anterior não valem aqui.
+  useEffect(() => setNewIncomeLinks([]), [activeWorkspaceId]);
   const canLinkIncome = watchType !== "income" && watchTransactionType === "simple";
   // Totais vinculados por lançamento (coberto nas despesas, comprometido nas receitas).
   const { data: allocationTotals = {} } = trpc.allocation.totals.useQuery();
@@ -430,6 +433,7 @@ export default function TransactionsEnhanced() {
               data.type !== "income" && data.transactionType === "simple" && newIncomeLinks.length
                 ? newIncomeLinks
                 : undefined,
+            workspaceId: activeWorkspaceId,
           }),
         ];
       }
