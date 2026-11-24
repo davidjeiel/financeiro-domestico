@@ -289,3 +289,30 @@ export function calculateCategoryTotals(
 
   return totals;
 }
+
+// ─── Parcelamento ────────────────────────────────────────────────────────────
+
+/**
+ * Divide um valor (em centavos) em `count` parcelas. A diferença de
+ * arredondamento vai para a primeira parcela, como fazem os cartões.
+ */
+export function splitInstallmentCents(totalCents: number, count: number): number[] {
+  if (!Number.isInteger(count) || count < 1) throw new RangeError("Número de parcelas inválido.");
+  const base = Math.floor(totalCents / count);
+  const parts = Array<number>(count).fill(base);
+  parts[0] += totalCents - base * count;
+  return parts;
+}
+
+/** Soma meses a uma data, sem pular mês quando o dia não existe (31/01 + 1 → 28/02). */
+export function addMonthsClamped(date: Date, months: number): Date {
+  const target = new Date(date.getFullYear(), date.getMonth() + months, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  return new Date(target.getFullYear(), target.getMonth(), Math.min(date.getDate(), lastDay));
+}
+
+/** Avança `months` meses a partir de uma competência (mês 1–12). */
+export function shiftCompetency(year: number, month: number, months: number) {
+  const index = year * 12 + (month - 1) + months;
+  return { year: Math.floor(index / 12), month: (index % 12) + 1 };
+}

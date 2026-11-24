@@ -91,6 +91,16 @@ Os vínculos ficam na aba `Vinculos` (`expenseId`, `incomeId`, `amount`).
 
 ---
 
+## Cartão de crédito nos lançamentos
+
+- **Faturas agrupadas:** na lista de lançamentos, as compras de um cartão aparecem numa única linha **Fatura &lt;cartão&gt;**, com o vencimento e o valor total. Clique na linha (ou na seta) para expandir e ver cada compra; as compras continuam editáveis e selecionáveis.
+- **Mês do vencimento:** na visão **Mensal**, a fatura entra no mês em que vence (é quando o dinheiro sai); na visão **Competência**, na competência da fatura.
+- **Pagamento:** o botão **Pagar** da linha da fatura registra um pagamento **total** ou **parcial**. A fatura fica *Aberta*, *Parcial · falta R$ …* ou *Paga*, e o "Pago" do card de Cartão soma o que já foi pago nas faturas.
+- **Parcelamento:** em *Nova movimentação → Parcelada*, informe o **valor total** e o número de parcelas (2 a 72). O app cria uma parcela por mês com o valor dividido (a diferença de centavos fica na 1ª). No cartão, a 1ª parcela cai na fatura da data da compra, respeitando o dia de fechamento, e as seguintes nas faturas seguintes. A lista mostra "2/10" ao lado da descrição.
+- Compras simples no cartão também passam a ir para a fatura certa pelo dia de fechamento do cartão.
+
+---
+
 ## Desenvolvimento
 
 ```sh
@@ -157,7 +167,7 @@ VITE_BASE_URL: /financeiro-domestico/   # GitHub Pages padrão
 |---|---|
 | `/` | Landing page pública |
 | `/dashboard` | Resumo financeiro do mês atual |
-| `/lancamentos` | Lista e cadastro de movimentações — visão **Competência** (cartão no mês da fatura) ou **Mensal** (pela data do lançamento); a última escolha fica salva |
+| `/lancamentos` | Lista e cadastro de movimentações — visão **Competência** ou **Mensal**; compras no cartão agrupadas por fatura (expansível, com pagamento parcial/total) |
 | `/cards` | Gerenciamento de cartões de crédito |
 | `/invoices` | Faturas dos cartões por competência |
 | `/calendar` | Visão calendário das movimentações |

@@ -44,6 +44,7 @@ export default function RecurringAndInstallments() {
   const [recurringTransactions, setRecurringTransactions] = useState<any[]>([]);
   const [installments, setInstallments] = useState<any[]>([]);
   const createRecurringMutation = trpc.transaction.createRecurring.useMutation();
+  const createInstallmentsMutation = trpc.transaction.createInstallments.useMutation();
   const utils = trpc.useUtils();
 
   const recurringForm = useForm<RecurringFormData>({
@@ -87,22 +88,34 @@ export default function RecurringAndInstallments() {
     try {
       const totalAmount = parseFloat(data.totalAmount);
       const totalInstallments = parseInt(data.totalInstallments);
-      const installmentAmount = totalAmount / totalInstallments;
-
+      if (!(totalAmount > 0) || !(totalInstallments >= 2)) {
+        toast.error("Informe o valor total e pelo menos 2 parcelas");
+        return;
+      }
+      // Grava uma parcela por mês na planilha, com o valor dividido.
+      const created = await createInstallmentsMutation.mutateAsync({
+        type: "expense",
+        category: data.category || "Outros",
+        description: data.description,
+        totalAmount: totalAmount.toFixed(2),
+        installments: totalInstallments,
+        firstDate: data.startDate,
+      });
       const newInstallment = {
         id: Date.now(),
         ...data,
         totalAmount,
         totalInstallments,
-        installmentAmount: installmentAmount.toFixed(2),
+        installmentAmount: created[created.length - 1]?.amount ?? (totalAmount / totalInstallments).toFixed(2),
         currentInstallment: 1,
         isActive: true,
       };
       setInstallments([...installments, newInstallment]);
-      toast.success("Parcelamento criado com sucesso!");
+      utils.transaction.list.invalidate();
+      toast.success(`${created.length} parcelas lançadas`);
       installmentForm.reset();
     } catch (error) {
-      toast.error("Erro ao criar parcelamento");
+      toast.error(error instanceof Error ? error.message : "Erro ao criar parcelamento");
     }
   };
 

@@ -30,6 +30,7 @@ import { ResponsibleSelect } from "@/components/workspace/ResponsibleSelect";
 import { PersonBadge } from "@/components/workspace/PersonBadge";
 import { usePeople } from "@/components/workspace/useWorkspaces";
 import { IncomeLinksEditor, type IncomeLink } from "@/components/allocation/IncomeLinksEditor";
+import { InvoicePaymentDialog, type InvoiceToPay } from "@/components/invoice/InvoicePaymentDialog";
 import {
   monthRange,
   readViewMode,
@@ -156,37 +157,37 @@ export default function TransactionsEnhanced() {
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
-  const { data: invoices } = trpc.invoice.list.useQuery(
-    { competencyId: activeCompetency?.id || 0 },
-    { enabled: !!activeCompetency }
-  );
-  
-  // Helper para obter data de vencimento de uma transacao de cartao
-  const getInvoiceDueDate = (transaction: any): Date | null => {
-    if (transaction.type !== 'credit_card' || !invoices) return null;
-    
-    const txDate = new Date(transaction.transactionDate);
-    const invoice = invoices.find(inv => {
-      const closingDate = new Date(inv.closingDate);
-      const dueDate = new Date(inv.dueDate);
-      return (
-        inv.creditCardId === transaction.creditCardId &&
-        txDate >= closingDate &&
-        txDate <= dueDate
-      );
+  // Faturas da área, por cartão + competência (as compras do cartão são agrupadas nelas).
+  const { data: allInvoices } = trpc.invoice.listAll.useQuery();
+  const invoiceKey = (creditCardId: number | null, competencyId: number) => `${creditCardId}-${competencyId}`;
+  const invoicesByKey = new Map((allInvoices ?? []).map(inv => [invoiceKey(inv.creditCardId, inv.competencyId), inv]));
+  const [expandedInvoices, setExpandedInvoices] = useState<Set<string>>(new Set());
+  const toggleInvoice = (key: string) =>
+    setExpandedInvoices(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
     });
-    
+  const [payingInvoice, setPayingInvoice] = useState<InvoiceToPay | null>(null);
+
+  // Vencimento da fatura em que uma compra no cartão é cobrada
+  const getInvoiceDueDate = (transaction: Transaction): Date | null => {
+    if (transaction.type !== 'credit_card') return null;
+    const invoice = invoicesByKey.get(invoiceKey(transaction.creditCardId, transaction.competencyId));
     return invoice ? new Date(invoice.dueDate) : null;
   };
   
   const createMutation = trpc.transaction.create.useMutation();
   const createRecurringMutation = trpc.transaction.createRecurring.useMutation();
+  const createInstallmentsMutation = trpc.transaction.createInstallments.useMutation();
   const utils = trpc.useUtils();
   const queryClient = useQueryClient();
   const markAsPaidMutation = trpc.transaction.markAsPaid.useMutation({
     onSuccess: () => {
       utils.transaction.list.invalidate();
       utils.allocation.invalidate();
+      utils.invoice.invalidate();
       toast.success("Status de pagamento atualizado!");
     },
     onError: () => {
@@ -315,6 +316,7 @@ export default function TransactionsEnhanced() {
   const watchType = watch("type");
   const watchTransactionType = watch("transactionType");
   const watchAmount = watch("amount");
+  const watchInstallments = watch("installments");
   // Receitas que pagam a nova despesa (só em lançamentos simples).
   const [newIncomeLinks, setNewIncomeLinks] = useState<IncomeLink[]>([]);
   const canLinkIncome = watchType !== "income" && watchTransactionType === "simple";
@@ -382,7 +384,28 @@ export default function TransactionsEnhanced() {
       };
 
       let createdTransactions: Transaction[];
-      if (data.transactionType === "recurring") {
+      if (data.transactionType === "installment") {
+        const count = parseInt(data.installments || "", 10);
+        if (!Number.isInteger(count) || count < 2 || count > 72) {
+          toast.error("Informe de 2 a 72 parcelas");
+          return;
+        }
+        if (data.type === "income") {
+          toast.error("Parcelamento vale para despesas e compras no cartão");
+          return;
+        }
+        createdTransactions = await createInstallmentsMutation.mutateAsync({
+          type: data.type,
+          category: data.category,
+          description: data.description || "",
+          totalAmount: amountNum.toFixed(2),
+          installments: count,
+          firstDate: data.transactionDate,
+          creditCardId: transactionData.creditCardId,
+          notes: data.notes || "",
+          responsibleUserId,
+        });
+      } else if (data.transactionType === "recurring") {
         if (!data.frequency || !data.endDate) {
           toast.error("Informe a frequência e a data limite");
           return;
@@ -414,7 +437,9 @@ export default function TransactionsEnhanced() {
       toast.success(
         data.transactionType === "recurring"
           ? `${createdTransactions.length} lançamentos recorrentes criados.`
-          : "Movimentação criada com sucesso!"
+          : data.transactionType === "installment"
+            ? `${createdTransactions.length} parcelas de ${formatCurrency(createdTransactions[createdTransactions.length - 1]?.amount ?? 0)} criadas.`
+            : "Movimentação criada com sucesso!"
       );
       
       // Salvar links se houver
@@ -444,7 +469,8 @@ export default function TransactionsEnhanced() {
       setOpen(false);
       utils.transaction.list.invalidate();
       utils.allocation.invalidate();
-      utils.invoice.list.invalidate();
+      utils.invoice.invalidate();
+      utils.invoice.invalidate();
     } catch (error: any) {
       console.error("Erro ao criar movimentação:", error);
       const errorMessage = error?.message || "Erro ao criar movimentação";
@@ -555,6 +581,240 @@ export default function TransactionsEnhanced() {
       }, new Map<number, { id: number; pay: number; paid: number; receive: number }>())
       .values()
   ).sort((a, b) => b.pay - a.pay);
+
+  // ── Compras no cartão viram uma linha por fatura (cartão + competência) ──
+  type InvoiceGroup = {
+    kind: "invoice";
+    key: string;
+    creditCardId: number;
+    competencyId: number;
+    items: Transaction[];
+  };
+  type DisplayRow = { kind: "tx"; transaction: Transaction } | InvoiceGroup;
+  const displayRows: DisplayRow[] = [];
+  const groupsByKey = new Map<string, InvoiceGroup>();
+  for (const t of filteredTransactions) {
+    if (t.type === "credit_card" && t.creditCardId) {
+      const key = invoiceKey(t.creditCardId, t.competencyId);
+      let group = groupsByKey.get(key);
+      if (!group) {
+        group = { kind: "invoice", key, creditCardId: t.creditCardId, competencyId: t.competencyId, items: [] };
+        groupsByKey.set(key, group);
+        displayRows.push(group);
+      }
+      group.items.push(t);
+    } else {
+      displayRows.push({ kind: "tx", transaction: t });
+    }
+  }
+  // O "pago" do cartão vem do que foi pago na fatura.
+  totals.creditCardPaid = Array.from(groupsByKey.values()).reduce((sum, g) => {
+    const inv = invoicesByKey.get(g.key);
+    const shown = g.items.reduce((acc, t) => acc + parseFloat(t.amount), 0);
+    return sum + Math.min(Number(inv?.paidAmount ?? 0), shown);
+  }, 0);
+
+  const renderInvoiceRow = (group: InvoiceGroup) => {
+    const invoice = invoicesByKey.get(group.key);
+    const card = creditCards?.find(c => c.id === group.creditCardId);
+    const cardName = card?.name ?? "Cartão";
+    const shown = group.items.reduce((acc, t) => acc + parseFloat(t.amount), 0);
+    const total = invoice ? Number(invoice.totalAmount) : shown;
+    const paid = Number(invoice?.paidAmount ?? 0);
+    const open = Math.max(total - paid, 0);
+    const expanded = expandedInvoices.has(group.key);
+    const dueDate = invoice ? new Date(invoice.dueDate) : null;
+    const status = paid <= 0 ? "open" : open < 0.005 ? "paid" : "partial";
+    return (
+      <tr
+        key={`invoice-row-${group.key}`}
+        className="border-b border-border bg-blue-500/5 hover:bg-blue-500/10 cursor-pointer"
+        onClick={() => toggleInvoice(group.key)}
+        aria-expanded={expanded}
+      >
+        <td className="py-3 px-4">
+          <button
+            type="button"
+            className="p-0.5 rounded hover:bg-muted"
+            aria-label={expanded ? "Recolher compras da fatura" : "Ver compras da fatura"}
+            onClick={e => {
+              e.stopPropagation();
+              toggleInvoice(group.key);
+            }}
+          >
+            {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+        </td>
+        <td className="py-3 px-4 text-foreground whitespace-nowrap">
+          {dueDate ? (
+            <>
+              <span className="text-xs text-muted-foreground block leading-none">vence</span>
+              {formatDate(dueDate)}
+            </>
+          ) : "-"}
+        </td>
+        <td className="py-3 px-4 text-foreground font-medium">
+          Fatura {cardName}
+          <span className="ml-2 text-xs font-normal text-muted-foreground">
+            {group.items.length} {group.items.length === 1 ? "lançamento" : "lançamentos"}
+          </span>
+        </td>
+        <td className="py-3 px-4 text-muted-foreground">—</td>
+        <td className="py-3 px-4">
+          <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-500/10 text-blue-600">Fatura</span>
+        </td>
+        {showResponsibleColumn && <td className="py-3 px-4" />}
+        <td className="py-3 px-4 text-right font-semibold text-red-600 whitespace-nowrap">
+          -{formatCurrency(shown)}
+          {Math.abs(shown - total) >= 0.005 && (
+            <span className="block text-xs font-normal text-muted-foreground" title="Os filtros escondem parte das compras">
+              de {formatCurrency(total)}
+            </span>
+          )}
+        </td>
+        {showAllocationColumn && <td className="py-3 px-4" />}
+        <td className="py-3 px-4 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
+          {status === "paid" ? (
+            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-600">Paga</span>
+          ) : status === "partial" ? (
+            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-600" title={`Pago ${formatCurrency(paid)}`}>
+              Parcial · falta {formatCurrency(open)}
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">Aberta</span>
+          )}
+        </td>
+        <td className="py-3 px-4 text-center" onClick={e => e.stopPropagation()}>
+          {status !== "paid" && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs"
+              onClick={() =>
+                setPayingInvoice({
+                  creditCardId: group.creditCardId,
+                  competencyId: group.competencyId,
+                  cardName,
+                  dueDate,
+                  total,
+                  paid,
+                })
+              }
+            >
+              Pagar
+            </Button>
+          )}
+        </td>
+      </tr>
+    );
+  };
+
+  const renderTransactionRow = (transaction: Transaction, nested: boolean) => (
+                    <tr key={transaction.id} className={`border-b border-border hover:bg-muted cursor-pointer ${nested ? "bg-muted/30 text-sm" : ""}`} onClick={() => {
+                      setEditingTransactionId(transaction.id);
+                      setShowEditIndividual(true);
+                    }}>
+                      <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedTransactionIds.includes(transaction.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedTransactionIds([...selectedTransactionIds, transaction.id]);
+                            } else {
+                              setSelectedTransactionIds(selectedTransactionIds.filter(id => id !== transaction.id));
+                            }
+                          }}
+                          className="w-4 h-4 cursor-pointer"
+                        />
+                      </td>
+                      <td className="py-3 px-4 text-foreground">
+                        {formatDate(transaction.transactionDate)}
+                      </td>
+                      <td className={`py-3 px-4 text-foreground ${nested ? "pl-10" : ""}`}>
+                        {transaction.description || "-"}
+                        {(transaction.installments ?? 1) > 1 && (
+                          <span className="ml-2 text-xs text-muted-foreground whitespace-nowrap">
+                            {transaction.currentInstallment}/{transaction.installments}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-foreground">{transaction.category}</td>
+                      <td className="py-3 px-4">
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          transaction.type === "income"
+                            ? "bg-green-500/10 text-green-600"
+                            : transaction.type === "expense"
+                            ? "bg-red-500/10 text-red-600"
+                            : "bg-blue-500/10 text-blue-600"
+                        }`}>
+                          {transaction.type === "income" ? "Receita" : transaction.type === "expense" ? "Despesa" : "Cartão"}
+                        </span>
+                      </td>
+                      {showResponsibleColumn && (
+                        <td className="py-3 px-4 text-foreground">
+                          <PersonBadge
+                            person={transaction.responsibleUserId != null ? peopleById.get(transaction.responsibleUserId) : null}
+                          />
+                        </td>
+                      )}
+                      <td className={`py-3 px-4 text-right font-semibold ${
+                        transaction.type === "income"
+                          ? "text-green-600"
+                          : "text-red-600"
+                      }`}>
+                        {transaction.type === "income" ? "+" : "-"}{formatCurrency(transaction.amount)}
+                      </td>
+                      {showAllocationColumn && (
+                        <td className="py-3 px-4 text-xs whitespace-nowrap">
+                          <AllocationCell
+                            type={transaction.type}
+                            amount={transaction.amount}
+                            linked={allocationTotals[transaction.id]}
+                          />
+                        </td>
+                      )}
+                      <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                        {transaction.type === "credit_card" ? (
+                          <span
+                            className="inline-flex items-center justify-center w-4 h-4 rounded border border-border opacity-40 cursor-not-allowed"
+                            title="O pagamento é feito na linha da fatura"
+                          />
+                        ) : (
+                          <input
+                            type="checkbox"
+                            checked={transaction.isPaid === 1}
+                            onChange={(e) => {
+                              markAsPaidMutation.mutate({
+                                id: transaction.id,
+                                isPaid: e.target.checked,
+                              });
+                            }}
+                            className="w-4 h-4 cursor-pointer"
+                            title={transaction.isPaid === 1 ? "Marcar como não pago" : "Marcar como pago"}
+                          />
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex gap-1 justify-center">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setDeletingTransactionId(transaction.id);
+                              setShowDeleteIndividual(true);
+                            }}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1 h-auto"
+                            title="Deletar transação"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+  );
 
   const hasActiveFilters =
     !!filterStartDate || !!filterEndDate ||
@@ -786,7 +1046,7 @@ export default function TransactionsEnhanced() {
                 {/* Amount */}
                 <div>
                   <label className="text-sm font-medium text-foreground mb-2 block">
-                    Valor <span className="text-red-600">*</span>
+                    {watchTransactionType === "installment" ? "Valor total da compra" : "Valor"} <span className="text-red-600">*</span>
                   </label>
                   <input
                     {...register("amount")}
@@ -847,18 +1107,24 @@ export default function TransactionsEnhanced() {
                       {...register("installments")}
                       type="number"
                       min="2"
-                      max="12"
+                      max="72"
                       placeholder="Ex: 3"
                       className="input-elegant w-full"
                     />
                     {errors.installments && <p className="text-red-600 text-sm mt-1">{errors.installments.message}</p>}
+                    {Number(watchInstallments) >= 2 && Number(watchAmount) > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {watchInstallments}x de {formatCurrency(Math.floor((Number(watchAmount) * 100) / Number(watchInstallments)) / 100)}
+                        {watchType === "credit_card" ? " — uma parcela em cada fatura" : " — uma parcela por mês"}
+                      </p>
+                    )}
                   </div>
                 )}
 
                 {/* Date */}
                 <div>
                   <label className="text-sm font-medium text-foreground mb-2 block">
-                    Data <span className="text-red-600">*</span>
+                    {watchTransactionType === "installment" ? "Data da compra (1ª parcela)" : "Data"} <span className="text-red-600">*</span>
                   </label>
                   <input
                     {...register("transactionDate")}
@@ -1293,107 +1559,17 @@ export default function TransactionsEnhanced() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredTransactions.map((transaction) => (
-                    <tr key={transaction.id} className="border-b border-border hover:bg-muted cursor-pointer" onClick={() => {
-                      setEditingTransactionId(transaction.id);
-                      setShowEditIndividual(true);
-                    }}>
-                      <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={selectedTransactionIds.includes(transaction.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedTransactionIds([...selectedTransactionIds, transaction.id]);
-                            } else {
-                              setSelectedTransactionIds(selectedTransactionIds.filter(id => id !== transaction.id));
-                            }
-                          }}
-                          className="w-4 h-4 cursor-pointer"
-                        />
-                      </td>
-                      <td className="py-3 px-4 text-foreground">
-                        {formatDate(transaction.transactionDate)}
-                      </td>
-                      <td className="py-3 px-4 text-foreground">
-                        {transaction.description || "-"}
-                      </td>
-                      <td className="py-3 px-4 text-foreground">{transaction.category}</td>
-                      <td className="py-3 px-4">
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                          transaction.type === "income"
-                            ? "bg-green-500/10 text-green-600"
-                            : transaction.type === "expense"
-                            ? "bg-red-500/10 text-red-600"
-                            : "bg-blue-500/10 text-blue-600"
-                        }`}>
-                          {transaction.type === "income" ? "Receita" : transaction.type === "expense" ? "Despesa" : "Cartão"}
-                        </span>
-                      </td>
-                      {showResponsibleColumn && (
-                        <td className="py-3 px-4 text-foreground">
-                          <PersonBadge
-                            person={transaction.responsibleUserId != null ? peopleById.get(transaction.responsibleUserId) : null}
-                          />
-                        </td>
-                      )}
-                      <td className={`py-3 px-4 text-right font-semibold ${
-                        transaction.type === "income"
-                          ? "text-green-600"
-                          : "text-red-600"
-                      }`}>
-                        {transaction.type === "income" ? "+" : "-"}{formatCurrency(transaction.amount)}
-                      </td>
-                      {showAllocationColumn && (
-                        <td className="py-3 px-4 text-xs whitespace-nowrap">
-                          <AllocationCell
-                            type={transaction.type}
-                            amount={transaction.amount}
-                            linked={allocationTotals[transaction.id]}
-                          />
-                        </td>
-                      )}
-                      <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
-                        {transaction.type === "credit_card" ? (
-                          <span
-                            className="inline-flex items-center justify-center w-4 h-4 rounded border border-border opacity-40 cursor-not-allowed"
-                            title="Pagamento de fatura é realizado na tela de Faturas"
-                          />
-                        ) : (
-                          <input
-                            type="checkbox"
-                            checked={transaction.isPaid === 1}
-                            onChange={(e) => {
-                              markAsPaidMutation.mutate({
-                                id: transaction.id,
-                                isPaid: e.target.checked,
-                              });
-                            }}
-                            className="w-4 h-4 cursor-pointer"
-                            title={transaction.isPaid === 1 ? "Marcar como não pago" : "Marcar como pago"}
-                          />
+                        {displayRows.map(row =>
+                          row.kind === "invoice" ? (
+                            <React.Fragment key={`invoice-${row.key}`}>
+                              {renderInvoiceRow(row)}
+                              {expandedInvoices.has(row.key) &&
+                                row.items.map(t => renderTransactionRow(t, true))}
+                            </React.Fragment>
+                          ) : (
+                            renderTransactionRow(row.transaction, false)
+                          )
                         )}
-                      </td>
-                      <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex gap-1 justify-center">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setDeletingTransactionId(transaction.id);
-                              setShowDeleteIndividual(true);
-                            }}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1 h-auto"
-                            title="Deletar transação"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}  
                       </tbody>
                     </table>
                   </div>
@@ -1430,6 +1606,7 @@ export default function TransactionsEnhanced() {
             setSelectedTransactionIds([]);
             utils.transaction.list.invalidate();
             utils.allocation.invalidate();
+            utils.invoice.invalidate();
           }}
         />
 
@@ -1442,10 +1619,12 @@ export default function TransactionsEnhanced() {
             setSelectedTransactionIds([]);
             utils.transaction.list.invalidate();
             utils.allocation.invalidate();
+            utils.invoice.invalidate();
           }}
         />
 
         {/* Individual Edit Modal */}
+        <InvoicePaymentDialog invoice={payingInvoice} onClose={() => setPayingInvoice(null)} />
         <EditTransactionModal
           isOpen={showEditIndividual}
           transactionId={editingTransactionId}
@@ -1456,6 +1635,7 @@ export default function TransactionsEnhanced() {
           onSuccess={() => {
             utils.transaction.list.invalidate();
             utils.allocation.invalidate();
+            utils.invoice.invalidate();
           }}
         />
 
@@ -1470,6 +1650,7 @@ export default function TransactionsEnhanced() {
           onSuccess={() => {
             utils.transaction.list.invalidate();
             utils.allocation.invalidate();
+            utils.invoice.invalidate();
           }}
         />
       </div>

@@ -3,6 +3,9 @@
  * Mantém as mesmas funções da antiga camada MySQL (server/db.ts).
  */
 import {
+  addMonthsClamped,
+  shiftCompetency,
+  splitInstallmentCents,
   calculateInvoiceDates,
   filterTransactionsByDateRange,
   generateRecurringDates,
@@ -90,16 +93,43 @@ export async function getCompetencyTransactions(competencyId: number) {
     .sort((a, b) => b.transactionDate.getTime() - a.transactionDate.getTime());
 }
 
+/** Vencimento da fatura em que uma compra no cartão é cobrada. */
+export function invoiceDueDateOf(s: SheetStore, t: Transaction): Date | null {
+  if (t.type !== "credit_card" || !t.creditCardId) return null;
+  const invoice = s.find(
+    "invoices",
+    i => i.creditCardId === t.creditCardId && i.competencyId === t.competencyId
+  );
+  if (invoice?.dueDate) return invoice.dueDate;
+  const card = s.find("creditCards", c => c.id === t.creditCardId);
+  const competency = s.find("competencies", c => c.id === t.competencyId);
+  return card && competency ? calculateInvoiceDates(card, competency.year, competency.month).dueDate : null;
+}
+
+/**
+ * Lançamentos de um intervalo de datas. Compras no cartão entram pelo
+ * vencimento da fatura (é quando o dinheiro sai), as demais pela data.
+ */
 export function getUserTransactionsByDateRange(
   userId: number,
   startDate?: string,
   endDate?: string
 ) {
-  return filterTransactionsByDateRange(
-    getStore().select("transactions", transaction => transaction.userId === userId),
+  const s = getStore();
+  const all = s.select("transactions", transaction => transaction.userId === userId);
+  const byDate = filterTransactionsByDateRange(
+    all.filter(t => t.type !== "credit_card"),
     startDate,
     endDate
-  ).sort((a, b) => b.transactionDate.getTime() - a.transactionDate.getTime());
+  );
+  const byInvoice = all.filter(t => {
+    if (t.type !== "credit_card") return false;
+    const due = invoiceDueDateOf(s, t) ?? t.transactionDate;
+    return filterTransactionsByDateRange([{ transactionDate: due }], startDate, endDate).length > 0;
+  });
+  return [...byDate, ...byInvoice].sort(
+    (a, b) => b.transactionDate.getTime() - a.transactionDate.getTime()
+  );
 }
 
 export function getCalendarEventsForYear(userId: number, year: number) {
@@ -221,6 +251,98 @@ export async function createRecurringTransactions(
   return created;
 }
 
+/** Garante a competência (ano/mês) do usuário e devolve o id. */
+function ensureCompetency(s: SheetStore, userId: number, year: number, month: number) {
+  const existing = s.find(
+    "competencies",
+    c => c.userId === userId && c.year === year && c.month === month
+  );
+  if (existing) return existing.id;
+  return s.insert("competencies", { userId, year, month, name: competencyName(year, month) }).id;
+}
+
+/**
+ * Compra/despesa parcelada: cria uma parcela por mês com o valor dividido.
+ * No cartão, a 1ª parcela cai na fatura da data da compra (respeitando o dia
+ * de fechamento) e as demais nas faturas seguintes.
+ */
+export async function createInstallmentTransactions(
+  userId: number,
+  data: {
+    type: "expense" | "credit_card";
+    category: string;
+    description?: string;
+    totalAmount: string;
+    installments: number;
+    firstDate: Date;
+    creditCardId?: number;
+    notes?: string;
+    responsibleUserId?: number | null;
+    createdBy?: number | null;
+  }
+) {
+  const s = getStore();
+  const card =
+    data.type === "credit_card" && data.creditCardId
+      ? s.find("creditCards", c => c.id === data.creditCardId && c.userId === userId)
+      : null;
+  if (data.type === "credit_card" && !card) throw new Error("Selecione um cartão de crédito ativo.");
+
+  const totalCents = Math.round(Number(data.totalAmount) * 100);
+  if (!(totalCents > 0)) throw new Error("Informe um valor total maior que zero.");
+  const parts = splitInstallmentCents(totalCents, data.installments);
+  const first = getCompetencyForTransaction(data.firstDate, card);
+
+  const created: Transaction[] = parts.map((cents, i) => {
+    const transactionDate = addMonthsClamped(data.firstDate, i);
+    const { year, month } = card
+      ? shiftCompetency(first.year, first.month, i)
+      : { year: transactionDate.getFullYear(), month: transactionDate.getMonth() + 1 };
+    return s.insert("transactions", {
+      userId,
+      competencyId: ensureCompetency(s, userId, year, month),
+      creditCardId: card?.id ?? null,
+      type: data.type,
+      category: data.category,
+      description: data.description ?? "",
+      amount: (cents / 100).toFixed(2),
+      transactionDate,
+      installments: data.installments,
+      currentInstallment: i + 1,
+      notes: data.notes ?? "",
+      responsibleUserId: data.responsibleUserId ?? null,
+      createdBy: data.createdBy ?? null,
+    });
+  });
+
+  if (card) {
+    new Set(created.map(t => t.competencyId)).forEach(competencyId =>
+      recalcInvoice(s, userId, card.id, competencyId)
+    );
+  }
+  await s.commit();
+  return created;
+}
+
+/**
+ * Competência certa de uma compra no cartão, pelo dia de fechamento do cartão.
+ * Para outros tipos, a competência informada.
+ */
+export function resolveCompetencyForCreate(
+  userId: number,
+  type: TransactionType,
+  creditCardId: number | undefined,
+  transactionDate: Date,
+  fallbackCompetencyId: number
+) {
+  if (type !== "credit_card" || !creditCardId) return fallbackCompetencyId;
+  const s = getStore();
+  const card = s.find("creditCards", c => c.id === creditCardId);
+  if (!card) return fallbackCompetencyId;
+  const { year, month } = getCompetencyForTransaction(transactionDate, card);
+  return ensureCompetency(s, userId, year, month);
+}
+
 export async function getTransactionById(id: number) {
   return getStore().find("transactions", t => t.id === id);
 }
@@ -279,8 +401,12 @@ function recalcInvoice(s: SheetStore, userId: number, creditCardId: number, comp
   const where = (i: { creditCardId: number; competencyId: number }) =>
     i.creditCardId === creditCardId && i.competencyId === competencyId;
 
-  if (s.find("invoices", where)) {
-    s.update("invoices", where, { totalAmount: total.toFixed(2) });
+  const existing = s.find("invoices", where);
+  if (existing) {
+    // Mudou o total (compra nova/excluída): o status acompanha o valor já pago.
+    const paid = parseFloat(String(existing.paidAmount ?? 0)) || 0;
+    const status = paid <= 0 ? "open" : paid + 0.005 >= total ? "paid" : "partial";
+    s.update("invoices", where, { totalAmount: total.toFixed(2), status });
   } else {
     const { closingDate, dueDate } = calculateInvoiceDates(card, competency.year, competency.month);
     s.insert("invoices", {
@@ -315,6 +441,39 @@ export async function updateInvoicePayment(invoiceId: number, paidAmount: number
   const status = paidAmount <= 0 ? "open" : paidAmount >= total ? "paid" : "partial";
   s.update("invoices", i => i.id === invoiceId, { paidAmount: paidAmount.toFixed(2), status });
   await s.commit();
+}
+
+/** Soma um pagamento ao valor já pago da fatura (sem passar do total). */
+export async function addInvoicePayment(
+  userId: number,
+  creditCardId: number,
+  competencyId: number,
+  amount: number
+) {
+  const s = getStore();
+  recalcInvoice(s, userId, creditCardId, competencyId);
+  const where = (i: { creditCardId: number; competencyId: number }) =>
+    i.creditCardId === creditCardId && i.competencyId === competencyId;
+  const invoice = s.find("invoices", where);
+  if (!invoice) throw new Error("Fatura não encontrada.");
+
+  const totalCents = Math.round(Number(invoice.totalAmount) * 100);
+  const paidCents = Math.round(Number(invoice.paidAmount ?? 0) * 100);
+  const remaining = totalCents - paidCents;
+  const payCents = Math.round(amount * 100);
+  if (remaining <= 0) throw new Error("Esta fatura já está paga.");
+  if (payCents > remaining) {
+    throw new Error(
+      `O pagamento passa do valor em aberto (${(remaining / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}).`
+    );
+  }
+  const newPaid = paidCents + payCents;
+  s.update("invoices", where, {
+    paidAmount: (newPaid / 100).toFixed(2),
+    status: newPaid >= totalCents ? "paid" : "partial",
+  });
+  await s.commit();
+  return s.find("invoices", where)!;
 }
 
 export async function syncInvoicesForCompetency(userId: number, competencyId: number) {

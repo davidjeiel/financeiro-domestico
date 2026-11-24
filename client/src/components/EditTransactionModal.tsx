@@ -171,6 +171,8 @@ export default function EditTransactionModal({
       await utils.transaction.list.invalidate();
 
       utils.allocation.invalidate();
+
+      utils.invoice.invalidate();
       toast.success('Transação atualizada com sucesso!');
       onSuccess();
       onClose();
