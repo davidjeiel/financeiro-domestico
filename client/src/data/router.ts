@@ -16,6 +16,9 @@ import {
   createTransaction,
   createRecurringTransactions,
   getTransactionById,
+  createInstallmentTransactions,
+  resolveCompetencyForCreate,
+  addInvoicePayment,
   updateTransaction,
   deleteTransaction,
   getCompetencyInvoices,
@@ -282,9 +285,18 @@ export const appRouter = router({
           return new Date(y, m - 1, d);
         })() : undefined;
         
+        // Compra no cartão vai para a fatura certa pelo dia de fechamento.
+        const competencyId = resolveCompetencyForCreate(
+          getDataUserId(),
+          input.type,
+          input.creditCardId,
+          transactionDate,
+          input.competencyId
+        );
         const tx = await createTransaction({
           userId: getDataUserId(),
           ...txInput,
+          competencyId,
           transactionDate,
           dueDate,
           // Sem responsável informado, fica com quem lançou.
@@ -304,9 +316,42 @@ export const appRouter = router({
           }
         }
         if (input.type === "credit_card" && input.creditCardId) {
-          await upsertInvoiceForCreditCard(getDataUserId(), input.creditCardId, input.competencyId);
+          await upsertInvoiceForCreditCard(getDataUserId(), input.creditCardId, competencyId);
         }
         return tx;
+      }),
+    /** Compra/despesa parcelada: uma parcela por mês, com o valor total dividido. */
+    createInstallments: protectedProcedure
+      .input(
+        z
+          .object({
+            type: z.enum(["expense", "credit_card"]),
+            category: z.string().min(1),
+            description: z.string().optional(),
+            totalAmount: z
+              .string()
+              .refine(v => Number.isFinite(Number(v)) && Number(v) > 0, "Valor inválido"),
+            installments: z.number().int().min(2, "Mínimo de 2 parcelas").max(72),
+            firstDate: dateOnlySchema,
+            creditCardId: z.number().optional(),
+            notes: z.string().optional(),
+            responsibleUserId: z.number().int().nullable().optional(),
+          })
+          .refine(v => v.type !== "credit_card" || !!v.creditCardId, {
+            message: "Selecione um cartão de crédito.",
+            path: ["creditCardId"],
+          })
+      )
+      .mutation(({ ctx, input }) => {
+        assertResponsible(input.responsibleUserId);
+        const [y, m, d] = input.firstDate.split("-").map(Number);
+        return createInstallmentTransactions(getDataUserId(), {
+          ...input,
+          firstDate: new Date(y, m - 1, d),
+          responsibleUserId:
+            input.responsibleUserId === undefined ? ctx.user.id : input.responsibleUserId,
+          createdBy: ctx.user.id,
+        });
       }),
     createRecurring: protectedProcedure
       .input(recurringTransactionSchema)
@@ -392,6 +437,25 @@ export const appRouter = router({
       .input(z.object({ invoiceId: z.number(), paidAmount: z.number().min(0) }))
       .mutation(({ input }) =>
         updateInvoicePayment(input.invoiceId, input.paidAmount)
+      ),
+    /** Todas as faturas da área (para agrupar as compras na lista de lançamentos). */
+    listAll: protectedProcedure.query(() =>
+      getStore().select("invoices", i => i.userId === getDataUserId())
+    ),
+    /**
+     * Registra um pagamento (parcial ou total) da fatura de um cartão numa
+     * competência. Cria a fatura se ainda não existir.
+     */
+    addPayment: protectedProcedure
+      .input(
+        z.object({
+          creditCardId: z.number().int(),
+          competencyId: z.number().int(),
+          amount: z.number().positive("Informe um valor maior que zero"),
+        })
+      )
+      .mutation(({ input }) =>
+        addInvoicePayment(getDataUserId(), input.creditCardId, input.competencyId, input.amount)
       ),
   }),
 

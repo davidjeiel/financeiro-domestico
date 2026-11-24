@@ -66,6 +66,8 @@ export default function BulkTransactionActions({
       await utils.transaction.list.invalidate();
 
       utils.allocation.invalidate();
+
+      utils.invoice.invalidate();
       onSuccess();
       onClose();
     } catch (error) {
