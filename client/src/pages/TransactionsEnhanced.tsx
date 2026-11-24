@@ -29,6 +29,7 @@ import { FilterPriorityManager } from "@/components/FilterPriorityManager";
 import { ResponsibleSelect } from "@/components/workspace/ResponsibleSelect";
 import { PersonBadge } from "@/components/workspace/PersonBadge";
 import { usePeople } from "@/components/workspace/useWorkspaces";
+import { IncomeLinksEditor, type IncomeLink } from "@/components/allocation/IncomeLinksEditor";
 
 const transactionSchema = z.object({
   type: z.enum(["income", "expense", "credit_card"]),
@@ -164,6 +165,7 @@ export default function TransactionsEnhanced() {
   const markAsPaidMutation = trpc.transaction.markAsPaid.useMutation({
     onSuccess: () => {
       utils.transaction.list.invalidate();
+      utils.allocation.invalidate();
       toast.success("Status de pagamento atualizado!");
     },
     onError: () => {
@@ -187,6 +189,7 @@ export default function TransactionsEnhanced() {
     { id: 'amount', label: 'Valor', visible: true },
     { id: 'creditCard', label: 'Cartão', visible: true },
     { id: 'responsible', label: 'Responsável', visible: true },
+    { id: 'allocation', label: 'Vínculo com receita', visible: true },
     { id: 'status', label: 'Status', visible: true },
     { id: 'links', label: 'Links', visible: true },
     { id: 'actions', label: 'Ações', visible: true },
@@ -224,6 +227,7 @@ export default function TransactionsEnhanced() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   const [filterPriority, setFilterPriority] = useState<string[]>([]);
+  const showAllocationColumn = columns.find(c => c.id === "allocation")?.visible !== false;
   const showResponsibleColumn =
     showResponsible && columns.find(c => c.id === "responsible")?.visible !== false;
 
@@ -289,6 +293,12 @@ export default function TransactionsEnhanced() {
 
   const watchType = watch("type");
   const watchTransactionType = watch("transactionType");
+  const watchAmount = watch("amount");
+  // Receitas que pagam a nova despesa (só em lançamentos simples).
+  const [newIncomeLinks, setNewIncomeLinks] = useState<IncomeLink[]>([]);
+  const canLinkIncome = watchType !== "income" && watchTransactionType === "simple";
+  // Totais vinculados por lançamento (coberto nas despesas, comprometido nas receitas).
+  const { data: allocationTotals = {} } = trpc.allocation.totals.useQuery();
 
   useEffect(() => {
     if (pendingNewCategory && allTypologies?.some((t) => t.name === pendingNewCategory)) {
@@ -298,7 +308,10 @@ export default function TransactionsEnhanced() {
   }, [allTypologies, pendingNewCategory, setValue]);
 
   useEffect(() => {
-    if (open) setResponsibleUserId(me?.id ?? null);
+    if (open) {
+      setResponsibleUserId(me?.id ?? null);
+      setNewIncomeLinks([]);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, me?.id]);
 
@@ -369,6 +382,10 @@ export default function TransactionsEnhanced() {
             ...transactionData,
             competencyId: activeCompetency.id,
             transactionDate: data.transactionDate,
+            incomeLinks:
+              data.type !== "income" && data.transactionType === "simple" && newIncomeLinks.length
+                ? newIncomeLinks
+                : undefined,
           }),
         ];
       }
@@ -405,6 +422,7 @@ export default function TransactionsEnhanced() {
       setNewTransactionLinks([]);
       setOpen(false);
       utils.transaction.list.invalidate();
+      utils.allocation.invalidate();
       utils.invoice.list.invalidate();
     } catch (error: any) {
       console.error("Erro ao criar movimentação:", error);
@@ -437,6 +455,9 @@ export default function TransactionsEnhanced() {
     filteredTransactions = filteredTransactions.filter(t => t.category === columnFilters.category);
   if (columnFilters.type)
     filteredTransactions = filteredTransactions.filter(t => t.type === columnFilters.type);
+  if (columnFilters.allocation)
+    filteredTransactions = filteredTransactions.filter(t =>
+      (Number(allocationTotals[t.id] ?? 0) > 0) === (columnFilters.allocation === 'linked'));
   if (columnFilters.responsibleUserId)
     filteredTransactions = filteredTransactions.filter(t =>
       columnFilters.responsibleUserId === 'none'
@@ -452,6 +473,11 @@ export default function TransactionsEnhanced() {
       let aVal: any = a[sortColumn as keyof typeof a];
       let bVal: any = b[sortColumn as keyof typeof b];
       if (sortColumn === 'amount') { aVal = parseFloat(aVal); bVal = parseFloat(bVal); }
+      else if (sortColumn === 'allocation') {
+        // Receitas pelo que sobra; despesas pelo que falta cobrir.
+        aVal = parseFloat(a.amount) - Number(allocationTotals[a.id] ?? 0);
+        bVal = parseFloat(b.amount) - Number(allocationTotals[b.id] ?? 0);
+      }
       else if (sortColumn === 'responsibleUserId') {
         aVal = (a.responsibleUserId != null && peopleById.get(a.responsibleUserId)?.name.toLowerCase()) || '\uffff';
         bVal = (b.responsibleUserId != null && peopleById.get(b.responsibleUserId)?.name.toLowerCase()) || '\uffff';
@@ -488,6 +514,11 @@ export default function TransactionsEnhanced() {
     },
     { income: 0, expense: 0, creditCard: 0, incomePaid: 0, expensePaid: 0, creditCardPaid: 0 }
   );
+
+  // Quanto das receitas filtradas já está comprometido com despesas.
+  const incomeCommitted = filteredTransactions
+    .filter(t => t.type === 'income')
+    .reduce((sum, t) => sum + Number(allocationTotals[t.id] ?? 0), 0);
 
   // Quanto cada pessoa paga/recebe nos lançamentos filtrados.
   const totalsByResponsible = Array.from(
@@ -787,6 +818,23 @@ export default function TransactionsEnhanced() {
                   {errors.transactionDate && <p className="text-red-600 text-sm mt-1">{errors.transactionDate.message}</p>}
                 </div>
 
+                {/* Receita que paga esta despesa */}
+                {canLinkIncome && (
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1 block">
+                      Pago com a receita
+                    </label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Opcional: de qual receita sai o dinheiro. Pode dividir entre várias.
+                    </p>
+                    <IncomeLinksEditor
+                      expenseAmount={watchAmount}
+                      value={newIncomeLinks}
+                      onChange={setNewIncomeLinks}
+                    />
+                  </div>
+                )}
+
                 {/* Notes */}
                 <div>
                   <label className="text-sm font-medium text-foreground mb-2 block">
@@ -912,6 +960,11 @@ export default function TransactionsEnhanced() {
                 <p className={`text-base font-semibold ${totals.income - totals.expense - totals.creditCard >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {formatCurrency(totals.income - totals.expense - totals.creditCard)}
                 </p>
+                {incomeCommitted > 0 && (
+                  <p className="text-xs text-muted-foreground" title="Receitas ainda não vinculadas a despesas">
+                    Receitas livres: {formatCurrency(totals.income - incomeCommitted)}
+                  </p>
+                )}
               </div>
             </div>
             {showResponsible && totalsByResponsible.length > 0 && (
@@ -1145,6 +1198,24 @@ export default function TransactionsEnhanced() {
                               filterType="text"
                             />
                           </th>
+                          {showAllocationColumn && (
+                            <th className="text-left py-3 px-4">
+                              <ColumnHeader
+                                label="Receita"
+                                columnId="allocation"
+                                sortColumn={sortColumn}
+                                sortOrder={sortOrder}
+                                onSort={handleSort}
+                                onFilter={handleColumnFilter}
+                                filterType="select"
+                                filterOptions={[
+                                  { label: "Com vínculo", value: "linked" },
+                                  { label: "Sem vínculo", value: "unlinked" },
+                                ]}
+                                currentFilterValue={columnFilters.allocation}
+                              />
+                            </th>
+                          )}
                           <th className="text-center py-3 px-4">
                             <ColumnHeader
                               label="Pago"
@@ -1216,6 +1287,15 @@ export default function TransactionsEnhanced() {
                       }`}>
                         {transaction.type === "income" ? "+" : "-"}{formatCurrency(transaction.amount)}
                       </td>
+                      {showAllocationColumn && (
+                        <td className="py-3 px-4 text-xs whitespace-nowrap">
+                          <AllocationCell
+                            type={transaction.type}
+                            amount={transaction.amount}
+                            linked={allocationTotals[transaction.id]}
+                          />
+                        </td>
+                      )}
                       <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                         {transaction.type === "credit_card" ? (
                           <span
@@ -1292,6 +1372,7 @@ export default function TransactionsEnhanced() {
           onSuccess={() => {
             setSelectedTransactionIds([]);
             utils.transaction.list.invalidate();
+            utils.allocation.invalidate();
           }}
         />
 
@@ -1303,6 +1384,7 @@ export default function TransactionsEnhanced() {
           onSuccess={() => {
             setSelectedTransactionIds([]);
             utils.transaction.list.invalidate();
+            utils.allocation.invalidate();
           }}
         />
 
@@ -1316,6 +1398,7 @@ export default function TransactionsEnhanced() {
           }}
           onSuccess={() => {
             utils.transaction.list.invalidate();
+            utils.allocation.invalidate();
           }}
         />
 
@@ -1329,9 +1412,40 @@ export default function TransactionsEnhanced() {
           }}
           onSuccess={() => {
             utils.transaction.list.invalidate();
+            utils.allocation.invalidate();
           }}
         />
       </div>
     </DashboardLayoutCustom>
+  );
+}
+
+/** Célula da coluna "Receita": o que sobra da receita ou quanto da despesa está coberto. */
+function AllocationCell({
+  type,
+  amount,
+  linked,
+}: {
+  type: string;
+  amount: string;
+  linked: string | undefined;
+}) {
+  const total = parseFloat(amount) || 0;
+  const used = Number(linked ?? 0);
+  if (type === "income") {
+    if (!used) return <span className="text-muted-foreground">Livre</span>;
+    const left = total - used;
+    return (
+      <span className={left < 0 ? "text-red-600" : "text-green-600"} title={`Comprometido ${formatCurrency(used)}`}>
+        Sobra {formatCurrency(left)}
+      </span>
+    );
+  }
+  if (!used) return <span className="text-muted-foreground">—</span>;
+  if (used >= total) return <span className="text-green-600">Coberta</span>;
+  return (
+    <span className="text-amber-600" title={`Coberto ${formatCurrency(used)} de ${formatCurrency(total)}`}>
+      Falta {formatCurrency(total - used)}
+    </span>
   );
 }

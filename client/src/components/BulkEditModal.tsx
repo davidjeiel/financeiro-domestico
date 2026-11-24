@@ -149,6 +149,8 @@ export default function BulkEditModal({
       }
 
       await utils.transaction.list.invalidate();
+
+      utils.allocation.invalidate();
       toast.success(`${selectedIds.length} transação(ões) atualizada(s) com sucesso!`);
       onSuccess();
       onClose();

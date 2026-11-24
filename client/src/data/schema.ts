@@ -230,6 +230,18 @@ export const tables = {
       ...timestamps,
     },
   },
+  incomeAllocations: {
+    // Quanto de uma receita paga uma despesa (ou compra no cartão).
+    sheet: "Vinculos",
+    columns: {
+      id,
+      expenseId: int(),
+      incomeId: int(),
+      amount: decimal(),
+      createdBy: int(),
+      ...timestamps,
+    },
+  },
   auditLog: {
     sheet: "Auditoria",
     columns: {
@@ -412,6 +424,16 @@ export type TransactionResponsibility = {
   notes: string | null;
 } & Timestamps;
 
+export type IncomeAllocation = {
+  id: number;
+  /** Lançamento de despesa ou cartão. */
+  expenseId: number;
+  /** Lançamento de receita que paga (parte d)a despesa. */
+  incomeId: number;
+  amount: string;
+  createdBy: number | null;
+} & Timestamps;
+
 export type AuditLog = {
   id: number;
   workspaceId: number;
@@ -437,6 +459,7 @@ export type RowTypes = {
   workspaceInvites: WorkspaceInvite;
   sharedAccounts: SharedAccount;
   transactionResponsibilities: TransactionResponsibility;
+  incomeAllocations: IncomeAllocation;
   auditLog: AuditLog;
 };
 

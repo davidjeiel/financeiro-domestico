@@ -78,6 +78,17 @@ Na lista de lançamentos há a coluna **Responsável** (com filtro e ordenação
 
 **Colunas novas na planilha**: `Lancamentos.responsibleUserId` e `Lancamentos.createdBy`; `Usuarios.status` e `Usuarios.color`. Planilhas existentes são atualizadas automaticamente no primeiro acesso.
 
+**Despesa paga com receita**
+
+Uma despesa (ou compra no cartão) pode ser vinculada a uma ou mais receitas — "a conta de luz sai do salário de março" —, informando quanto sai de cada uma. O vínculo é feito no cadastro (lançamentos simples) ou na edição da despesa, em **Pago com a receita**.
+
+- O app não deixa vincular mais que o valor da despesa nem mais que o disponível da receita.
+- Na edição de uma receita aparecem as despesas pagas com ela, o **comprometido** e o que **sobra**.
+- Na lista de lançamentos, a coluna **Receita** mostra o que sobra de cada receita e se cada despesa está coberta (com filtro "com/sem vínculo"); o card de saldo mostra as **receitas livres**.
+- Excluir um lançamento, ou trocar uma despesa para receita (e vice-versa), apaga os vínculos dele.
+
+Os vínculos ficam na aba `Vinculos` (`expenseId`, `incomeId`, `amount`).
+
 ---
 
 ## Desenvolvimento
