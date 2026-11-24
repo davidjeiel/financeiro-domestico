@@ -44,6 +44,8 @@ jobs:
           # OAuth Client ID do Google (login + gravação na planilha do usuário).
           # Cadastre-o em Settings → Secrets and variables → Actions → Variables.
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_API_KEY: ${{ vars.VITE_GOOGLE_API_KEY }}
+          VITE_GOOGLE_APP_ID: ${{ vars.VITE_GOOGLE_APP_ID }}
 
       - name: Disable Jekyll
         run: touch dist/public/.nojekyll

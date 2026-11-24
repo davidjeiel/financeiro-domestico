@@ -3,6 +3,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Menu, X, LogOut, Settings } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { WorkspaceSwitcher } from "@/components/workspace/WorkspaceSwitcher";
 
 interface DashboardLayoutCustomProps {
   children: React.ReactNode;
@@ -82,8 +83,13 @@ export default function DashboardLayoutCustom({
           </div>
         </div>
 
+        {/* Área de trabalho ativa */}
+        <div className="px-4 pt-4">
+          <WorkspaceSwitcher compact={!sidebarOpen} />
+        </div>
+
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
           <NavLink href="/" icon="📊" label="Dashboard" open={sidebarOpen} />
           <NavLink href="/lancamentos" icon="💳" label="Lançamentos" open={sidebarOpen} />
           <NavLink href="/cards" icon="🏦" label="Cartões" open={sidebarOpen} />
@@ -94,8 +100,7 @@ export default function DashboardLayoutCustom({
           <NavLink href="/filters" icon="🔍" label="Filtros" open={sidebarOpen} />
           <NavLink href="/competency-config" icon="📋" label="Competência" open={sidebarOpen} />
           <NavLink href="/recurring-installments" icon="🔄" label="Fixos/Parcelados" open={sidebarOpen} />
-          <NavLink href="/workspaces" icon="👥" label="Workspaces" open={sidebarOpen} />
-          <NavLink href="/shared-accounts" icon="🔗" label="Contas Compartilhadas" open={sidebarOpen} />
+          <NavLink href="/workspaces" icon="👥" label="Áreas e pessoas" open={sidebarOpen} />
         </nav>
 
         {/* User Profile */}

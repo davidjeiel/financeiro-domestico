@@ -26,6 +26,9 @@ import { AdvancedFilters, TransactionFilters } from "@/components/AdvancedFilter
 import TransactionLinksManager from "@/components/TransactionLinksManager";
 import { ColumnHeader } from "@/components/ColumnHeader";
 import { FilterPriorityManager } from "@/components/FilterPriorityManager";
+import { ResponsibleSelect } from "@/components/workspace/ResponsibleSelect";
+import { PersonBadge } from "@/components/workspace/PersonBadge";
+import { usePeople } from "@/components/workspace/useWorkspaces";
 
 const transactionSchema = z.object({
   type: z.enum(["income", "expense", "credit_card"]),
@@ -170,6 +173,11 @@ export default function TransactionsEnhanced() {
 
   const [open, setOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<"income" | "expense" | "credit_card">("expense");
+  const { people, byId: peopleById } = usePeople();
+  const me = people.find(p => p.isMe);
+  // Responsável pelo pagamento do novo lançamento (padrão: quem está lançando).
+  const [responsibleUserId, setResponsibleUserId] = useState<number | null>(null);
+  const showResponsible = people.filter(p => p.status !== "removed").length > 1;
   // Ações individuais removidas - usar seleção em lote com botões flutuantes
   const defaultColumns: ColumnConfig[] = [
     { id: 'date', label: 'Data', visible: true },
@@ -178,6 +186,7 @@ export default function TransactionsEnhanced() {
     { id: 'type', label: 'Tipo', visible: true },
     { id: 'amount', label: 'Valor', visible: true },
     { id: 'creditCard', label: 'Cartão', visible: true },
+    { id: 'responsible', label: 'Responsável', visible: true },
     { id: 'status', label: 'Status', visible: true },
     { id: 'links', label: 'Links', visible: true },
     { id: 'actions', label: 'Ações', visible: true },
@@ -193,7 +202,11 @@ export default function TransactionsEnhanced() {
   const [columns, setColumns] = useState<ColumnConfig[]>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('transactionColumns');
-      return saved ? JSON.parse(saved) : defaultColumns;
+      if (!saved) return defaultColumns;
+      const parsed: ColumnConfig[] = JSON.parse(saved);
+      // Colunas novas (ex: Responsável) entram mesmo com configuração salva.
+      const missing = defaultColumns.filter(c => !parsed.some(p => p.id === c.id));
+      return missing.length ? [...parsed, ...missing] : parsed;
     }
     return defaultColumns;
   });
@@ -211,6 +224,8 @@ export default function TransactionsEnhanced() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   const [filterPriority, setFilterPriority] = useState<string[]>([]);
+  const showResponsibleColumn =
+    showResponsible && columns.find(c => c.id === "responsible")?.visible !== false;
 
   const handleAdvancedFiltersChange = (newFilters: TransactionFilters) => {
     setAdvancedFilters(newFilters);
@@ -283,6 +298,11 @@ export default function TransactionsEnhanced() {
   }, [allTypologies, pendingNewCategory, setValue]);
 
   useEffect(() => {
+    if (open) setResponsibleUserId(me?.id ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, me?.id]);
+
+  useEffect(() => {
     if (open) {
       reset({
         type: "expense",
@@ -324,6 +344,7 @@ export default function TransactionsEnhanced() {
         amount: amountNum.toString(),
         creditCardId: data.creditCardId ? parseInt(data.creditCardId) : undefined,
         notes: data.notes || "",
+        responsibleUserId,
       };
 
       let createdTransactions: Transaction[];
@@ -416,6 +437,11 @@ export default function TransactionsEnhanced() {
     filteredTransactions = filteredTransactions.filter(t => t.category === columnFilters.category);
   if (columnFilters.type)
     filteredTransactions = filteredTransactions.filter(t => t.type === columnFilters.type);
+  if (columnFilters.responsibleUserId)
+    filteredTransactions = filteredTransactions.filter(t =>
+      columnFilters.responsibleUserId === 'none'
+        ? t.responsibleUserId == null
+        : String(t.responsibleUserId) === columnFilters.responsibleUserId);
   if (columnFilters.isPaid) {
     const isPaidValue = columnFilters.isPaid === '1' ? 1 : 0;
     filteredTransactions = filteredTransactions.filter(t => t.isPaid === isPaidValue);
@@ -426,6 +452,10 @@ export default function TransactionsEnhanced() {
       let aVal: any = a[sortColumn as keyof typeof a];
       let bVal: any = b[sortColumn as keyof typeof b];
       if (sortColumn === 'amount') { aVal = parseFloat(aVal); bVal = parseFloat(bVal); }
+      else if (sortColumn === 'responsibleUserId') {
+        aVal = (a.responsibleUserId != null && peopleById.get(a.responsibleUserId)?.name.toLowerCase()) || '\uffff';
+        bVal = (b.responsibleUserId != null && peopleById.get(b.responsibleUserId)?.name.toLowerCase()) || '\uffff';
+      }
       else if (sortColumn === 'transactionDate') { aVal = new Date(aVal).getTime(); bVal = new Date(bVal).getTime(); }
       else if (typeof aVal === 'string') { aVal = aVal.toLowerCase(); bVal = bVal.toLowerCase(); }
       if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
@@ -458,6 +488,21 @@ export default function TransactionsEnhanced() {
     },
     { income: 0, expense: 0, creditCard: 0, incomePaid: 0, expensePaid: 0, creditCardPaid: 0 }
   );
+
+  // Quanto cada pessoa paga/recebe nos lançamentos filtrados.
+  const totalsByResponsible = Array.from(
+    filteredTransactions
+      .reduce((acc, t) => {
+        const key = t.responsibleUserId ?? 0;
+        const entry = acc.get(key) ?? { id: key, pay: 0, paid: 0, receive: 0 };
+        const amt = parseFloat(t.amount);
+        if (t.type === 'income') entry.receive += amt;
+        else { entry.pay += amt; if (t.isPaid) entry.paid += amt; }
+        acc.set(key, entry);
+        return acc;
+      }, new Map<number, { id: number; pay: number; paid: number; receive: number }>())
+      .values()
+  ).sort((a, b) => b.pay - a.pay);
 
   const hasActiveFilters =
     !!filterStartDate || !!filterEndDate ||
@@ -598,6 +643,23 @@ export default function TransactionsEnhanced() {
                     })()}
                   </select>
                   {errors.category && <p className="text-red-600 text-sm mt-1">{errors.category.message}</p>}
+                </div>
+
+                {/* Responsável pelo pagamento */}
+                <div>
+                  <label htmlFor="responsibleUserId" className="text-sm font-medium text-foreground mb-2 block">
+                    {watchType === "income" ? "Quem recebe" : "Responsável pelo pagamento"}
+                  </label>
+                  <ResponsibleSelect
+                    id="responsibleUserId"
+                    value={responsibleUserId}
+                    onChange={setResponsibleUserId}
+                  />
+                  {!showResponsible && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Adicione pessoas em <a href={`${import.meta.env.BASE_URL}workspaces`} className="text-primary hover:underline">Áreas e pessoas</a> para dividir as contas.
+                    </p>
+                  )}
                 </div>
 
                 {/* Credit Card Selection - Required for credit_card type */}
@@ -852,6 +914,34 @@ export default function TransactionsEnhanced() {
                 </p>
               </div>
             </div>
+            {showResponsible && totalsByResponsible.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {totalsByResponsible.map(entry => {
+                  const person = entry.id ? peopleById.get(entry.id) : null;
+                  const active = columnFilters.responsibleUserId === (entry.id ? String(entry.id) : 'none');
+                  return (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      onClick={() => handleColumnFilter('responsibleUserId', active ? undefined : entry.id ? String(entry.id) : 'none')}
+                      className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition-colors ${
+                        active ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted'
+                      }`}
+                      title="Filtrar por responsável"
+                    >
+                      <PersonBadge person={person} fallback="Sem responsável" className="font-medium" />
+                      {entry.pay > 0 && (
+                        <span className="text-red-600">
+                          paga {formatCurrency(entry.pay)}
+                          <span className="text-muted-foreground"> (pago {formatCurrency(entry.paid)})</span>
+                        </span>
+                      )}
+                      {entry.receive > 0 && <span className="text-green-600">recebe {formatCurrency(entry.receive)}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -1027,6 +1117,24 @@ export default function TransactionsEnhanced() {
                               currentFilterValue={columnFilters.type}
                             />
                           </th>
+                          {showResponsibleColumn && (
+                            <th className="text-left py-3 px-4">
+                              <ColumnHeader
+                                label="Responsável"
+                                columnId="responsibleUserId"
+                                sortColumn={sortColumn}
+                                sortOrder={sortOrder}
+                                onSort={handleSort}
+                                onFilter={handleColumnFilter}
+                                filterType="select"
+                                filterOptions={[
+                                  ...people.map(p => ({ label: p.name, value: String(p.id) })),
+                                  { label: "Sem responsável", value: "none" },
+                                ]}
+                                currentFilterValue={columnFilters.responsibleUserId}
+                              />
+                            </th>
+                          )}
                           <th className="text-right py-3 px-4">
                             <ColumnHeader
                               label="Valor"
@@ -1094,6 +1202,13 @@ export default function TransactionsEnhanced() {
                           {transaction.type === "income" ? "Receita" : transaction.type === "expense" ? "Despesa" : "Cartão"}
                         </span>
                       </td>
+                      {showResponsibleColumn && (
+                        <td className="py-3 px-4 text-foreground">
+                          <PersonBadge
+                            person={transaction.responsibleUserId != null ? peopleById.get(transaction.responsibleUserId) : null}
+                          />
+                        </td>
+                      )}
                       <td className={`py-3 px-4 text-right font-semibold ${
                         transaction.type === "income"
                           ? "text-green-600"

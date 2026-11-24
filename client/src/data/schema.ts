@@ -43,6 +43,11 @@ export const tables = {
       competencyEndDay: int(0),
       // Timezone IANA do usuário (ex: "America/Sao_Paulo")
       timezone: text("America/Sao_Paulo"),
+      // "active" = já entrou no app; "invited" = convidado que ainda não abriu
+      // a área; "guest" = pessoa sem acesso (só aparece como responsável);
+      // "removed" = saiu da área (mantida para o histórico dos lançamentos).
+      status: text("active"),
+      color: text("#3B82F6"),
       ...timestamps,
       lastSignedIn: date(NOW),
     },
@@ -93,6 +98,10 @@ export const tables = {
       links: text(),
       isPaid: int(0),
       paidDate: date(),
+      // Pessoa (linha de Usuarios) responsável pelo pagamento/recebimento.
+      responsibleUserId: int(),
+      // Quem registrou o lançamento.
+      createdBy: int(),
       ...timestamps,
     },
   },
@@ -252,8 +261,12 @@ export type User = {
   competencyStartDay: number;
   competencyEndDay: number;
   timezone: string;
+  status: UserStatus;
+  color: string | null;
   lastSignedIn: Date;
 } & Timestamps;
+
+export type UserStatus = "active" | "invited" | "guest" | "removed";
 
 export type Competency = {
   id: number;
@@ -295,6 +308,8 @@ export type Transaction = {
   links: string | null;
   isPaid: number;
   paidDate: Date | null;
+  responsibleUserId: number | null;
+  createdBy: number | null;
 } & Timestamps;
 
 export type Invoice = {

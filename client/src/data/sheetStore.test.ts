@@ -132,4 +132,50 @@ describe("SheetStore", () => {
     store.select("accounts")[0].name = "alterado";
     expect(store.select("accounts")[0].name).toBe("A");
   });
+
+  it("refresh enxerga o que outra pessoa gravou na mesma planilha", async () => {
+    const alice = new SheetStore("abc");
+    await alice.load();
+    const bob = new SheetStore("abc");
+    await bob.load();
+
+    alice.insert("transactions", { userId: 1, type: "expense", category: "Luz", amount: "100", responsibleUserId: 1 });
+    await alice.commit();
+
+    // Sem refresh, a gravação de Bob apagaria o lançamento de Alice.
+    await bob.refresh();
+    const created = bob.insert("transactions", {
+      userId: 1,
+      type: "expense",
+      category: "Água",
+      amount: "50",
+      responsibleUserId: 2,
+    });
+    await bob.commit();
+
+    expect(created.id).toBe(2);
+    const reloaded = new SheetStore("abc");
+    await reloaded.load();
+    expect(
+      reloaded.select("transactions").map(t => [t.category, t.responsibleUserId])
+    ).toEqual([
+      ["Luz", 1],
+      ["Água", 2],
+    ]);
+  });
+
+  it("planilhas antigas sem as colunas novas carregam com valores padrão", async () => {
+    const store = new SheetStore("abc");
+    await store.load();
+    // Simula uma aba Usuarios gravada antes das colunas status/color.
+    fake.sheets.set("Usuarios", [["id", "openId", "name"], [1, "sub-1", "Ana"]]);
+    fake.sheets.set("Lancamentos", [["id", "userId", "category"], [1, 1, "Luz"]]);
+
+    const reloaded = new SheetStore("abc");
+    await reloaded.load();
+    expect(reloaded.find("users", u => u.id === 1)).toMatchObject({ status: "active", name: "Ana" });
+    expect(reloaded.find("transactions", t => t.id === 1)).toMatchObject({ responsibleUserId: null });
+    // O cabeçalho é atualizado na própria carga.
+    expect(fake.sheets.get("Usuarios")![0]).toEqual(Object.keys(tables.users.columns));
+  });
 });

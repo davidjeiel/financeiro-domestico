@@ -20,6 +20,8 @@ import type {
   TransactionResponsibility,
   TransactionType,
   Typology,
+  User,
+  UserStatus,
   Workspace,
   WorkspaceInvite,
   WorkspaceMember,
@@ -143,6 +145,8 @@ export async function createRecurringTransactions(
     frequency: RecurrenceFrequency;
     startDate: Date;
     endDate: Date;
+    responsibleUserId?: number | null;
+    createdBy?: number | null;
   }
 ) {
   const s = getStore();
@@ -198,6 +202,8 @@ export async function createRecurringTransactions(
         amount: data.amount,
         transactionDate,
         notes: data.notes ?? "",
+        responsibleUserId: data.responsibleUserId ?? null,
+        createdBy: data.createdBy ?? null,
       })
     );
 
@@ -679,6 +685,138 @@ export async function getAuditLogByWorkspace(workspaceId: number, limit = 100) {
     .select("auditLog", a => a.workspaceId === workspaceId)
     .sort(byNewest)
     .slice(0, limit);
+}
+
+// ─── Pessoas da área de trabalho ─────────────────────────────────────────────
+//
+// As pessoas são as linhas da aba `Usuarios` da planilha ativa: quem já entrou
+// (active), convidados que ainda não abriram a área (invited) e pessoas sem
+// acesso que só aparecem como responsáveis (guest).
+
+const PERSON_COLORS = [
+  "#3B82F6", "#EC4899", "#10B981", "#F59E0B", "#8B5CF6",
+  "#06B6D4", "#EF4444", "#14B8A6", "#F97316", "#6366F1",
+];
+
+export type Person = {
+  id: number;
+  name: string;
+  email: string | null;
+  status: UserStatus;
+  role: User["role"];
+  color: string;
+};
+
+function toPerson(u: User): Person {
+  return {
+    id: u.id,
+    name: u.name || u.email?.split("@")[0] || `Pessoa ${u.id}`,
+    email: u.email,
+    status: u.status ?? "active",
+    role: u.role,
+    color: u.color || PERSON_COLORS[(u.id - 1) % PERSON_COLORS.length],
+  };
+}
+
+const STATUS_ORDER: Record<UserStatus, number> = { active: 0, invited: 1, guest: 2, removed: 3 };
+
+/** Pessoas da área (inclui removidas, para exibir o histórico). */
+export function listPeople(): Person[] {
+  return getStore()
+    .select("users")
+    .map(toPerson)
+    .sort(
+      (a, b) =>
+        STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || a.name.localeCompare(b.name, "pt-BR")
+    );
+}
+
+function nextColor(s: SheetStore) {
+  const used = new Set(s.select("users").map(u => u.color?.toUpperCase()));
+  return PERSON_COLORS.find(c => !used.has(c)) ?? PERSON_COLORS[s.select("users").length % PERSON_COLORS.length];
+}
+
+/** Pessoa sem acesso ao app, só para indicar como responsável. */
+export async function addGuestPerson(name: string, color?: string) {
+  const s = getStore();
+  const created = s.insert("users", {
+    openId: "",
+    name: name.trim(),
+    email: null,
+    loginMethod: null,
+    role: "user",
+    status: "guest",
+    color: color || nextColor(s),
+  });
+  await s.commit();
+  return toPerson(created);
+}
+
+/** Registra (ou reativa) uma pessoa convidada por e-mail. */
+export async function upsertInvitedPerson(email: string, name?: string) {
+  const s = getStore();
+  const normalized = email.trim().toLowerCase();
+  const existing = s.find("users", u => u.email?.trim().toLowerCase() === normalized);
+  if (existing) {
+    if (existing.status === "active" && existing.openId) {
+      throw new Error("Essa pessoa já participa desta área de trabalho.");
+    }
+    s.update("users", u => u.id === existing.id, {
+      status: existing.openId ? "active" : "invited",
+      name: name?.trim() || existing.name,
+    });
+    await s.commit();
+    return toPerson(s.find("users", u => u.id === existing.id)!);
+  }
+  const created = s.insert("users", {
+    openId: "",
+    name: name?.trim() || normalized.split("@")[0],
+    email: normalized,
+    loginMethod: "google",
+    role: "user",
+    status: "invited",
+    color: nextColor(s),
+  });
+  await s.commit();
+  return toPerson(created);
+}
+
+export async function updatePerson(id: number, data: { name?: string; color?: string }) {
+  const s = getStore();
+  if (!s.find("users", u => u.id === id)) throw new Error("Pessoa não encontrada");
+  s.update("users", u => u.id === id, {
+    name: data.name?.trim() || undefined,
+    color: data.color || undefined,
+  });
+  await s.commit();
+  return toPerson(s.find("users", u => u.id === id)!);
+}
+
+/**
+ * Tira a pessoa da área. A linha é mantida (status "removed") para que os
+ * lançamentos antigos continuem mostrando quem era o responsável.
+ */
+export async function removePerson(id: number) {
+  const s = getStore();
+  const person = s.find("users", u => u.id === id);
+  if (!person) throw new Error("Pessoa não encontrada");
+  const used = s.find("transactions", t => t.responsibleUserId === id);
+  if (used || person.openId) {
+    s.update("users", u => u.id === id, { status: "removed" });
+  } else {
+    s.delete("users", u => u.id === id);
+  }
+  await s.commit();
+  return toPerson(person);
+}
+
+/** Garante que o responsável informado é uma pessoa ativa da área. */
+export function assertResponsible(id: number | null | undefined) {
+  if (id === null || id === undefined) return;
+  const person = getStore().find("users", u => u.id === id);
+  if (!person || person.status === "removed") {
+    throw new Error("Responsável inválido: escolha uma pessoa desta área de trabalho.");
+  }
 }
 
 // ─── Preferências do usuário ─────────────────────────────────────────────────
