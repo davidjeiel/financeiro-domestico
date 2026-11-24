@@ -13,6 +13,11 @@ import { formatCurrency, formatDate } from '@/lib/formatting';
 import { Plus } from 'lucide-react';
 import TransactionLinksManager from '@/components/TransactionLinksManager';
 import { ResponsibleSelect } from '@/components/workspace/ResponsibleSelect';
+import {
+  IncomeCommitments,
+  IncomeLinksEditor,
+  type IncomeLink,
+} from '@/components/allocation/IncomeLinksEditor';
 
 interface EditTransactionModalProps {
   isOpen: boolean;
@@ -49,6 +54,28 @@ export default function EditTransactionModal({
 
   const { data: typologies = [], isLoading: isLoadingTypologies, refetch: refetchTypologies } = trpc.typology.list.useQuery();
   const updateMutation = trpc.transaction.update.useMutation();
+  const setAllocationsMutation = trpc.allocation.set.useMutation();
+  const { data: allocation } = trpc.allocation.forTransaction.useQuery(
+    { transactionId: transactionId || 0 },
+    { enabled: isOpen && transactionId !== null }
+  );
+  // Receitas que pagam esta despesa (editadas aqui, gravadas ao salvar).
+  const [incomeLinks, setIncomeLinks] = useState<IncomeLink[]>([]);
+  const [incomeLinksDirty, setIncomeLinksDirty] = useState(false);
+
+  useEffect(() => {
+    if (allocation?.role === 'expense' && !incomeLinksDirty) {
+      setIncomeLinks(
+        allocation.links
+          .filter((l) => l.counterpart)
+          .map((l) => ({ incomeId: l.counterpart!.id, amount: Number(l.amount).toFixed(2) }))
+      );
+    }
+  }, [allocation, incomeLinksDirty]);
+
+  useEffect(() => {
+    if (!isOpen) setIncomeLinksDirty(false);
+  }, [isOpen]);
   const createTypologyMutation = trpc.typology.create.useMutation();
   const utils = trpc.useUtils();
 
@@ -129,7 +156,21 @@ export default function EditTransactionModal({
         responsibleUserId: formData.responsibleUserId,
       });
 
+      if (incomeLinksDirty && transaction?.type !== 'income') {
+        try {
+          await setAllocationsMutation.mutateAsync({ expenseId: transactionId || 0, links: incomeLinks });
+        } catch (error) {
+          utils.transaction.list.invalidate();
+          toast.error(
+            `Lançamento salvo, mas os vínculos não: ${error instanceof Error ? error.message : 'erro desconhecido'}`
+          );
+          return;
+        }
+      }
+
       await utils.transaction.list.invalidate();
+
+      utils.allocation.invalidate();
       toast.success('Transação atualizada com sucesso!');
       onSuccess();
       onClose();
@@ -320,6 +361,33 @@ export default function EditTransactionModal({
                   </div>
                 )}
               </div>
+
+              {/* Vínculo com receitas */}
+              {transaction && transaction.type !== 'income' && (
+                <div>
+                  <Label>Pago com a receita</Label>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    De qual receita sai o dinheiro desta despesa. Pode dividir entre várias.
+                  </p>
+                  <IncomeLinksEditor
+                    expenseId={transaction.id}
+                    expenseAmount={formData.amount}
+                    value={incomeLinks}
+                    onChange={(links) => {
+                      setIncomeLinks(links);
+                      setIncomeLinksDirty(true);
+                    }}
+                  />
+                </div>
+              )}
+              {transaction && transaction.type === 'income' && (
+                <div>
+                  <Label>Despesas pagas com esta receita</Label>
+                  <div className="mt-2">
+                    <IncomeCommitments incomeId={transaction.id} />
+                  </div>
+                </div>
+              )}
 
               {/* Notas */}
               <div>

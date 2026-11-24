@@ -62,6 +62,23 @@ O responsável também pode ser alterado:
 
 ---
 
+## De qual receita sai cada despesa
+
+Além de quem paga, dá para indicar **com qual dinheiro** a despesa é paga:
+
+1. Ao lançar (ou editar) uma despesa, em **Pago com a receita**, clique em
+   **Vincular receita**.
+2. Escolha a receita (a lista mostra quanto ainda está disponível em cada uma) e
+   o valor. O app já sugere o que falta cobrir.
+3. Para dividir, vincule mais de uma receita — ex.: R$ 500 do salário e
+   R$ 400 do freela.
+
+Ao abrir uma receita você vê as despesas pagas com ela, quanto está
+**comprometido** e quanto **sobra**. Na lista, a coluna **Receita** mostra
+"Sobra R$ …" nas receitas e "Coberta" / "Falta R$ …" nas despesas.
+
+---
+
 ## Pessoas sem acesso
 
 Em **Áreas e pessoas → Pessoa sem acesso ao app** você cadastra alguém só para

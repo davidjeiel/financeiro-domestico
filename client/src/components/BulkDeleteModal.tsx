@@ -33,6 +33,7 @@ export default function BulkDeleteModal({
 
       toast.success(`${selectedIds.length} transação(ões) deletada(s)`);
       await utils.transaction.list.invalidate();
+      utils.allocation.invalidate();
       
       setShowConfirm(false);
       onSuccess();

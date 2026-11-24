@@ -10,6 +10,7 @@ import {
   type RecurrenceFrequency,
 } from "./competencyLogic";
 import { getStore } from "./session";
+import { cleanupAllocationsAfterUpdate, removeAllocationsOf } from "./allocations";
 import type { SheetStore } from "./sheetStore";
 import type {
   Account,
@@ -229,6 +230,7 @@ export async function updateTransaction(id: number, updates: Insert<"transaction
   const before = s.find("transactions", t => t.id === id);
   s.update("transactions", t => t.id === id, updates);
   syncInvoicesTouchedBy(s, before, s.find("transactions", t => t.id === id));
+  cleanupAllocationsAfterUpdate(s, id);
   await s.commit();
   return { success: true } as const;
 }
@@ -238,6 +240,7 @@ export async function deleteTransaction(id: number) {
   const before = s.find("transactions", t => t.id === id);
   s.delete("transactions", t => t.id === id);
   syncInvoicesTouchedBy(s, before, null);
+  removeAllocationsOf(s, id);
   await s.commit();
   return { success: true } as const;
 }

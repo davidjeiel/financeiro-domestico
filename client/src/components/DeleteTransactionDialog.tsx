@@ -36,6 +36,7 @@ export default function DeleteTransactionDialog({
     try {
       await deleteMutation.mutateAsync({ id: transactionId });
       await utils.transaction.list.invalidate();
+      utils.allocation.invalidate();
       toast.success("Lançamento deletado com sucesso!");
       onSuccess();
       onClose();

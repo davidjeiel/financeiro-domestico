@@ -69,6 +69,12 @@ import {
   switchWorkspace,
 } from "./session";
 import {
+  allocationTotals,
+  allocationsOf,
+  incomeOptions,
+  setAllocations,
+} from "./allocations";
+import {
   createSharedWorkspaceFile,
   joinLink,
   listSharedWorkspaces,
@@ -113,6 +119,13 @@ const recurringTransactionSchema = z
       });
     }
   });
+
+const allocationLinkSchema = z.object({
+  incomeId: z.number().int(),
+  amount: z
+    .string()
+    .refine(value => Number.isFinite(Number(value)) && Number(value) > 0, "Valor inválido"),
+});
 
 function randomToken(bytes = 32) {
   const buf = crypto.getRandomValues(new Uint8Array(bytes));
@@ -253,10 +266,13 @@ export const appRouter = router({
           installments: z.number().optional(),
           notes: z.string().optional(),
           responsibleUserId: z.number().int().nullable().optional(),
+          // Receitas que pagam esta despesa (opcional).
+          incomeLinks: z.array(allocationLinkSchema).optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
         assertResponsible(input.responsibleUserId);
+        const { incomeLinks, ...txInput } = input;
         // Converter strings YYYY-MM-DD para Date (meia-noite local)
         const [year, month, day] = input.transactionDate.split('-').map(Number);
         const transactionDate = new Date(year, month - 1, day);
@@ -268,7 +284,7 @@ export const appRouter = router({
         
         const tx = await createTransaction({
           userId: getDataUserId(),
-          ...input,
+          ...txInput,
           transactionDate,
           dueDate,
           // Sem responsável informado, fica com quem lançou.
@@ -276,6 +292,17 @@ export const appRouter = router({
             input.responsibleUserId === undefined ? ctx.user.id : input.responsibleUserId,
           createdBy: ctx.user.id,
         });
+        if (incomeLinks?.length) {
+          const s = getStore();
+          try {
+            setAllocations(s, tx.id, incomeLinks, ctx.user.id);
+            await s.commit();
+          } catch (error) {
+            // Vínculo inválido: desfaz o lançamento para não ficar pela metade.
+            await deleteTransaction(tx.id);
+            throw error;
+          }
+        }
         if (input.type === "credit_card" && input.creditCardId) {
           await upsertInvoiceForCreditCard(getDataUserId(), input.creditCardId, input.competencyId);
         }
@@ -662,6 +689,28 @@ export const appRouter = router({
     switch: protectedProcedure
       .input(z.object({ id: z.string().min(1).nullable() }))
       .mutation(({ input }) => switchWorkspace(input.id)),
+  }),
+
+  allocation: router({
+    /** Total vinculado de cada lançamento (coberto, nas despesas; comprometido, nas receitas). */
+    totals: protectedProcedure.query(() =>
+      Object.fromEntries(Array.from(allocationTotals(getStore()).entries()).map(([id, c]) => [id, (c / 100).toFixed(2)]))
+    ),
+    forTransaction: protectedProcedure
+      .input(z.object({ transactionId: z.number().int() }))
+      .query(({ input }) => allocationsOf(getStore(), input.transactionId)),
+    incomeOptions: protectedProcedure
+      .input(z.object({ expenseId: z.number().int().optional() }))
+      .query(({ input }) => incomeOptions(getStore(), getDataUserId(), input.expenseId)),
+    /** Substitui as receitas vinculadas a uma despesa. Lista vazia remove os vínculos. */
+    set: protectedProcedure
+      .input(z.object({ expenseId: z.number().int(), links: z.array(allocationLinkSchema) }))
+      .mutation(async ({ ctx, input }) => {
+        const s = getStore();
+        setAllocations(s, input.expenseId, input.links, ctx.user.id);
+        await s.commit();
+        return allocationsOf(s, input.expenseId);
+      }),
   }),
 
   people: router({
