@@ -227,6 +227,23 @@ export async function syncSharedStore(force: boolean) {
   await refreshing;
 }
 
+/**
+ * Abre a planilha de outra área (sem trocar a ativa), já com o usuário
+ * logado vinculado a ela. Usado para transferir lançamentos.
+ */
+export async function openOtherWorkspace(id: string) {
+  const current = await ensureLoaded();
+  if (id === current.workspace.id) throw new Error("Escolha uma área diferente da ativa.");
+  const workspace = await getWorkspaceFile(id);
+  const store = await openStore(id);
+  const user = bindUser(store, current.profile);
+  const owner = findOwner(store) ?? user;
+  if (store.select("typologies", t => t.userId === owner.id).length === 0) {
+    createDefaultTypologies(store, owner.id);
+  }
+  return { store, workspace, user, ownerId: owner.id };
+}
+
 /** Troca a área de trabalho ativa e carrega a planilha dela. */
 export async function switchWorkspace(id: string | null) {
   const current = await ensureLoaded();

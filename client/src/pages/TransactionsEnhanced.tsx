@@ -18,6 +18,7 @@ import LoadingOverlay from "@/components/LoadingOverlay";
 // BulkTransactionActions removido - usando BulkEditModal e BulkDeleteModal
 import BulkActionsFAB from "@/components/BulkActionsFAB";
 import { CalculatorPopover } from "@/components/CalculatorPopover";
+import { TransferTransactionsDialog } from "@/components/workspace/TransferTransactionsDialog";
 import BulkEditModal from "@/components/BulkEditModal";
 import BulkDeleteModal from "@/components/BulkDeleteModal";
 import EditTransactionModal from "@/components/EditTransactionModal";
@@ -244,6 +245,7 @@ export default function TransactionsEnhanced() {
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<number[]>([]);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [showTransfer, setShowTransfer] = useState(false);
   const [showEditIndividual, setShowEditIndividual] = useState(false);
   const [editingTransactionId, setEditingTransactionId] = useState<number | null>(null);
   const [showDeleteIndividual, setShowDeleteIndividual] = useState(false);
@@ -1661,6 +1663,15 @@ export default function TransactionsEnhanced() {
           selectedCount={selectedTransactionIds.length}
           onEdit={() => setShowBulkEdit(true)}
           onDelete={() => setShowBulkDelete(true)}
+          onTransfer={() => setShowTransfer(true)}
+        />
+
+        {/* Transferir para outra área de trabalho */}
+        <TransferTransactionsDialog
+          open={showTransfer}
+          ids={selectedTransactionIds}
+          onClose={() => setShowTransfer(false)}
+          onDone={() => setSelectedTransactionIds([])}
         />
 
         {/* Bulk Edit Modal */}
