@@ -42,6 +42,7 @@ export default function EditTransactionModal({
     notes: '',
     category: '__placeholder__',
     responsibleUserId: null as number | null,
+    fixed: false,
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -57,6 +58,7 @@ export default function EditTransactionModal({
 
   const { data: typologies = [], isLoading: isLoadingTypologies, refetch: refetchTypologies } = trpc.typology.list.useQuery();
   const updateMutation = trpc.transaction.update.useMutation();
+  const setRecurrenceMutation = trpc.transaction.setRecurrence.useMutation();
   const setAllocationsMutation = trpc.allocation.set.useMutation();
   const workspaceId = useActiveWorkspaceId();
   const { data: allocation } = trpc.allocation.forTransaction.useQuery(
@@ -99,6 +101,7 @@ export default function EditTransactionModal({
         notes: transaction.notes || '',
         category: transaction.category || '__placeholder__',
         responsibleUserId: transaction.responsibleUserId ?? null,
+        fixed: !!transaction.recurrence,
       });
     }
   }, [transaction]);
@@ -159,6 +162,15 @@ export default function EditTransactionModal({
         notes: formData.notes,
         responsibleUserId: formData.responsibleUserId,
       });
+
+      if (transaction && formData.fixed !== !!transaction.recurrence) {
+        await setRecurrenceMutation.mutateAsync({
+          ids: [transaction.id],
+          frequency: formData.fixed
+            ? ((transaction.recurrence as 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'annual' | null) ?? 'monthly')
+            : null,
+        });
+      }
 
       if (incomeLinksDirty && transaction?.type !== 'income') {
         try {
@@ -265,6 +277,24 @@ export default function EditTransactionModal({
                   onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
                 />
               </div>
+
+              {/* Natureza: fixa (recorrente) ou variável */}
+              <label className="flex items-start gap-2 rounded-md border border-border p-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 w-4 h-4"
+                  checked={formData.fixed}
+                  onChange={(e) => setFormData({ ...formData, fixed: e.target.checked })}
+                />
+                <span className="text-sm">
+                  <span className="font-medium">
+                    {transaction?.type === 'income' ? 'Receita fixa (recorrente)' : 'Despesa fixa (recorrente)'}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    Lançamentos criados como recorrentes já vêm marcados. Entra como fixa no comparativo dos relatórios.
+                  </span>
+                </span>
+              </label>
 
               {/* Responsável */}
               <div>

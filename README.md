@@ -112,6 +112,14 @@ Os vínculos ficam na aba `Vinculos` (`expenseId`, `incomeId`, `amount`).
 
 ---
 
+## Despesas fixas × variáveis (Relatórios)
+
+- **Fixa** = lançamento recorrente. Ao criar um lançamento como **Recorrente** (ou em Fixos/Parcelados), cada lançamento da série guarda a frequência (`Lancamentos.recurrence`) e o id da série (`recurrenceGroup`). Variável = todo o resto (parcelas incluídas).
+- Em **Relatórios**, a seção *Despesas fixas × variáveis* (despesas e compras no cartão, por competência) mostra: total de fixas e variáveis do mês e a fatia de cada uma, quanto da receita as fixas comprometem, a evolução dos últimos 6 meses, a divisão por categoria e a lista das fixas do mês. Os números e valores da tabela abrem os lançamentos filtrados.
+- **Dados antigos:** séries criadas antes dessa marca aparecem como variáveis. O relatório sugere as despesas que se repetem (mesmo tipo, categoria, descrição, valor e cartão em 3+ competências) para marcar como fixas de uma vez. Também dá para marcar/desmarcar na edição do lançamento (*Despesa fixa (recorrente)*) ou em lote (*Atualizar natureza*). Na lista, lançamentos fixos têm o selo **fixa**.
+
+---
+
 ## Desenvolvimento
 
 ```sh

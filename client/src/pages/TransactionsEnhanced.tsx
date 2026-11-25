@@ -568,6 +568,11 @@ export default function TransactionsEnhanced() {
       t.description?.toLowerCase().includes(columnFilters.description.toLowerCase()));
   if (columnFilters.category)
     filteredTransactions = filteredTransactions.filter(t => t.category === columnFilters.category);
+  if (columnFilters.recurrence)
+    // Despesas fixas/variáveis (o comparativo dos relatórios é só de despesas).
+    filteredTransactions = filteredTransactions.filter(t =>
+      t.type !== 'income' &&
+      (columnFilters.recurrence === 'fixa' ? !!t.recurrence : !t.recurrence));
   if (columnFilters.creditCardId)
     filteredTransactions = filteredTransactions.filter(t => String(t.creditCardId) === columnFilters.creditCardId);
   if (columnFilters.invoiceStatus) {
@@ -812,6 +817,14 @@ export default function TransactionsEnhanced() {
                       </td>
                       <td className={`py-3 px-4 text-foreground ${nested ? "pl-10" : ""}`}>
                         {transaction.description || "-"}
+                        {transaction.recurrence && (
+                          <span
+                            className="ml-2 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary align-middle"
+                            title="Lançamento fixo (recorrente)"
+                          >
+                            fixa
+                          </span>
+                        )}
                         {(transaction.installments ?? 1) > 1 && (
                           <span className="ml-2 text-xs text-muted-foreground whitespace-nowrap">
                             {transaction.currentInstallment}/{transaction.installments}
@@ -921,6 +934,13 @@ export default function TransactionsEnhanced() {
       key: "invoiceStatus",
       label: columnFilters.invoiceStatus === "pago" ? "Fatura paga" : "Fatura em aberto",
       keys: ["invoiceStatus"],
+    });
+  }
+  if (columnFilters.recurrence) {
+    activeFilterChips.push({
+      key: "recurrence",
+      label: columnFilters.recurrence === "fixa" ? "Despesas fixas" : "Despesas variáveis",
+      keys: ["recurrence"],
     });
   }
   if (columnFilters.category) {

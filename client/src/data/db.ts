@@ -194,6 +194,8 @@ export async function createRecurringTransactions(
 
   const competencies = new Map<string, number>();
   const created: Transaction[] = [];
+  // Marca a série como recorrente (despesa/receita fixa).
+  const recurrenceGroup = newRecurrenceGroup();
   const invoiceCompetencies = new Set<number>();
 
   for (const transactionDate of generateRecurringDates(
@@ -235,6 +237,8 @@ export async function createRecurringTransactions(
         notes: data.notes ?? "",
         responsibleUserId: data.responsibleUserId ?? null,
         createdBy: data.createdBy ?? null,
+        recurrence: data.frequency,
+        recurrenceGroup,
       })
     );
 
@@ -341,6 +345,24 @@ export function resolveCompetencyForCreate(
   if (!card) return fallbackCompetencyId;
   const { year, month } = getCompetencyForTransaction(transactionDate, card);
   return ensureCompetency(s, userId, year, month);
+}
+
+export function newRecurrenceGroup() {
+  const bytes = crypto.getRandomValues(new Uint8Array(6));
+  return "r" + Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Marca (ou desmarca, com `frequency` nulo) lançamentos como recorrentes/fixos.
+ * Usado para lançamentos antigos, criados antes de a série ser registrada.
+ */
+export async function setRecurrence(ids: number[], frequency: string | null) {
+  const s = getStore();
+  const set = new Set(ids);
+  const group = frequency ? newRecurrenceGroup() : null;
+  s.update("transactions", t => set.has(t.id), { recurrence: frequency, recurrenceGroup: group });
+  await s.commit();
+  return { count: ids.length };
 }
 
 export async function getTransactionById(id: number) {
