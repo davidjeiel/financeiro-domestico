@@ -443,6 +443,29 @@ export async function updateInvoicePayment(invoiceId: number, paidAmount: number
   await s.commit();
 }
 
+/**
+ * Recalcula as faturas de todas as compras no cartão do dono da área. Dados
+ * antigos podiam ficar sem fatura ou com total desatualizado. Devolve
+ * quantas faturas mudaram.
+ */
+export function syncAllInvoices(s: SheetStore, userId: number) {
+  const before = JSON.stringify(s.select("invoices").map(i => [i.id, i.totalAmount, i.status]));
+  const groups = new Set<string>();
+  for (const t of s.select("transactions", t => t.userId === userId && t.type === "credit_card" && !!t.creditCardId)) {
+    groups.add(`${t.creditCardId}:${t.competencyId}`);
+  }
+  // Faturas que ficaram sem compras (ex.: compras excluídas) também são zeradas.
+  for (const i of s.select("invoices", i => i.userId === userId)) {
+    groups.add(`${i.creditCardId}:${i.competencyId}`);
+  }
+  groups.forEach(key => {
+    const [card, comp] = key.split(":").map(Number);
+    recalcInvoice(s, userId, card, comp);
+  });
+  const after = JSON.stringify(s.select("invoices").map(i => [i.id, i.totalAmount, i.status]));
+  return before === after ? 0 : 1;
+}
+
 /** Soma um pagamento ao valor já pago da fatura (sem passar do total). */
 export async function addInvoicePayment(
   userId: number,

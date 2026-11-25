@@ -19,6 +19,7 @@ import {
   createInstallmentTransactions,
   resolveCompetencyForCreate,
   addInvoicePayment,
+  syncAllInvoices,
   updateTransaction,
   deleteTransaction,
   getCompetencyInvoices,
@@ -523,9 +524,12 @@ export const appRouter = router({
         updateInvoicePayment(input.invoiceId, input.paidAmount)
       ),
     /** Todas as faturas da área (para agrupar as compras na lista de lançamentos). */
-    listAll: protectedProcedure.query(() =>
-      getStore().select("invoices", i => i.userId === getDataUserId())
-    ),
+    listAll: protectedProcedure.query(async () => {
+      const s = getStore();
+      // Corrige faturas antigas (sem registro ou com total desatualizado).
+      if (syncAllInvoices(s, getDataUserId())) await s.commit();
+      return s.select("invoices", i => i.userId === getDataUserId());
+    }),
     /**
      * Registra um pagamento (parcial ou total) da fatura de um cartão numa
      * competência. Cria a fatura se ainda não existir.

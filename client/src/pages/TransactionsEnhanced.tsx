@@ -34,6 +34,10 @@ import { useActiveWorkspaceId, usePeople } from "@/components/workspace/useWorks
 import { IncomeLinksEditor, type IncomeLink } from "@/components/allocation/IncomeLinksEditor";
 import { InvoicePaymentDialog, type InvoiceToPay } from "@/components/invoice/InvoicePaymentDialog";
 import {
+  parseTransactionsSearch,
+  toColumnFilters,
+} from "@/lib/transactionFilters";
+import {
   monthRange,
   readViewMode,
   saveViewMode,
@@ -93,7 +97,17 @@ export default function TransactionsEnhanced() {
   const { data: currentCompetency } = trpc.competency.current.useQuery();
 
   // Visão escolhida pelo usuário; a última escolha fica salva no navegador.
-  const [viewMode, setViewMode] = useState<ViewMode>(readViewMode);
+  // Filtros vindos da URL (ex.: clique num card do dashboard), lidos uma vez.
+  const [linkFilters] = useState(() =>
+    typeof window === "undefined" ? {} : parseTransactionsSearch(window.location.search)
+  );
+  useEffect(() => {
+    // Tira os parâmetros da barra de endereço: daqui em diante os filtros são da tela.
+    if (window.location.search) {
+      window.history.replaceState(window.history.state, "", window.location.pathname + window.location.hash);
+    }
+  }, []);
+  const [viewMode, setViewMode] = useState<ViewMode>(() => linkFilters.visao ?? readViewMode());
   const changeViewMode = (mode: ViewMode) => {
     setViewMode(mode);
     saveViewMode(mode);
@@ -164,6 +178,19 @@ export default function TransactionsEnhanced() {
   const invoiceKey = (creditCardId: number | null, competencyId: number) => `${creditCardId}-${competencyId}`;
   const invoicesByKey = new Map((allInvoices ?? []).map(inv => [invoiceKey(inv.creditCardId, inv.competencyId), inv]));
   const [expandedInvoices, setExpandedInvoices] = useState<Set<string>>(new Set());
+  // Veio filtrando um cartão: abre as faturas dele para mostrar as compras.
+  const cardFilterFromLink = linkFilters.cartao;
+  useEffect(() => {
+    if (!cardFilterFromLink || !transactions) return;
+    setExpandedInvoices(prev => {
+      const next = new Set(prev);
+      transactions
+        .filter(t => t.type === "credit_card" && t.creditCardId === cardFilterFromLink)
+        .forEach(t => next.add(invoiceKey(t.creditCardId, t.competencyId)));
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardFilterFromLink, transactions]);
   const toggleInvoice = (key: string) =>
     setExpandedInvoices(prev => {
       const next = new Set(prev);
@@ -254,7 +281,9 @@ export default function TransactionsEnhanced() {
   const [pendingNewCategory, setPendingNewCategory] = useState<string | null>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>(() =>
+    toColumnFilters(linkFilters)
+  );
   const [filterPriority, setFilterPriority] = useState<string[]>([]);
   const showAllocationColumn = columns.find(c => c.id === "allocation")?.visible !== false;
   const showResponsibleColumn =
@@ -539,6 +568,17 @@ export default function TransactionsEnhanced() {
       t.description?.toLowerCase().includes(columnFilters.description.toLowerCase()));
   if (columnFilters.category)
     filteredTransactions = filteredTransactions.filter(t => t.category === columnFilters.category);
+  if (columnFilters.creditCardId)
+    filteredTransactions = filteredTransactions.filter(t => String(t.creditCardId) === columnFilters.creditCardId);
+  if (columnFilters.invoiceStatus) {
+    // Situação das compras no cartão = situação da fatura em que são cobradas.
+    filteredTransactions = filteredTransactions.filter(t => {
+      if (t.type !== 'credit_card') return false;
+      const inv = invoicesByKey.get(invoiceKey(t.creditCardId, t.competencyId));
+      const paidInFull = !!inv && Number(inv.paidAmount ?? 0) + 0.005 >= Number(inv.totalAmount);
+      return columnFilters.invoiceStatus === 'pago' ? paidInFull : !paidInFull;
+    });
+  }
   if (columnFilters.type)
     filteredTransactions = filteredTransactions.filter(t => t.type === columnFilters.type);
   if (columnFilters.allocation)
@@ -854,6 +894,53 @@ export default function TransactionsEnhanced() {
                       </td>
                     </tr>
   );
+
+  const TYPE_LABELS: Record<string, string> = { income: "Receitas", expense: "Despesas", credit_card: "Cartão" };
+  const activeFilterChips: { key: string; label: string; keys: string[] }[] = [];
+  if (columnFilters.type) {
+    activeFilterChips.push({
+      key: "type",
+      label: TYPE_LABELS[columnFilters.type] ?? columnFilters.type,
+      // Tirar o tipo "cartão" também tira os filtros que só valem para cartão.
+      keys: columnFilters.type === "credit_card" ? ["type", "creditCardId", "invoiceStatus"] : ["type"],
+    });
+  }
+  if (columnFilters.creditCardId) {
+    const card = creditCards?.find(c => String(c.id) === columnFilters.creditCardId);
+    activeFilterChips.push({ key: "card", label: `Cartão ${card?.name ?? columnFilters.creditCardId}`, keys: ["creditCardId"] });
+  }
+  if (columnFilters.isPaid) {
+    const label =
+      columnFilters.type === "income"
+        ? columnFilters.isPaid === "1" ? "Recebidas" : "A receber"
+        : columnFilters.isPaid === "1" ? "Pagos" : "Em aberto";
+    activeFilterChips.push({ key: "isPaid", label, keys: ["isPaid"] });
+  }
+  if (columnFilters.invoiceStatus) {
+    activeFilterChips.push({
+      key: "invoiceStatus",
+      label: columnFilters.invoiceStatus === "pago" ? "Fatura paga" : "Fatura em aberto",
+      keys: ["invoiceStatus"],
+    });
+  }
+  if (columnFilters.category) {
+    activeFilterChips.push({ key: "category", label: `Categoria: ${columnFilters.category}`, keys: ["category"] });
+  }
+  if (columnFilters.responsibleUserId) {
+    const person = peopleById.get(Number(columnFilters.responsibleUserId));
+    activeFilterChips.push({
+      key: "responsible",
+      label: `Responsável: ${columnFilters.responsibleUserId === "none" ? "ninguém" : person?.name ?? "?"}`,
+      keys: ["responsibleUserId"],
+    });
+  }
+  if (columnFilters.allocation) {
+    activeFilterChips.push({
+      key: "allocation",
+      label: columnFilters.allocation === "linked" ? "Com vínculo" : "Sem vínculo",
+      keys: ["allocation"],
+    });
+  }
 
   const hasActiveFilters =
     !!filterStartDate || !!filterEndDate ||
@@ -1379,6 +1466,39 @@ export default function TransactionsEnhanced() {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Filtros ativos (inclusive os vindos do dashboard) */}
+        {activeFilterChips.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Filtrando por:</span>
+            {activeFilterChips.map(chip => (
+              <span
+                key={chip.key}
+                className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-3 py-1"
+              >
+                {chip.label}
+                <button
+                  type="button"
+                  className="ml-1 rounded-full hover:bg-primary/20 px-1"
+                  aria-label={`Remover filtro ${chip.label}`}
+                  onClick={() => chip.keys.forEach(k => handleColumnFilter(k, undefined))}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            <button
+              type="button"
+              className="text-primary hover:underline"
+              onClick={() => {
+                setColumnFilters({});
+                setFilterPriority([]);
+              }}
+            >
+              Limpar filtros
+            </button>
           </div>
         )}
 
