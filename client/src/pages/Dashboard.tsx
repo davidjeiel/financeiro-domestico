@@ -9,6 +9,10 @@ import { formatCurrency } from "@/lib/formatting";
 import { calculateInvoiceDates } from "@/data/competencyLogic";
 import { monthRange, readViewMode, saveViewMode, type ViewMode } from "@/lib/transactionView";
 import { buildTransactionsUrl, type LinkFilters } from "@/lib/transactionFilters";
+import { startOfMonth } from "date-fns";
+import { dailyTotals, dateKey, periodRanges, yearsFor } from "@/lib/periodTotals";
+import { PeriodTotalsCards } from "@/components/dashboard/PeriodTotalsCards";
+import { TransactionsCalendar } from "@/components/dashboard/TransactionsCalendar";
 
 type CardTotals = { total: number; paid: number; count: number; dueDate: Date | null };
 
@@ -42,6 +46,33 @@ export default function Dashboard() {
   const { data: creditCards } = trpc.creditCard.list.useQuery();
   const { data: invoices } = trpc.invoice.listAll.useQuery();
   const { data: competencies } = trpc.competency.list.useQuery();
+
+  // Totais por dia (calendário e cards de hoje/semana/mês/ano), pela data do
+  // lançamento. Carrega o ano corrente, o vizinho se a semana virar o ano e o
+  // ano exibido no calendário.
+  const now = useMemo(() => new Date(), []);
+  const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(now));
+  const [selectedDay, setSelectedDay] = useState(now);
+  const years = useMemo(() => {
+    const set = new Set(yearsFor(periodRanges(now)));
+    set.add(calendarMonth.getFullYear());
+    return Array.from(set).sort((a, b) => a - b);
+  }, [now, calendarMonth]);
+  const yearQueries = trpc.useQueries(t => years.map(year => t.calendar.eventsForYear({ year })));
+  const yearsLoading = yearQueries.some(q => q.isLoading);
+  const yearsVersion = yearQueries.map(q => q.dataUpdatedAt).join(",");
+  const yearTransactions = useMemo(
+    () => yearQueries.flatMap(q => q.data?.transactions ?? []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [yearsVersion, years.join(",")]
+  );
+  const byDay = useMemo(() => dailyTotals(yearTransactions), [yearTransactions]);
+  const selectedDayTransactions = useMemo(() => {
+    const key = dateKey(selectedDay);
+    return yearTransactions
+      .filter(t => dateKey(new Date(t.transactionDate)) === key)
+      .sort((a, b) => (a.type === "income" ? -1 : 0) - (b.type === "income" ? -1 : 0));
+  }, [yearTransactions, selectedDay]);
 
   const goTo = (filters: LinkFilters) => navigate(buildTransactionsUrl({ ...filters, visao: viewMode }));
 
@@ -123,12 +154,12 @@ export default function Dashboard() {
 
   return (
     <DashboardLayoutCustom title={`Dashboard - ${currentCompetency?.name}`}>
-      <div className="space-y-8">
+      <div className="space-y-5 sm:space-y-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">
+          <p className="hidden sm:block text-sm text-muted-foreground">
             Clique em um card para ver os lançamentos correspondentes.
           </p>
-          <div role="radiogroup" aria-label="Período do resumo" className="inline-flex rounded-md border border-border p-0.5 bg-muted/40">
+          <div role="radiogroup" aria-label="Período do resumo" className="glass inline-flex rounded-lg p-0.5 ml-auto">
             {([
               ["competency", "Competência"],
               ["monthly", "Mensal"],
@@ -140,7 +171,7 @@ export default function Dashboard() {
                 aria-checked={viewMode === mode}
                 onClick={() => changeViewMode(mode)}
                 className={`px-3 py-1 text-sm rounded transition-colors ${
-                  viewMode === mode ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"
+                  viewMode === mode ? "bg-white/10 shadow-sm font-medium text-foreground" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {label}
@@ -149,37 +180,78 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <SummaryCard
-            title="Receitas"
-            amount={summary.income}
-            paid={{ label: "Recebido", value: summary.incomePaid }}
-            open={{ label: "A receber", value: summary.income - summary.incomePaid }}
-            onOpen={situacao => goTo({ tipo: "income", situacao })}
-          />
-          <SummaryCard
-            title="Despesas"
-            amount={summary.expense}
-            paid={{ label: "Pago", value: summary.expensePaid }}
-            open={{ label: "Em aberto", value: summary.expense - summary.expensePaid }}
-            onOpen={situacao => goTo({ tipo: "expense", situacao })}
-          />
-          <SummaryCard
-            title="Cartão de Crédito"
-            amount={summary.creditCard}
-            paid={{ label: "Pago", value: summary.creditCardPaid }}
-            open={{ label: "Em aberto", value: summary.creditCard - summary.creditCardPaid }}
-            onOpen={situacao => goTo({ tipo: "credit_card", situacao })}
-          />
-          <SummaryCard title="Saldo" amount={summary.balance} onOpen={() => goTo({})} />
-        </div>
+        {/* Resumo do período + calendário à direita */}
+        <section className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-12">
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-1 auto-rows-fr gap-3 sm:gap-4 xl:col-span-5">
+            <SummaryCard
+              title="Receitas"
+              amount={summary.income}
+              paid={{ label: "Recebido", value: summary.incomePaid }}
+              open={{ label: "A receber", value: summary.income - summary.incomePaid }}
+              onOpen={situacao => goTo({ tipo: "income", situacao })}
+            />
+            <SummaryCard
+              title="Despesas"
+              amount={summary.expense}
+              paid={{ label: "Pago", value: summary.expensePaid }}
+              open={{ label: "Em aberto", value: summary.expense - summary.expensePaid }}
+              onOpen={situacao => goTo({ tipo: "expense", situacao })}
+            />
+            <SummaryCard
+              title="Cartão de Crédito"
+              amount={summary.creditCard}
+              paid={{ label: "Pago", value: summary.creditCardPaid }}
+              open={{ label: "Em aberto", value: summary.creditCard - summary.creditCardPaid }}
+              onOpen={situacao => goTo({ tipo: "credit_card", situacao })}
+            />
+            <SummaryCard title="Saldo" amount={summary.balance} onOpen={() => goTo({})} />
+          </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <TransactionsCalendar
+            className="xl:col-span-7"
+            month={calendarMonth}
+            onMonthChange={setCalendarMonth}
+            selected={selectedDay}
+            onSelect={setSelectedDay}
+            byDay={byDay}
+            dayTransactions={selectedDayTransactions}
+            today={now}
+            loading={yearsLoading}
+          />
+        </section>
+
+        {/* Totais de hoje, da semana, do mês e do ano */}
+        <PeriodTotalsCards byDay={byDay} now={now} loading={yearsLoading} />
+
+        {/* Category Breakdown */}
+        {Object.keys(transactionsByCategory).length > 0 && (
+          <Card className="p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-semibold text-foreground mb-4">Distribuição por Categoria</h2>
+            <div className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
+              {Object.entries(transactionsByCategory).map(([category, { total, count }]) => (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => goTo({ categoria: category })}
+                  className="glass-inset min-w-0 text-left p-3 sm:p-4 rounded-xl hover:bg-white/[0.06] transition"
+                  title={`Ver lançamentos de ${category}`}
+                >
+                  <p className="truncate text-sm font-medium text-foreground mb-1 sm:mb-2">{category}</p>
+                  <p className="text-lg sm:text-2xl font-bold text-primary tabular-nums">{formatCurrency(total)}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {count} lançamento{count !== 1 ? "s" : ""}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Recent Transactions */}
-          <Card className="p-6">
+          <Card className="p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-foreground">Lançamentos Recentes</h2>
+              <h2 className="text-lg sm:text-xl font-semibold text-foreground">Lançamentos Recentes</h2>
               <button type="button" onClick={() => goTo({})} className="text-sm text-primary hover:underline">
                 Ver todos
               </button>
@@ -193,15 +265,15 @@ export default function Dashboard() {
             ) : transactions && transactions.length > 0 ? (
               <div className="space-y-3">
                 {transactions.slice(0, 5).map(t => (
-                  <div key={t.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <div className="flex-1">
-                      <p className="font-medium text-foreground">{t.description || t.category}</p>
+                  <div key={t.id} className="glass-inset flex items-center justify-between gap-3 p-3 rounded-xl">
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate font-medium text-foreground">{t.description || t.category}</p>
                       <p className="text-sm text-muted-foreground">
                         {new Date(t.transactionDate).toLocaleDateString("pt-BR")}
                       </p>
                     </div>
                     <p
-                      className={`font-semibold ${
+                      className={`shrink-0 font-semibold tabular-nums ${
                         t.type === "income" ? "text-green-600" : t.type === "expense" ? "text-red-600" : "text-blue-600"
                       }`}
                     >
@@ -216,8 +288,8 @@ export default function Dashboard() {
           </Card>
 
           {/* Credit Cards */}
-          <Card className="p-6">
-            <h2 className="text-xl font-semibold text-foreground mb-4">Cartões de Crédito</h2>
+          <Card className="p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-semibold text-foreground mb-4">Cartões de Crédito</h2>
             {creditCards && creditCards.length > 0 ? (
               <div className="space-y-3">
                 {creditCards.map(card => (
@@ -225,13 +297,13 @@ export default function Dashboard() {
                     key={card.id}
                     type="button"
                     onClick={() => goTo({ cartao: card.id })}
-                    className="w-full text-left p-4 rounded-lg border border-border hover:bg-muted/60 hover:shadow-sm transition"
+                    className="glass-inset w-full text-left p-3 sm:p-4 rounded-xl hover:bg-white/[0.06] transition"
                     style={{ borderLeftColor: card.color || "#3B82F6", borderLeftWidth: "4px" }}
                     title={`Ver lançamentos do cartão ${card.name}`}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-foreground">{card.name}</p>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-foreground">{card.name}</p>
                         <p className="text-sm text-muted-foreground">
                           Corte: dia {card.cutoffDay} | Vencimento: dia {card.dueDay}
                         </p>
@@ -249,30 +321,6 @@ export default function Dashboard() {
             )}
           </Card>
         </div>
-
-        {/* Category Breakdown */}
-        {Object.keys(transactionsByCategory).length > 0 && (
-          <Card className="p-6">
-            <h2 className="text-xl font-semibold text-foreground mb-4">Distribuição por Categoria</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Object.entries(transactionsByCategory).map(([category, { total, count }]) => (
-                <button
-                  key={category}
-                  type="button"
-                  onClick={() => goTo({ categoria: category })}
-                  className="text-left p-4 bg-muted rounded-lg hover:bg-muted/70 hover:shadow-sm transition"
-                  title={`Ver lançamentos de ${category}`}
-                >
-                  <p className="text-sm font-medium text-foreground mb-2">{category}</p>
-                  <p className="text-2xl font-bold text-primary">{formatCurrency(total)}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {count} lançamento{count !== 1 ? "s" : ""}
-                  </p>
-                </button>
-              ))}
-            </div>
-          </Card>
-        )}
       </div>
     </DashboardLayoutCustom>
   );
@@ -306,16 +354,21 @@ function SummaryCard({
           onOpen();
         }
       }}
-      className="p-6 cursor-pointer transition hover:shadow-md hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="@container min-w-0 gap-0 p-3.5 sm:p-5 cursor-pointer transition hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       title={`Ver lançamentos: ${title}`}
     >
+      <div className="flex h-full flex-col @[24rem]:flex-row @[24rem]:items-center @[24rem]:gap-4">
+      <div className="min-w-0 @[24rem]:flex-1">
       <div className="flex items-start justify-between">
-        <p className="text-sm text-muted-foreground mb-2">{title}</p>
-        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+        <p className="text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2">{title}</p>
+        <ChevronRight className="w-4 h-4 text-muted-foreground @[24rem]:hidden" />
       </div>
-      <p className="text-3xl font-bold text-foreground">{formatCurrency(amount)}</p>
+      <p className={`font-bold tabular-nums tracking-tight text-lg @[11rem]:text-xl @[14rem]:text-2xl @[18rem]:text-3xl ${amount < 0 ? "text-rose-400" : "text-foreground"}`}>
+        {formatCurrency(amount)}
+      </p>
+      </div>
       {paid && open && (
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-auto pt-3 flex flex-wrap gap-1.5 sm:gap-2 @[24rem]:mt-0 @[24rem]:pt-0 @[24rem]:flex-col @[24rem]:items-end">
           {[
             { ...paid, situacao: "pago" as const, cls: "bg-green-500/10 text-green-700 dark:text-green-400 hover:bg-green-500/20" },
             { ...open, situacao: "aberto" as const, cls: "bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20" },
@@ -328,7 +381,7 @@ function SummaryCard({
                 onOpen(item.situacao);
               }}
               onKeyDown={e => e.stopPropagation()}
-              className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${item.cls}`}
+              className={`rounded-full px-2 py-0.5 sm:px-2.5 sm:py-1 text-[11px] sm:text-xs font-medium tabular-nums transition ${item.cls}`}
               title={`Ver lançamentos: ${title} · ${item.label.toLowerCase()}`}
             >
               {item.label}: {formatCurrency(Math.max(item.value, 0))}
@@ -336,6 +389,7 @@ function SummaryCard({
           ))}
         </div>
       )}
+      </div>
     </Card>
   );
 }

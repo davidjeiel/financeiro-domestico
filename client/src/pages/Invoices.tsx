@@ -81,7 +81,7 @@ export default function Invoices() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
                   <div className="p-4 bg-muted rounded-lg">
                     <p className="text-xs text-muted-foreground mb-1">Valor Total</p>
                     <p className="text-2xl font-bold text-foreground">
