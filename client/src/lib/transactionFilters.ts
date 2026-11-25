@@ -13,6 +13,8 @@ export type LinkFilters = {
   cartao?: number;
   categoria?: string;
   visao?: ViewMode;
+  /** Despesas fixas (recorrentes) ou variáveis. */
+  natureza?: "fixa" | "variavel";
 };
 
 const TYPES: TxType[] = ["income", "expense", "credit_card"];
@@ -24,6 +26,7 @@ export function buildTransactionsUrl(filters: LinkFilters) {
   if (filters.cartao != null) params.set("cartao", String(filters.cartao));
   if (filters.categoria) params.set("categoria", filters.categoria);
   if (filters.visao) params.set("visao", filters.visao);
+  if (filters.natureza) params.set("natureza", filters.natureza);
   const query = params.toString();
   return `/lancamentos${query ? `?${query}` : ""}`;
 }
@@ -34,12 +37,14 @@ export function parseTransactionsSearch(search: string): LinkFilters {
   const situacao = params.get("situacao");
   const cartao = Number(params.get("cartao"));
   const visao = params.get("visao");
+  const natureza = params.get("natureza");
   return {
     tipo: tipo && TYPES.includes(tipo) ? tipo : undefined,
     situacao: situacao === "pago" || situacao === "aberto" ? situacao : undefined,
     cartao: Number.isInteger(cartao) && cartao > 0 ? cartao : undefined,
     categoria: params.get("categoria") || undefined,
     visao: visao === "monthly" || visao === "competency" ? visao : undefined,
+    natureza: natureza === "fixa" || natureza === "variavel" ? natureza : undefined,
   };
 }
 
@@ -52,6 +57,7 @@ export function toColumnFilters(filters: LinkFilters): Record<string, string> {
   const columns: Record<string, string> = {};
   if (filters.tipo) columns.type = filters.tipo;
   if (filters.categoria) columns.category = filters.categoria;
+  if (filters.natureza) columns.recurrence = filters.natureza;
   if (filters.cartao != null) {
     columns.creditCardId = String(filters.cartao);
     columns.type = "credit_card";

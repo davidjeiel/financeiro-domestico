@@ -4,6 +4,7 @@ import DashboardLayoutCustom from "@/components/DashboardLayoutCustom";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/formatting";
+import { FixedVsVariableSection } from "@/components/reports/FixedVsVariableSection";
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 const COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"];
@@ -97,6 +98,15 @@ export default function Reports() {
             </p>
           </Card>
         </div>
+
+        {/* Despesas fixas × variáveis */}
+        {currentCompetency && (
+          <FixedVsVariableSection
+            year={currentCompetency.year}
+            month={currentCompetency.month}
+            name={currentCompetency.name}
+          />
+        )}
 
         {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

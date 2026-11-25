@@ -11,13 +11,16 @@ describe("filtros dos lançamentos pela URL", () => {
       cartao: undefined,
       categoria: "Saúde & bem-estar",
       visao: "monthly",
+      natureza: undefined,
     });
+    expect(parseTransactionsSearch("natureza=fixa").natureza).toBe("fixa");
+    expect(toColumnFilters({ natureza: "variavel", categoria: "Lazer" })).toEqual({ category: "Lazer", recurrence: "variavel" });
     expect(buildTransactionsUrl({})).toBe("/lancamentos");
   });
 
   it("ignora valores inválidos", () => {
     expect(parseTransactionsSearch("?tipo=xyz&situacao=talvez&cartao=abc")).toEqual({
-      tipo: undefined, situacao: undefined, cartao: undefined, categoria: undefined, visao: undefined,
+      tipo: undefined, situacao: undefined, cartao: undefined, categoria: undefined, visao: undefined, natureza: undefined,
     });
   });
 

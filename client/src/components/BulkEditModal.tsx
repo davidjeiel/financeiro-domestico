@@ -32,6 +32,7 @@ export default function BulkEditModal({
     dueDate: '',
     notes: '',
     responsibleUserId: null as number | null,
+    fixed: true,
   });
 
   const [updateFields, setUpdateFields] = useState({
@@ -40,6 +41,7 @@ export default function BulkEditModal({
     dueDate: false,
     notes: false,
     responsibleUserId: false,
+    fixed: false,
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -49,6 +51,7 @@ export default function BulkEditModal({
 
   const { data: typologies = [], refetch: refetchTypologies } = trpc.typology.list.useQuery();
   const updateMutation = trpc.transaction.update.useMutation();
+  const setRecurrenceMutation = trpc.transaction.setRecurrence.useMutation();
   const createTypologyMutation = trpc.typology.create.useMutation();
   const utils = trpc.useUtils();
 
@@ -61,6 +64,7 @@ export default function BulkEditModal({
         dueDate: '',
         notes: '',
         responsibleUserId: null,
+        fixed: true,
       });
       setUpdateFields({
         category: false,
@@ -68,6 +72,7 @@ export default function BulkEditModal({
         dueDate: false,
         notes: false,
         responsibleUserId: false,
+        fixed: false,
       });
       setShowNewCategoryInput(false);
       setNewCategoryName('');
@@ -125,7 +130,15 @@ export default function BulkEditModal({
 
     setIsLoading(true);
     try {
-      for (const id of selectedIds) {
+      // Natureza: fixa (recorrente) ou variável.
+      if (updateFields.fixed) {
+        await setRecurrenceMutation.mutateAsync({
+          ids: selectedIds,
+          frequency: formData.fixed ? 'monthly' : null,
+        });
+      }
+      const onlyNature = fieldsToUpdate.every(f => f === 'fixed');
+      for (const id of onlyNature ? [] : selectedIds) {
         const updates: any = { id };
 
         if (updateFields.category && formData.category !== '__placeholder__') {
@@ -277,6 +290,36 @@ export default function BulkEditModal({
                   </div>
                 </div>
               )
+            )}
+          </div>
+
+          {/* Natureza: fixa ou variável */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="updateFixed"
+                checked={updateFields.fixed}
+                onCheckedChange={(checked) =>
+                  setUpdateFields({ ...updateFields, fixed: checked as boolean })
+                }
+              />
+              <Label htmlFor="updateFixed" className="cursor-pointer">
+                Atualizar natureza (fixa / variável)
+              </Label>
+            </div>
+            {updateFields.fixed && (
+              <div className="flex gap-4 pl-6 text-sm">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="radio" name="bulk-fixed" checked={formData.fixed}
+                    onChange={() => setFormData({ ...formData, fixed: true })} />
+                  Fixa (recorrente)
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="radio" name="bulk-fixed" checked={!formData.fixed}
+                    onChange={() => setFormData({ ...formData, fixed: false })} />
+                  Variável
+                </label>
+              </div>
             )}
           </div>
 

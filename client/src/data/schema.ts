@@ -102,6 +102,11 @@ export const tables = {
       responsibleUserId: int(),
       // Quem registrou o lançamento.
       createdBy: int(),
+      // Lançamento recorrente (despesa/receita fixa): frequência da série
+      // ("monthly", "weekly"…). Vazio = lançamento avulso (variável).
+      recurrence: text(),
+      // Identifica os lançamentos da mesma série recorrente.
+      recurrenceGroup: text(),
       ...timestamps,
     },
   },
@@ -322,6 +327,8 @@ export type Transaction = {
   paidDate: Date | null;
   responsibleUserId: number | null;
   createdBy: number | null;
+  recurrence: string | null;
+  recurrenceGroup: string | null;
 } & Timestamps;
 
 export type Invoice = {

@@ -19,6 +19,7 @@ import {
   createInstallmentTransactions,
   resolveCompetencyForCreate,
   addInvoicePayment,
+  setRecurrence,
   syncAllInvoices,
   updateTransaction,
   deleteTransaction,
@@ -74,6 +75,7 @@ import {
   switchWorkspace,
 } from "./session";
 import { previewTransfer, transferTransactions } from "./transfer";
+import { fixedVsVariableReport, suggestRecurringSeries } from "./fixedExpenses";
 import {
   allocationTotals,
   allocationsOf,
@@ -373,6 +375,17 @@ export const appRouter = router({
           createdBy: ctx.user.id,
         });
       }),
+    /** Marca lançamentos como fixos (recorrentes) ou volta a deixá-los variáveis. */
+    setRecurrence: protectedProcedure
+      .input(
+        z.object({
+          ids: z.array(z.number().int()).min(1),
+          frequency: z
+            .enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"])
+            .nullable(),
+        })
+      )
+      .mutation(({ input }) => setRecurrence(input.ids, input.frequency)),
     /** O que vai acontecer ao transferir os lançamentos para outra área. */
     transferPreview: protectedProcedure
       .input(
@@ -841,6 +854,25 @@ export const appRouter = router({
     switch: protectedProcedure
       .input(z.object({ id: z.string().min(1).nullable() }))
       .mutation(({ input }) => switchWorkspace(input.id)),
+  }),
+
+  report: router({
+    /** Despesas fixas (recorrentes) × variáveis: últimos meses e detalhe do mês. */
+    fixedVsVariable: protectedProcedure
+      .input(
+        z.object({
+          year: z.number().int(),
+          month: z.number().int().min(1).max(12),
+          months: z.number().int().min(1).max(24).optional(),
+        })
+      )
+      .query(({ input }) =>
+        fixedVsVariableReport(getStore(), getDataUserId(), input.year, input.month, input.months ?? 6)
+      ),
+    /** Séries antigas que parecem recorrentes, para marcar como fixas. */
+    recurringSuggestions: protectedProcedure.query(() =>
+      suggestRecurringSeries(getStore(), getDataUserId())
+    ),
   }),
 
   allocation: router({
