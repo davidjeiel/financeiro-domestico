@@ -67,10 +67,12 @@ import {
   getPersonalWorkspaceId,
   getSpreadsheetUrl,
   getStore,
+  openOtherWorkspace,
   reload,
   signOut,
   switchWorkspace,
 } from "./session";
+import { previewTransfer, transferTransactions } from "./transfer";
 import {
   allocationTotals,
   allocationsOf,
@@ -369,6 +371,71 @@ export const appRouter = router({
             input.responsibleUserId === undefined ? ctx.user.id : input.responsibleUserId,
           createdBy: ctx.user.id,
         });
+      }),
+    /** O que vai acontecer ao transferir os lançamentos para outra área. */
+    transferPreview: protectedProcedure
+      .input(
+        z.object({
+          ids: z.array(z.number().int()).min(1),
+          sourceWorkspaceId: z.string(),
+          targetWorkspaceId: z.string(),
+        })
+      )
+      .query(async ({ input }) => {
+        assertActiveWorkspace(input.sourceWorkspaceId);
+        const target = await openOtherWorkspace(input.targetWorkspaceId);
+        return previewTransfer(getStore(), target.store, {
+          ids: input.ids,
+          sourceOwnerId: getDataUserId(),
+          targetOwnerId: target.ownerId,
+        });
+      }),
+    /**
+     * Move lançamentos da área ativa para outra área: grava no destino
+     * primeiro e só depois remove da origem.
+     */
+    transfer: protectedProcedure
+      .input(
+        z.object({
+          ids: z.array(z.number().int()).min(1),
+          sourceWorkspaceId: z.string(),
+          targetWorkspaceId: z.string(),
+          cardMap: z.record(z.string(), z.union([z.number().int(), z.literal("new")])).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        assertActiveWorkspace(input.sourceWorkspaceId);
+        const target = await openOtherWorkspace(input.targetWorkspaceId);
+        const source = getStore();
+        const result = transferTransactions(source, target.store, {
+          ids: input.ids,
+          sourceOwnerId: getDataUserId(),
+          targetOwnerId: target.ownerId,
+          actorTargetUserId: target.user.id,
+          cardMap: input.cardMap,
+        });
+        await target.store.commit();
+        try {
+          await source.commit();
+        } catch (error) {
+          throw new Error(
+            "Os lançamentos foram copiados para o destino, mas não foi possível removê-los desta área. " +
+              "Use Recarregar dados e exclua-os aqui manualmente."
+          );
+        }
+        await logAuditAction({
+          workspaceId: 0,
+          userId: ctx.user.id,
+          action: "transfer_transactions",
+          entityType: "transaction",
+          entityId: null,
+          changes: JSON.stringify({ to: input.targetWorkspaceId, count: result.created.length }),
+        });
+        return {
+          count: result.created.length,
+          allocationsRemoved: result.allocationsRemoved,
+          target: { id: target.workspace.id, name: target.workspace.name },
+        };
       }),
     createRecurring: protectedProcedure
       .input(recurringTransactionSchema)

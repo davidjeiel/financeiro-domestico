@@ -10,7 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { trpc } from '@/lib/trpc';
 import { formatCurrency, formatDate } from '@/lib/formatting';
-import { Plus } from 'lucide-react';
+import { ArrowRightLeft, Plus } from 'lucide-react';
+import { TransferTransactionsDialog } from '@/components/workspace/TransferTransactionsDialog';
 import TransactionLinksManager from '@/components/TransactionLinksManager';
 import { ResponsibleSelect } from '@/components/workspace/ResponsibleSelect';
 import { useActiveWorkspaceId } from '@/components/workspace/useWorkspaces';
@@ -44,6 +45,7 @@ export default function EditTransactionModal({
   });
 
   const [isLoading, setIsLoading] = useState(false);
+  const [showTransfer, setShowTransfer] = useState(false);
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryColor, setNewCategoryColor] = useState('#3b82f6');
@@ -419,6 +421,17 @@ export default function EditTransactionModal({
 
             {/* Footer fixo */}
             <div className="flex gap-2 justify-end px-6 py-4 border-t border-border shrink-0">
+              {transactionId && (
+                <Button
+                  variant="ghost"
+                  className="mr-auto"
+                  title="Transferir para outra área de trabalho"
+                  onClick={() => setShowTransfer(true)}
+                >
+                  <ArrowRightLeft className="w-4 h-4 mr-1" />
+                  Transferir
+                </Button>
+              )}
               <Button variant="outline" onClick={onClose}>
                 Cancelar
               </Button>
@@ -429,6 +442,15 @@ export default function EditTransactionModal({
           </>
         )}
       </DialogContent>
+      <TransferTransactionsDialog
+        open={showTransfer}
+        ids={transactionId ? [transactionId] : []}
+        onClose={() => setShowTransfer(false)}
+        onDone={() => {
+          onSuccess();
+          onClose();
+        }}
+      />
     </Dialog>
   );
 }

@@ -78,6 +78,17 @@ Na lista de lançamentos há a coluna **Responsável** (com filtro e ordenação
 
 **Colunas novas na planilha**: `Lancamentos.responsibleUserId` e `Lancamentos.createdBy`; `Usuarios.status` e `Usuarios.color`. Planilhas existentes são atualizadas automaticamente no primeiro acesso.
 
+**Transferir lançamentos entre áreas**
+
+Selecione lançamentos na lista e use o botão **Transferir** (ou **Transferir** na edição de um lançamento) para movê-los para outra área de trabalho. Antes de confirmar, o app mostra o que muda:
+
+- **Cartões:** cada cartão de origem é ligado a um cartão da área de destino (sugestão: o de mesmo nome) ou a uma cópia criada lá; as faturas são recalculadas nos dois lados.
+- **Responsável:** vira a pessoa de mesmo e-mail na área de destino (ou, para pessoas sem acesso, de mesmo nome); sem correspondente, fica sem responsável.
+- **Vínculos com receitas** da área de origem são desfeitos.
+- Competência, categoria, notas e links são mantidos; categorias que faltarem são criadas no destino.
+
+Os lançamentos são gravados primeiro no destino e só depois removidos da origem.
+
 **Despesa paga com receita**
 
 Uma despesa (ou compra no cartão) pode ser vinculada a uma ou mais receitas — "a conta de luz sai do salário de março" —, informando quanto sai de cada uma. O vínculo é feito no cadastro (lançamentos simples) ou na edição da despesa, em **Pago com a receita**.

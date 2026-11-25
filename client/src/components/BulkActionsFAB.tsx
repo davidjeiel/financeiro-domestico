@@ -1,16 +1,19 @@
-import { Edit3, Trash2 } from "lucide-react";
+import { ArrowRightLeft, Edit3, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface BulkActionsFABProps {
   selectedCount: number;
   onEdit: () => void;
   onDelete: () => void;
+  /** Transferir para outra área de trabalho. */
+  onTransfer?: () => void;
 }
 
 export default function BulkActionsFAB({
   selectedCount,
   onEdit,
   onDelete,
+  onTransfer,
 }: BulkActionsFABProps) {
   if (selectedCount === 0) {
     return null;
@@ -34,6 +37,18 @@ export default function BulkActionsFAB({
       >
         <Edit3 className="w-6 h-6" />
       </Button>
+
+      {/* Transferir para outra área */}
+      {onTransfer && (
+        <Button
+          onClick={onTransfer}
+          className="h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all bg-violet-600 hover:bg-violet-700 text-white flex items-center justify-center p-0"
+          title="Transferir para outra área de trabalho"
+          aria-label="Transferir para outra área de trabalho"
+        >
+          <ArrowRightLeft className="w-6 h-6" />
+        </Button>
+      )}
 
       {/* Botão de Exclusão */}
       <Button

@@ -34,7 +34,7 @@ import type {
 const byNewest = <T extends { createdAt: Date }>(a: T, b: T) =>
   b.createdAt.getTime() - a.createdAt.getTime();
 
-function competencyName(year: number, month: number) {
+export function competencyName(year: number, month: number) {
   const name = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(
     new Date(year, month - 1, 1)
   );
@@ -389,7 +389,7 @@ export async function getCompetencyInvoices(competencyId: number) {
     .sort((a, b) => b.dueDate.getTime() - a.dueDate.getTime());
 }
 
-function recalcInvoice(s: SheetStore, userId: number, creditCardId: number, competencyId: number) {
+export function recalcInvoice(s: SheetStore, userId: number, creditCardId: number, competencyId: number) {
   const card = s.find("creditCards", c => c.id === creditCardId);
   const competency = s.find("competencies", c => c.id === competencyId);
   if (!card || !competency) return;
