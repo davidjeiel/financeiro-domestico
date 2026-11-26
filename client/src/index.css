@@ -27,6 +27,9 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
+  --color-field: var(--field);
+  --color-field-hover: var(--field-hover);
+  --color-surface-raised: var(--surface-raised);
   --color-ring: var(--ring);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
@@ -69,7 +72,13 @@
   --destructive: oklch(0.65 0.2 30);
   --destructive-foreground: oklch(0.98 0.01 0);
   --border: oklch(0.2 0.01 280);
-  --input: oklch(0.15 0.01 280);
+  /* Borda dos campos de formulário (visível sobre o modal) */
+  --input: oklch(0.42 0.02 280);
+  /* Fundo dos campos: mais escuro que o modal, para o campo "afundar" */
+  --field: oklch(0.1 0.008 280);
+  --field-hover: oklch(0.12 0.01 280);
+  /* Superfície de modais: mais clara que a página e que os cards */
+  --surface-raised: oklch(0.19 0.014 280);
   --ring: oklch(0.7 0.2 280);
   --sidebar: oklch(0.12 0.01 280);
   --sidebar-foreground: oklch(0.92 0.01 0);
@@ -100,7 +109,13 @@
   --destructive: oklch(0.65 0.2 30);
   --destructive-foreground: oklch(0.98 0.01 0);
   --border: oklch(0.2 0.01 280);
-  --input: oklch(0.15 0.01 280);
+  /* Borda dos campos de formulário (visível sobre o modal) */
+  --input: oklch(0.42 0.02 280);
+  /* Fundo dos campos: mais escuro que o modal, para o campo "afundar" */
+  --field: oklch(0.1 0.008 280);
+  --field-hover: oklch(0.12 0.01 280);
+  /* Superfície de modais: mais clara que a página e que os cards */
+  --surface-raised: oklch(0.19 0.014 280);
   --ring: oklch(0.7 0.2 280);
   --chart-1: oklch(0.7 0.2 280);
   --chart-2: oklch(0.65 0.18 260);
@@ -226,6 +241,10 @@
     }
   }
 }
+
+/* Estilos de modais e formulários na camada base: as classes utilitárias
+ * dos componentes (ex.: bg-surface-raised, bg-transparent) prevalecem. */
+@layer base {
   /* Modal and Dialog Styles for Dark Theme */
   [role="dialog"],
   .radix-dialog-content,
@@ -244,14 +263,12 @@
     @apply bg-card text-card-foreground hover:bg-muted;
   }
 
-  /* Input fields in modals */
-  [role="dialog"] input,
+  /* Campos dentro de modais: fundo rebaixado e borda visível (classes no
+     próprio campo, como bg-transparent, continuam valendo). */
+  [role="dialog"] input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
   [role="dialog"] select,
-  [role="dialog"] textarea,
-  .radix-dialog-content input,
-  .radix-dialog-content select,
-  .radix-dialog-content textarea {
-    @apply bg-input text-foreground border-border;
+  [role="dialog"] textarea {
+    @apply bg-field text-foreground border-input;
   }
 
   /* Popover content */
@@ -261,25 +278,35 @@
 
   /* Command/Search styles */
   .cmdk-input {
-    @apply bg-input text-foreground;
+    @apply bg-field text-foreground;
   }
 
   .cmdk-item {
     @apply text-foreground hover:bg-muted;
   }
 
-  /* Ensure all text in modals is visible */
-  [role="dialog"] *,
-  .radix-dialog-content *,
-  .radix-popover-content * {
+  /* Cor padrão do texto em modais (sem sobrescrever as cores próprias de
+     rótulos, textos de ajuda e avisos, como fazia a regra antiga com "*") */
+  [role="dialog"],
+  .radix-popover-content {
     @apply text-foreground;
   }
 
-  /* Input elegant style */
+  /* Campo de formulário: caixa com borda e fundo próprios, bem distinta do rótulo */
   .input-elegant {
-    @apply bg-input text-foreground border-border placeholder:text-muted-foreground;
+    @apply block w-full rounded-md border border-input bg-field px-3 py-2 text-sm text-foreground shadow-[inset_0_1px_2px_rgb(0_0_0/0.35)] transition-colors placeholder:text-muted-foreground/70;
+  }
+
+  .input-elegant:hover {
+    @apply bg-field-hover;
   }
 
   .input-elegant:focus {
-    @apply border-primary ring-primary/20;
+    @apply border-primary outline-none ring-2 ring-primary/30;
   }
+
+  /* Rótulo de campo: menor, em caixa alta e na cor secundária */
+  .form-label {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground;
+  }
+}

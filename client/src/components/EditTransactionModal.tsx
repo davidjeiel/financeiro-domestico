@@ -21,6 +21,9 @@ import {
   type IncomeLink,
 } from '@/components/allocation/IncomeLinksEditor';
 
+/** Rótulo de campo: menor, em caixa alta e na cor secundária (distinto do campo). */
+const FIELD_LABEL = 'mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground';
+
 const FREQUENCY_LABELS: Record<string, string> = {
   daily: 'diária',
   weekly: 'semanal',
@@ -268,9 +271,9 @@ export default function EditTransactionModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md flex flex-col max-h-[90vh] gap-0 p-0">
+      <DialogContent className="max-w-md flex flex-col max-h-[90vh] gap-0 p-0 overflow-hidden">
         {/* Header fixo */}
-        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
+        <DialogHeader className="px-6 pt-5 pb-4 border-b border-white/10 bg-black/20 shrink-0">
           <DialogTitle>Editar Transação</DialogTitle>
         </DialogHeader>
 
@@ -281,10 +284,10 @@ export default function EditTransactionModal({
         ) : (
           <>
             {/* Corpo rolável */}
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
               {/* Descrição */}
               <div>
-                <Label htmlFor="description">Descrição</Label>
+                <Label htmlFor="description" className={FIELD_LABEL}>Descrição</Label>
                 <Input
                   id="description"
                   value={formData.description}
@@ -295,7 +298,7 @@ export default function EditTransactionModal({
 
               {/* Valor */}
               <div>
-                <Label htmlFor="amount">Valor</Label>
+                <Label htmlFor="amount" className={FIELD_LABEL}>Valor</Label>
                 <Input
                   id="amount"
                   type="number"
@@ -331,7 +334,7 @@ export default function EditTransactionModal({
 
               {/* Data da Transação */}
               <div>
-                <Label htmlFor="transactionDate">Data da Transação</Label>
+                <Label htmlFor="transactionDate" className={FIELD_LABEL}>Data da Transação</Label>
                 <Input
                   id="transactionDate"
                   type="date"
@@ -342,7 +345,7 @@ export default function EditTransactionModal({
 
               {/* Data de Vencimento */}
               <div>
-                <Label htmlFor="dueDate">Data de Vencimento</Label>
+                <Label htmlFor="dueDate" className={FIELD_LABEL}>Data de Vencimento</Label>
                 <Input
                   id="dueDate"
                   type="date"
@@ -411,12 +414,12 @@ export default function EditTransactionModal({
 
               {/* Responsável */}
               <div>
-                <Label htmlFor="responsibleUserId">
+                <Label htmlFor="responsibleUserId" className={FIELD_LABEL}>
                   {transaction?.type === 'income' ? 'Quem recebe' : 'Responsável pelo pagamento'}
                 </Label>
                 <ResponsibleSelect
                   id="responsibleUserId"
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                  className="flex h-9 w-full rounded-md border border-input bg-field hover:bg-field-hover px-3 py-1 text-sm shadow-xs"
                   value={formData.responsibleUserId}
                   onChange={(value) => setFormData({ ...formData, responsibleUserId: value })}
                 />
@@ -424,7 +427,7 @@ export default function EditTransactionModal({
 
               {/* Categoria */}
               <div>
-                <Label htmlFor="category">Categoria</Label>
+                <Label htmlFor="category" className={FIELD_LABEL}>Categoria</Label>
                 {!showNewCategoryInput ? (
                   <Select value={formData.category} onValueChange={(value) => {
                     if (value === '__new__') {
@@ -518,7 +521,7 @@ export default function EditTransactionModal({
               {/* Vínculo com receitas */}
               {transaction && transaction.type !== 'income' && (
                 <div>
-                  <Label>Pago com a receita</Label>
+                  <Label className={FIELD_LABEL}>Pago com a receita</Label>
                   <p className="text-xs text-muted-foreground mb-2">
                     De qual receita sai o dinheiro desta despesa. Pode dividir entre várias.
                   </p>
@@ -535,7 +538,7 @@ export default function EditTransactionModal({
               )}
               {transaction && transaction.type === 'income' && (
                 <div>
-                  <Label>Despesas pagas com esta receita</Label>
+                  <Label className={FIELD_LABEL}>Despesas pagas com esta receita</Label>
                   <div className="mt-2">
                     <IncomeCommitments incomeId={transaction.id} />
                   </div>
@@ -544,7 +547,7 @@ export default function EditTransactionModal({
 
               {/* Notas */}
               <div>
-                <Label htmlFor="notes">Notas</Label>
+                <Label htmlFor="notes" className={FIELD_LABEL}>Notas</Label>
                 <Textarea
                   id="notes"
                   value={formData.notes}
@@ -563,7 +566,7 @@ export default function EditTransactionModal({
             </div>
 
             {/* Footer fixo */}
-            <div className="flex gap-2 justify-end px-6 py-4 border-t border-border shrink-0">
+            <div className="flex gap-2 justify-end px-6 py-4 border-t border-white/10 bg-black/20 shrink-0">
               {transactionId && (
                 <Button
                   variant="ghost"
