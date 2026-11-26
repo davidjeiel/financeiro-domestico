@@ -137,3 +137,47 @@ describe("parcelamento", () => {
     expect(s.select("invoices")).toHaveLength(2);
   });
 });
+
+describe("competência: fatura no mês do vencimento", () => {
+  beforeEach(() => fake.sheets.clear());
+
+  it("em novembro aparece a fatura que vence em novembro, não as compras de novembro", async () => {
+    const { s, card } = await setup(); // fechamento dia 20, vencimento dia 27
+    const { getCompetencyTransactions } = await import("./db");
+    const oct = s.insert("competencies", { userId: 1, year: 2026, month: 10, name: "Outubro de 2026" });
+    const nov = s.insert("competencies", { userId: 1, year: 2026, month: 11, name: "Novembro de 2026" });
+    // Compra de outubro (competência out) → fatura vence 27/11.
+    s.insert("transactions", { userId: 1, competencyId: oct.id, type: "credit_card", creditCardId: card.id, category: "X", description: "Compra out", amount: "100", transactionDate: new Date(2026, 9, 10) });
+    // Compra de novembro (competência nov) → fatura vence 27/12.
+    s.insert("transactions", { userId: 1, competencyId: nov.id, type: "credit_card", creditCardId: card.id, category: "X", description: "Compra nov", amount: "50", transactionDate: new Date(2026, 10, 10) });
+    // Despesa comum de novembro continua em novembro.
+    s.insert("transactions", { userId: 1, competencyId: nov.id, type: "expense", category: "Luz", description: "Luz", amount: "200", transactionDate: new Date(2026, 10, 15) });
+
+    const inNov = await getCompetencyTransactions(nov.id);
+    expect(inNov.map(t => t.description).sort()).toEqual(["Compra out", "Luz"]);
+    const inOct = await getCompetencyTransactions(oct.id);
+    expect(inOct.map(t => t.description)).toEqual([]);
+  });
+});
+
+describe("ordem manual", () => {
+  beforeEach(() => fake.sheets.clear());
+
+  it("numera na ordem arrastada e, depois, redistribui as posições existentes", async () => {
+    const { s } = await setup();
+    const { reorderTransactions } = await import("./db");
+    const ids = ["A", "B", "C", "D"].map(d =>
+      s.insert("transactions", { userId: 1, competencyId: 1, type: "expense", category: "X", description: d, amount: "1", transactionDate: new Date(2026, 0, 1) }).id
+    );
+    const order = () =>
+      s.select("transactions").sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)).map(t => t.description);
+
+    await reorderTransactions([ids[2], ids[0], ids[3], ids[1]]);
+    expect(order()).toEqual(["C", "A", "D", "B"]);
+    expect(s.select("transactions").map(t => t.sortOrder).sort((a, b) => a! - b!)).toEqual([10, 20, 30, 40]);
+
+    // Arrastando só parte (ex.: lista filtrada), os outros não saem do lugar.
+    await reorderTransactions([ids[1], ids[0]]); // B antes de A
+    expect(order()).toEqual(["C", "B", "D", "A"]);
+  });
+});

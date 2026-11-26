@@ -105,10 +105,12 @@ Os vínculos ficam na aba `Vinculos` (`expenseId`, `incomeId`, `amount`).
 ## Cartão de crédito nos lançamentos
 
 - **Faturas agrupadas:** na lista de lançamentos, as compras de um cartão aparecem numa única linha **Fatura &lt;cartão&gt;**, com o vencimento e o valor total. Clique na linha (ou na seta) para expandir e ver cada compra; as compras continuam editáveis e selecionáveis.
-- **Mês do vencimento:** na visão **Mensal**, a fatura entra no mês em que vence (é quando o dinheiro sai); na visão **Competência**, na competência da fatura.
+- **Mês do vencimento:** nas duas visões (**Competência** e **Mensal**), a fatura entra no mês em que vence, que é quando o dinheiro sai. Ex.: em novembro aparece a fatura que vence em novembro (compras de outubro); as compras feitas em novembro aparecem em dezembro. O mesmo vale para o dashboard e os relatórios. Ao lançar uma compra no cartão, o app avisa em qual fatura ela entrou.
+- **Faturas por cartão:** em **Cartões**, selecione um cartão para ver as faturas dele, filtrando por ano e mês de vencimento. Cada fatura abre as compras e pode ser paga (total ou parcial) ou ter os pagamentos zerados. O antigo menu *Faturas* foi removido (`/invoices` leva para Cartões).
 - **Pagamento:** o botão **Pagar** da linha da fatura registra um pagamento **total** ou **parcial**. A fatura fica *Aberta*, *Parcial · falta R$ …* ou *Paga*, e o "Pago" do card de Cartão soma o que já foi pago nas faturas.
 - **Parcelamento:** em *Nova movimentação → Parcelada*, informe o **valor total** e o número de parcelas (2 a 72). O app cria uma parcela por mês com o valor dividido (a diferença de centavos fica na 1ª). No cartão, a 1ª parcela cai na fatura da data da compra, respeitando o dia de fechamento, e as seguintes nas faturas seguintes. A lista mostra "2/10" ao lado da descrição.
 - Compras simples no cartão também passam a ir para a fatura certa pelo dia de fechamento do cartão.
+- **Ordem manual:** arraste uma linha pela alça (⋮⋮) para mudar a posição; a linha de uma fatura leva todas as compras dela. Também funciona pelo teclado (foco na alça, espaço, setas, espaço). A ordem fica gravada na planilha (`Lancamentos.sortOrder`); ordenar por uma coluna sobrepõe a ordem manual, e o botão **Ordem manual** volta a ela.
 
 ---
 
@@ -186,13 +188,12 @@ VITE_BASE_URL: /financeiro-domestico/   # GitHub Pages padrão
 |---|---|
 | `/` | Landing page pública |
 | `/dashboard` | Resumo financeiro do mês atual |
-| `/lancamentos` | Lista e cadastro de movimentações — visão **Competência** ou **Mensal**; compras no cartão agrupadas por fatura (expansível, com pagamento parcial/total) |
-| `/cards` | Gerenciamento de cartões de crédito |
-| `/invoices` | Faturas dos cartões por competência |
+| `/lancamentos` | Lista e cadastro de movimentações — visão **Competência** ou **Mensal**; compras no cartão agrupadas por fatura (expansível, com pagamento parcial/total); ordem manual arrastando as linhas |
+| `/filters` | Filtros salvos para movimentações |
+| `/cards` | Cartões de crédito; ao selecionar um cartão, as faturas dele (filtro por ano e mês) |
 | `/calendar` | Visão calendário das movimentações |
 | `/reports` | Gráficos e relatórios financeiros |
 | `/export` | Exportação de dados (CSV/XLSX) |
-| `/filters` | Filtros salvos para movimentações |
 | `/competency-config` | Configuração de datas de competência |
 | `/recurring-installments` | Despesas fixas e parcelamentos |
 | `/settings` | Configurações da conta |

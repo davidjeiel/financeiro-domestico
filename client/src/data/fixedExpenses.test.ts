@@ -89,18 +89,23 @@ describe("despesas fixas × variáveis", () => {
     add("credit_card", "Alimentação", "300.10");
     add("income", "Salário", "8000");
 
-    const report = fixedVsVariableReport(s, 1, 2026, 3, 3);
+    // Compra no cartão conta no mês em que a fatura vence: o streaming de
+    // 03/03 (fechamento dia 28) vence em 05/04, então entra em abril.
+    const report = fixedVsVariableReport(s, 1, 2026, 4, 4);
     expect(report.months.map(m => [m.label, m.fixed, m.variable, m.income])).toEqual([
       ["jan/26", 0, 0, 0],
       ["fev/26", 2000, 0, 0],
-      ["mar/26", 2055.9, 450.1, 8000],
+      ["mar/26", 2000, 450.1, 8000],
+      ["abr/26", 55.9, 0, 0],
     ]);
-    expect(report.byCategory).toEqual([
+    expect(report.fixedItems.map(i => i.description)).toEqual(["Streaming"]);
+
+    const marchReport = fixedVsVariableReport(s, 1, 2026, 3, 1);
+    expect(marchReport.byCategory).toEqual([
       { category: "Moradia", fixed: 2000, variable: 150 },
       { category: "Alimentação", fixed: 0, variable: 300.1 },
-      { category: "Assinaturas", fixed: 55.9, variable: 0 },
     ]);
-    expect(report.fixedItems.map(i => i.description)).toEqual(["Aluguel", "Streaming"]);
+    expect(marchReport.fixedItems.map(i => i.description)).toEqual(["Aluguel"]);
   });
 
   it("sugere séries antigas sem marca e permite marcá-las como fixas", async () => {

@@ -310,7 +310,7 @@ export default function Dashboard() {
                       </div>
                       <CardInvoiceSummary
                         totals={cardTotals.get(card.id)}
-                        label={viewMode === "monthly" ? "Fatura do mês" : "Fatura da competência"}
+                        label="Fatura do mês"
                       />
                     </div>
                   </button>
