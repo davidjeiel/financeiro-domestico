@@ -44,6 +44,8 @@ let lastMaterializedDay: string | null = null;
 let loaded: Loaded | null = null;
 let lastRefresh = 0;
 let refreshing: Promise<void> | null = null;
+/** Motivo da última vez em que a área ativa não abriu e o app voltou para a pessoal. */
+let lastWorkspaceError: unknown = null;
 
 const sameEmail = (a?: string | null, b?: string | null) =>
   !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -113,6 +115,7 @@ async function load(): Promise<Loaded> {
 
   let store: SheetStore | null = null;
   let workspace: WorkspaceRef | null = null;
+  lastWorkspaceError = null;
 
   if (activeId && activeId !== personalId) {
     try {
@@ -122,6 +125,7 @@ async function load(): Promise<Loaded> {
       if (error instanceof GoogleAuthError) throw error;
       // Sem acesso (removido da área, planilha excluída…): volta para a pessoal.
       console.warn("Área de trabalho indisponível, voltando para a pessoal", error);
+      lastWorkspaceError = error;
       setActiveWorkspaceId(profile.sub, null);
       store = null;
       workspace = null;
@@ -267,14 +271,43 @@ export async function ensureRecurrences() {
   if (created.length || duplicatesRemoved) await store.commit();
 }
 
+/** Explica, em português, por que o app não conseguiu abrir uma área compartilhada. */
+export function workspaceAccessMessage(error: unknown): string {
+  if (error instanceof GoogleApiError && (error.status === 404 || error.status === 403)) {
+    return (
+      "O app ainda não tem acesso a esta planilha. Use \"Entrar em área compartilhada comigo\" e " +
+      "selecione a planilha na janela do Google, com a mesma conta que recebeu o convite."
+    );
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
 /** Troca a área de trabalho ativa e carrega a planilha dela. */
 export async function switchWorkspace(id: string | null) {
   const current = await ensureLoaded();
   const target = !id || id === current.personalId ? null : id;
-  if (target) await getWorkspaceFile(target); // falha cedo se não houver acesso
+  if (target) {
+    try {
+      const file = await getWorkspaceFile(target); // falha cedo se não houver acesso
+      if (file.kind !== "shared") {
+        throw new Error("Esta planilha é a área pessoal de alguém, não uma área compartilhada.");
+      }
+    } catch (error) {
+      if (error instanceof GoogleAuthError) throw error;
+      throw new Error(workspaceAccessMessage(error));
+    }
+  }
   setActiveWorkspaceId(current.profile.sub, target);
   loaded = null;
-  return (await ensureLoaded()).workspace;
+  const next = await ensureLoaded();
+  // A planilha foi encontrada mas não abriu: o load voltou para a pessoal.
+  // Antes isso acontecia em silêncio e a pessoa "não entrava" sem saber por quê.
+  if (target && next.workspace.id !== target) {
+    throw new Error(
+      `Não foi possível abrir a área compartilhada: ${workspaceAccessMessage(lastWorkspaceError)}`
+    );
+  }
+  return next.workspace;
 }
 
 export async function signIn() {

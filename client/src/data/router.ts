@@ -1076,8 +1076,11 @@ export const appRouter = router({
         await shareWorkspaceFile(
           active.id,
           input.email,
-          `${inviter} convidou você para a área "${active.name}" no Financeiro Doméstico. ` +
-            `Para entrar, abra: ${joinLink(active.id)}`
+          `${inviter} convidou você para a área "${active.name}" no Financeiro Doméstico.\n\n` +
+            `IMPORTANTE: não use o botão "Abrir" deste e-mail (ele abre só a planilha). ` +
+            `Para usar o app, abra este link e entre com esta conta Google (${input.email}):\n` +
+            `${joinLink(active.id)}\n\n` +
+            `Na primeira vez, selecione a planilha na janela do Google e clique em "Selecionar".`
         );
         await logAuditAction({
           workspaceId: 0,

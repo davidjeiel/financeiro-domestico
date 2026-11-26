@@ -257,8 +257,27 @@ export function getProfile() {
 
 const PICKER_SRC = "https://apis.google.com/js/api.js";
 const apiKey = import.meta.env.VITE_GOOGLE_API_KEY as string | undefined;
-/** Número do projeto no Google Cloud (necessário para o Picker liberar o arquivo). */
-const appId = import.meta.env.VITE_GOOGLE_APP_ID as string | undefined;
+/**
+ * Número do projeto no Google Cloud (necessário para o Picker liberar o arquivo).
+ *
+ * Tem de ser o *número* (só dígitos), não o ID textual do projeto: com um valor
+ * errado o Picker abre e "seleciona", mas o Google não libera a planilha para o
+ * app e o convidado nunca entra. O Client ID começa com esse número
+ * ("123456789012-xxxx.apps.googleusercontent.com"), então ele serve de reserva.
+ */
+export function resolveAppId(configured?: string, oauthClientId?: string): string | undefined {
+  const value = configured?.trim();
+  if (value && /^\d+$/.test(value)) return value;
+  const fromClient = oauthClientId?.match(/^(\d+)-/)?.[1];
+  if (value && fromClient) {
+    console.warn(
+      `VITE_GOOGLE_APP_ID ("${value}") não é o número do projeto; usando ${fromClient} (do Client ID).`
+    );
+  }
+  return fromClient ?? value;
+}
+
+const appId = resolveAppId(import.meta.env.VITE_GOOGLE_APP_ID as string | undefined, clientId);
 
 export function isPickerConfigured() {
   return Boolean(clientId && apiKey && appId);
@@ -308,7 +327,11 @@ export async function pickSharedSpreadsheet(fileId?: string): Promise<string | n
     .setMode(picker.DocsViewMode.LIST)
     .setIncludeFolders(false);
   if (fileId && typeof view.setFileIds === "function") view.setFileIds(fileId);
-  else view.setQuery("Financeiro Doméstico");
+  else {
+    // Só planilhas compartilhadas com a pessoa (a pessoal dela não interessa aqui).
+    view.setOwnedByMe(false);
+    view.setQuery("Financeiro Doméstico");
+  }
 
   return new Promise<string | null>(resolve => {
     new picker.PickerBuilder()

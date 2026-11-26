@@ -48,7 +48,7 @@ A lógica que antes ficava no servidor (router tRPC) agora roda no navegador via
    - `http://localhost:3000` (desenvolvimento)
    - `https://davidjeiel.github.io` (GitHub Pages)
 5. Copie o Client ID para a variável `VITE_GOOGLE_CLIENT_ID`.
-6. *(Para áreas compartilhadas)* Ative também a **Google Picker API**, crie uma **Chave de API** em **Credenciais** (restrinja às mesmas origens e às APIs Picker/Drive) e anote o **Número do projeto** (Painel do projeto). Eles vão nas variáveis `VITE_GOOGLE_API_KEY` e `VITE_GOOGLE_APP_ID`.
+6. *(Para áreas compartilhadas)* Ative também a **Google Picker API**, crie uma **Chave de API** em **Credenciais** (restrinja às mesmas origens e às APIs Picker/Drive) e anote o **Número do projeto** (Painel do projeto). Eles vão nas variáveis `VITE_GOOGLE_API_KEY` e `VITE_GOOGLE_APP_ID`. O `VITE_GOOGLE_APP_ID` precisa ser o **número** (só dígitos), não o ID textual do projeto; se estiver vazio ou errado, o app usa o número que aparece no início do Client ID.
 
 ---
 
@@ -66,6 +66,8 @@ A área ativa é escolhida no seletor da barra lateral.
 1. Na área compartilhada, em **Áreas e pessoas**, informe o e-mail Google da pessoa e clique em **Convidar**.
 2. O app compartilha a planilha pelo Google Drive (permissão de edição) e o Google envia um e-mail com o link `…/join/<id>`.
 3. A pessoa abre o link, entra com a conta Google e, na primeira vez, seleciona a planilha na janela do Google (**Google Picker**). Isso é exigido pelo escopo `drive.file`: o app só acessa arquivos criados por ele para aquele usuário ou escolhidos no Picker.
+
+> **O botão "Abrir" do e-mail do Google abre só a planilha, não o app.** Quem entrar no app pelo endereço normal não verá a área até liberá-la: no seletor **Área de trabalho** da barra lateral, escolha **➕ Entrar em área compartilhada comigo…** (ou o botão de mesmo nome em **Áreas e pessoas**) e selecione a planilha. Se a área não abrir, o app agora mostra o motivo em vez de voltar em silêncio para a Pessoal.
 
 **Responsável pelo pagamento**
 
