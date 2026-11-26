@@ -10,6 +10,10 @@ import {
   filterTransactionsByDateRange,
   generateRecurringDates,
   getCompetencyForTransaction,
+  competencyEndDayFor,
+  competencyOfDate,
+  competencyPeriod,
+  normalizeStartDay,
   type RecurrenceFrequency,
 } from "./competencyLogic";
 import { getStore } from "./session";
@@ -44,13 +48,32 @@ export function competencyName(year: number, month: number) {
 
 // ─── Competências ────────────────────────────────────────────────────────────
 
+/**
+ * Dia em que a competência começa, gravado na linha do dono dos dados (na
+ * área compartilhada vale para todos). 1 = mês do calendário.
+ */
+export function competencyStartDayOf(s: SheetStore, userId: number): number {
+  return normalizeStartDay(s.find("users", u => u.id === userId)?.competencyStartDay);
+}
+
+/** Competência (ano/mês) em que um lançamento que não é de cartão entra, pela data. */
+export function competencyOfDateFor(s: SheetStore, userId: number, date: Date) {
+  return competencyOfDate(date, competencyStartDayOf(s, userId));
+}
+
+/** Competência com o intervalo de datas que ela cobre (para exibir). */
+function withPeriod<T extends { year: number; month: number }>(s: SheetStore, userId: number, c: T) {
+  const { start, end } = competencyPeriod(c.year, c.month, competencyStartDayOf(s, userId));
+  return { ...c, periodStart: start, periodEnd: end };
+}
+
 export async function getOrCreateCompetencyByYearMonth(userId: number, year: number, month: number) {
   const s = getStore();
   const existing = s.find(
     "competencies",
     c => c.userId === userId && c.year === year && c.month === month
   );
-  if (existing) return existing;
+  if (existing) return withPeriod(s, userId, existing);
 
   const created = s.insert("competencies", {
     userId,
@@ -59,12 +82,60 @@ export async function getOrCreateCompetencyByYearMonth(userId: number, year: num
     name: competencyName(year, month),
   });
   await s.commit();
-  return created;
+  return withPeriod(s, userId, created);
 }
 
+/** Competência de hoje — com início no dia 30, em 26/11 ainda é a de outubro. */
 export function getOrCreateCurrentCompetency(userId: number) {
-  const now = new Date();
-  return getOrCreateCompetencyByYearMonth(userId, now.getFullYear(), now.getMonth() + 1);
+  const { year, month } = competencyOfDateFor(getStore(), userId, new Date());
+  return getOrCreateCompetencyByYearMonth(userId, year, month);
+}
+
+export function getCompetencyConfig(userId: number) {
+  const startDay = competencyStartDayOf(getStore(), userId);
+  return { startDay, endDay: competencyEndDayFor(startDay) };
+}
+
+/**
+ * Lançamentos (fora do cartão) que estão numa competência diferente da que a
+ * data deles indica, com o dia inicial informado. Cartão segue a fatura.
+ */
+export function findCompetencyMismatches(s: SheetStore, userId: number, startDay: number) {
+  const competencies = new Map(s.select("competencies", c => c.userId === userId).map(c => [c.id, c]));
+  return s
+    .select("transactions", t => t.userId === userId && t.type !== "credit_card")
+    .flatMap(t => {
+      const expected = competencyOfDate(t.transactionDate, startDay);
+      const current = competencies.get(t.competencyId);
+      if (current && current.year === expected.year && current.month === expected.month) return [];
+      return [{ transaction: t, expected }];
+    });
+}
+
+/** Quantos lançamentos mudariam de competência com este dia inicial. */
+export function previewCompetencyStartDay(userId: number, startDay: number) {
+  return { affected: findCompetencyMismatches(getStore(), userId, normalizeStartDay(startDay)).length };
+}
+
+/**
+ * Grava o dia inicial da competência e reorganiza os lançamentos (fora do
+ * cartão) pela data, para que cada competência mostre o período configurado.
+ */
+export async function setCompetencyStartDay(userId: number, startDay: number) {
+  const s = getStore();
+  const day = normalizeStartDay(startDay);
+  s.update("users", u => u.id === userId, {
+    competencyStartDay: day,
+    competencyEndDay: competencyEndDayFor(day),
+  });
+  const mismatches = findCompetencyMismatches(s, userId, day);
+  for (const { transaction, expected } of mismatches) {
+    s.update("transactions", t => t.id === transaction.id, {
+      competencyId: ensureCompetency(s, userId, expected.year, expected.month),
+    });
+  }
+  await s.commit();
+  return { startDay: day, endDay: competencyEndDayFor(day), moved: mismatches.length };
 }
 
 export async function getUserCompetencies(userId: number) {
@@ -96,7 +167,8 @@ export async function createCreditCard(data: Insert<"creditCards">) {
 export function monthOfTransaction(s: SheetStore, t: Transaction): { year: number; month: number } | null {
   if (t.type === "credit_card" && t.creditCardId) {
     const due = invoiceDueDateOf(s, t);
-    if (due) return { year: due.getFullYear(), month: due.getMonth() + 1 };
+    // A fatura entra na competência cujo período contém o vencimento.
+    if (due) return competencyOfDateFor(s, t.userId, due);
   }
   const c = s.find("competencies", x => x.id === t.competencyId);
   return c ? { year: c.year, month: c.month } : null;
@@ -281,7 +353,7 @@ export async function createInstallmentTransactions(
     const transactionDate = addMonthsClamped(data.firstDate, i);
     const { year, month } = card
       ? shiftCompetency(first.year, first.month, i)
-      : { year: transactionDate.getFullYear(), month: transactionDate.getMonth() + 1 };
+      : competencyOfDateFor(s, userId, transactionDate);
     return s.insert("transactions", {
       userId,
       competencyId: ensureCompetency(s, userId, year, month),
@@ -309,8 +381,9 @@ export async function createInstallmentTransactions(
 }
 
 /**
- * Competência certa de uma compra no cartão, pelo dia de fechamento do cartão.
- * Para outros tipos, a competência informada.
+ * Competência certa de um lançamento novo: compra no cartão pelo dia de
+ * fechamento do cartão; os demais pela data e pelo período de competência
+ * configurado. A informada só vale se a data não puder ser usada.
  */
 export function resolveCompetencyForCreate(
   userId: number,
@@ -319,8 +392,12 @@ export function resolveCompetencyForCreate(
   transactionDate: Date,
   fallbackCompetencyId: number
 ) {
-  if (type !== "credit_card" || !creditCardId) return fallbackCompetencyId;
   const s = getStore();
+  if (type !== "credit_card" || !creditCardId) {
+    if (Number.isNaN(transactionDate.getTime())) return fallbackCompetencyId;
+    const { year, month } = competencyOfDateFor(s, userId, transactionDate);
+    return ensureCompetency(s, userId, year, month);
+  }
   const card = s.find("creditCards", c => c.id === creditCardId);
   if (!card) return fallbackCompetencyId;
   const { year, month } = getCompetencyForTransaction(transactionDate, card);
@@ -379,6 +456,21 @@ export async function updateTransaction(id: number, updates: Insert<"transaction
   const s = getStore();
   const before = s.find("transactions", t => t.id === id);
   s.update("transactions", t => t.id === id, updates);
+  // Mudou a data (ou deixou de ser cartão): a competência acompanha a data.
+  const after = s.find("transactions", t => t.id === id);
+  if (
+    before &&
+    after &&
+    after.type !== "credit_card" &&
+    (before.type !== after.type ||
+      before.transactionDate.getTime() !== after.transactionDate.getTime())
+  ) {
+    const { year, month } = competencyOfDateFor(s, after.userId, after.transactionDate);
+    const competencyId = ensureCompetency(s, after.userId, year, month);
+    if (competencyId !== after.competencyId) {
+      s.update("transactions", t => t.id === id, { competencyId });
+    }
+  }
   syncInvoicesTouchedBy(s, before, s.find("transactions", t => t.id === id));
   cleanupAllocationsAfterUpdate(s, id);
   await s.commit();

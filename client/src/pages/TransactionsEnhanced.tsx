@@ -120,6 +120,22 @@ const FREQUENCIES = {
   annual: "Anual",
 };
 
+/** "30/11 a 29/12" — período da competência, quando não é o mês do calendário. */
+function competencyRangeLabel(
+  competency: { periodStart?: Date; periodEnd?: Date } | null | undefined
+): string | null {
+  if (!competency?.periodStart || !competency.periodEnd) return null;
+  const start = new Date(competency.periodStart);
+  const end = new Date(competency.periodEnd);
+  const isCalendarMonth =
+    start.getDate() === 1 &&
+    end.getMonth() === start.getMonth() &&
+    new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1).getDate() === 1;
+  if (isCalendarMonth) return null;
+  const fmt = (d: Date) => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  return `${fmt(start)} a ${fmt(end)}`;
+}
+
 export default function TransactionsEnhanced() {
   const { data: currentCompetency } = trpc.competency.current.useQuery();
 
@@ -550,6 +566,21 @@ export default function TransactionsEnhanced() {
         ];
       }
 
+      // Lançamento simples fora do cartão vai para a competência da data dele.
+      const landed = createdTransactions[0] as { competencyId?: number } | undefined;
+      if (
+        data.transactionType === "simple" &&
+        data.type !== "credit_card" &&
+        !!landed?.competencyId &&
+        !!activeCompetency &&
+        landed.competencyId !== activeCompetency.id
+      ) {
+        toast.info("Pela data, o lançamento entrou em outra competência", {
+          description: `Ele aparece na competência que contém ${new Date(
+            `${data.transactionDate}T00:00:00`
+          ).toLocaleDateString("pt-BR")}.`,
+        });
+      }
       toast.success(
         data.transactionType === "recurring"
           ? data.endDate
@@ -1274,7 +1305,9 @@ export default function TransactionsEnhanced() {
             <span className="min-w-[160px] text-center select-none leading-tight">
               <span className="block text-base font-semibold">{activeCompetency?.name ?? "..."}</span>
               <span className="block text-xs text-muted-foreground">
-                {viewMode === "monthly" ? "mês do calendário" : "competência"}
+                {viewMode === "monthly"
+                  ? "mês do calendário"
+                  : competencyRangeLabel(activeCompetency) ?? "competência"}
               </span>
             </span>
             <Button variant="outline" size="icon" onClick={goNext} title="Próximo período">
