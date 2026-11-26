@@ -3,7 +3,8 @@
  *
  * Em vez de gravar todas as ocorrências de uma vez (o que exigia data final),
  * a planilha guarda a **regra** (aba Recorrencias) e o app gera as ocorrências
- * só até o fim do mês seguinte (1 mês de antecedência). Cada ocorrência é um
+ * até o fim do 12º mês à frente (1 ano de antecedência), completando conforme o
+ * tempo passa. Cada ocorrência é um
  * lançamento normal, marcado com a série (recurrenceGroup) e a data da
  * ocorrência (recurrenceDate) — a chave que impede gerar duas vezes.
  *
@@ -17,13 +18,13 @@ import type { RecurrenceRule, Transaction, TransactionType } from "./schema";
 import { generateRecurringDates, getCompetencyForTransaction, type RecurrenceFrequency } from "./competencyLogic";
 import { ensureCompetency, newRecurrenceGroup, recalcInvoice } from "./db";
 
-/** Meses de antecedência com que as ocorrências são geradas. */
-export const HORIZON_MONTHS = 1;
+/** Meses de antecedência com que as ocorrências são geradas (1 ano). */
+export const HORIZON_MONTHS = 12;
 
 export const dateKey = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-/** Último dia do mês seguinte a `today` (até onde as ocorrências são geradas). */
+/** Último dia do mês HORIZON_MONTHS à frente de `today` (até onde as ocorrências são geradas). */
 export function horizonEnd(today: Date) {
   return new Date(today.getFullYear(), today.getMonth() + 1 + HORIZON_MONTHS, 0);
 }
@@ -329,4 +330,91 @@ export function listRecurrences(s: SheetStore, ownerId: number, today = new Date
   return [...rules, ...legacy].sort(
     (a, b) => Number(a.ended) - Number(b.ended) || a.description.localeCompare(b.description, "pt-BR")
   );
+}
+
+// ─── Excluir lançamento recorrente ──────────────────────────────────────────
+
+/**
+ * this        → só esta ocorrência (a data não volta a ser gerada);
+ * future      → esta e as próximas não pagas; a recorrência é encerrada;
+ * all_unpaid  → além disso, as anteriores não pagas. As pagas ficam no histórico.
+ */
+export type RecurringDeleteScope = "this" | "future" | "all_unpaid";
+
+const occurrenceKey = (t: Pick<Transaction, "recurrenceDate" | "transactionDate">) =>
+  t.recurrenceDate ?? dateKey(t.transactionDate);
+
+function seriesAround(s: SheetStore, transactionId: number) {
+  const t = s.find("transactions", x => x.id === transactionId);
+  if (!t) throw new Error("Lançamento não encontrado.");
+  if (!t.recurrenceGroup) return { t, future: [] as Transaction[], past: [] as Transaction[] };
+  const key = occurrenceKey(t);
+  const others = s.select(
+    "transactions",
+    x => x.userId === t.userId && x.recurrenceGroup === t.recurrenceGroup && x.id !== t.id
+  );
+  return {
+    t,
+    future: others.filter(x => occurrenceKey(x) > key),
+    past: others.filter(x => occurrenceKey(x) <= key),
+  };
+}
+
+/** Quantos lançamentos cada opção de exclusão alcança (para a pergunta ao usuário). */
+export function recurringDeletePreview(s: SheetStore, transactionId: number) {
+  const { t, future, past } = seriesAround(s, transactionId);
+  return {
+    recurring: !!t.recurrenceGroup,
+    type: t.type,
+    description: t.description || t.category,
+    futureUnpaid: future.filter(x => !x.isPaid).length,
+    futurePaid: future.filter(x => !!x.isPaid).length,
+    pastUnpaid: past.filter(x => !x.isPaid).length,
+    pastPaid: past.filter(x => !!x.isPaid).length,
+    lastFutureDate: future.length ? future.map(occurrenceKey).sort().at(-1)! : null,
+  };
+}
+
+/** Remove lançamentos, os vínculos com receitas e refaz as faturas afetadas. */
+function removeTransactions(s: SheetStore, list: Transaction[]) {
+  const ids = new Set(list.map(t => t.id));
+  s.delete("transactions", t => ids.has(t.id));
+  s.delete("incomeAllocations", a => ids.has(a.expenseId) || ids.has(a.incomeId));
+  new Set(list.filter(t => t.creditCardId).map(t => `${t.userId}:${t.creditCardId}:${t.competencyId}`)).forEach(k => {
+    const [owner, card, comp] = k.split(":").map(Number);
+    recalcInvoice(s, owner, card, comp);
+  });
+}
+
+export function deleteRecurring(s: SheetStore, transactionId: number, scope: RecurringDeleteScope) {
+  const { t, future, past } = seriesAround(s, transactionId);
+  const rule = ruleOfTransaction(s, t);
+
+  if (scope === "this" || !t.recurrenceGroup) {
+    removeTransactions(s, [t]);
+    skipOccurrence(s, t);
+    return { removed: 1, keptPaid: 0, ended: false };
+  }
+
+  const doomed = [t, ...future.filter(x => !x.isPaid), ...(scope === "all_unpaid" ? past.filter(x => !x.isPaid) : [])];
+  const keptPaid = future.filter(x => !!x.isPaid).length + (scope === "all_unpaid" ? past.filter(x => !!x.isPaid).length : 0);
+  removeTransactions(s, doomed);
+  // As removidas não voltam (as anteriores ainda estariam dentro do período da regra).
+  doomed.forEach(x => skipOccurrence(s, x));
+
+  if (rule) {
+    const remaining = s.select("transactions", x => x.userId === t.userId && x.recurrenceGroup === t.recurrenceGroup);
+    if (remaining.length === 0) {
+      // Nada sobrou da série: a regra sai também.
+      s.delete("recurrenceRules", r => r.id === rule.id);
+    } else {
+      // Encerra no dia anterior a esta ocorrência: a regra não gera mais nada
+      // daqui em diante (ocorrências futuras pagas, se houver, continuam).
+      const [y, m, d] = occurrenceKey(t).split("-").map(Number);
+      const lastDay = new Date(y, m - 1, d - 1);
+      const end = rule.endDate && rule.endDate < lastDay ? rule.endDate : lastDay;
+      s.update("recurrenceRules", r => r.id === rule.id, { endDate: end });
+    }
+  }
+  return { removed: doomed.length, keptPaid, ended: true };
 }

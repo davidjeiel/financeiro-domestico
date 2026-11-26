@@ -41,6 +41,7 @@ import EditTransactionModal from "@/components/EditTransactionModal";
 import SavedFiltersSelector, { type AppliedSavedFilter } from "@/components/SavedFiltersSelector";
 import { PaymentStatusIcon, PaymentStatusUnknown, paymentStatusOf } from "@/components/PaymentStatusIcon";
 import { CARD_ROW_CLASS, cardRowStyle } from "@/lib/cardTint";
+import { RecurringDeleteDialog } from "@/components/RecurringDeleteDialog";
 import {
   applyFilterCriteria,
   countCriteria,
@@ -552,7 +553,7 @@ export default function TransactionsEnhanced() {
       toast.success(
         data.transactionType === "recurring"
           ? data.endDate
-            ? `Recorrência criada: ${createdTransactions.length} lançamento(s) até o mês que vem; os demais são gerados com 1 mês de antecedência.`
+            ? `Recorrência criada: ${createdTransactions.length} lançamento(s) para os próximos 12 meses; os seguintes são gerados automaticamente.`
             : `Recorrência sem data final criada: ${createdTransactions.length} lançamento(s) até o mês que vem; os próximos são gerados automaticamente.`
           : data.transactionType === "installment"
             ? `${createdTransactions.length} parcelas de ${formatCurrency(createdTransactions[createdTransactions.length - 1]?.amount ?? 0)} criadas.`
@@ -1218,6 +1219,10 @@ export default function TransactionsEnhanced() {
     ].filter((c): c is string => !!c))
   ).sort((a, b) => a.localeCompare(b, "pt-BR"));
 
+  const deletingIsRecurring =
+    deletingTransactionId != null &&
+    !!transactions?.find(t => t.id === deletingTransactionId)?.recurrenceGroup;
+
   const hasActiveFilters =
     !!filterStartDate || !!filterEndDate ||
     countCriteria(advancedFilters) > 0 ||
@@ -1524,7 +1529,7 @@ export default function TransactionsEnhanced() {
                         className="input-elegant w-full"
                       />
                       <p className="text-xs text-muted-foreground mt-1">
-                        Em branco, repete sem fim. Os lançamentos são gerados com 1 mês de antecedência.
+                        Em branco, repete sem fim. Os lançamentos são gerados com 1 ano (12 meses) de antecedência.
                       </p>
                       {errors.endDate && <p className="text-red-600 text-sm mt-1">{errors.endDate.message}</p>}
                     </div>
@@ -2160,7 +2165,7 @@ export default function TransactionsEnhanced() {
 
         {/* Individual Delete Modal */}
         <BulkDeleteModal
-          isOpen={showDeleteIndividual}
+          isOpen={showDeleteIndividual && !deletingIsRecurring}
           selectedIds={deletingTransactionId ? [deletingTransactionId] : []}
           onClose={() => {
             setShowDeleteIndividual(false);
@@ -2171,6 +2176,17 @@ export default function TransactionsEnhanced() {
             utils.allocation.invalidate();
             utils.invoice.invalidate();
           }}
+        />
+
+        {/* Lançamento recorrente: pergunta se exclui só este, os próximos ou também os anteriores não pagos */}
+        <RecurringDeleteDialog
+          open={showDeleteIndividual && deletingIsRecurring}
+          transactionId={deletingTransactionId}
+          onClose={() => {
+            setShowDeleteIndividual(false);
+            setDeletingTransactionId(null);
+          }}
+          onDeleted={() => setSelectedTransactionIds(ids => ids.filter(id => id !== deletingTransactionId))}
         />
       </div>
     </DashboardLayoutCustom>

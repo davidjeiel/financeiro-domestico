@@ -259,7 +259,7 @@ export default function RecurringAndInstallments() {
                 </span>
               </label>
               <p className="text-xs text-muted-foreground">
-                Os lançamentos são gerados com 1 mês de antecedência; os seguintes aparecem automaticamente.
+                Os lançamentos são gerados com 1 ano (12 meses) de antecedência; os seguintes aparecem automaticamente.
               </p>
 
               <Button

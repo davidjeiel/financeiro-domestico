@@ -196,7 +196,7 @@ export async function createTransaction(data: Insert<"transactions">) {
 
 /**
  * Lançamento fixo/recorrente: grava a regra (aba Recorrencias) e gera as
- * ocorrências até o fim do mês seguinte. Sem `endDate`, repete sem fim — as
+ * ocorrências até 12 meses à frente. Sem `endDate`, repete sem fim — as
  * próximas ocorrências são geradas conforme o tempo passa.
  */
 export async function createRecurringTransactions(

@@ -365,7 +365,7 @@ export default function EditTransactionModal({
                     {recurrenceInfo.endDate
                       ? ` até ${new Date(recurrenceInfo.endDate).toLocaleDateString('pt-BR')}`
                       : ' · sem data final'}
-                    {' · '}gerado com 1 mês de antecedência
+                    {' · '}gerado com 1 ano de antecedência
                   </p>
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input

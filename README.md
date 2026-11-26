@@ -124,10 +124,14 @@ Os vínculos ficam na aba `Vinculos` (`expenseId`, `incomeId`, `amount`).
 ## Lançamentos fixos sem data final
 
 - Ao criar um lançamento **Recorrente** (em Lançamentos ou Fixos/Parcelados), a **data limite é opcional**: em branco, repete sem fim.
-- A planilha guarda a **regra** (aba `Recorrencias`), e o app gera os lançamentos **com 1 mês de antecedência** (até o fim do mês seguinte). Os próximos aparecem sozinhos conforme o tempo passa (ao abrir o app, e uma vez por dia com ele aberto). Cada ocorrência leva a série (`recurrenceGroup`) e a data (`recurrenceDate`), o que impede gerar duas vezes — inclusive com duas pessoas numa área compartilhada.
+- A planilha guarda a **regra** (aba `Recorrencias`), e o app gera os lançamentos **com 1 ano de antecedência** (até o fim do 12º mês à frente), então a despesa ou receita aparece em todos os meses do próximo ano. Os seguintes aparecem sozinhos conforme o tempo passa (ao abrir o app, e uma vez por dia com ele aberto). Cada ocorrência leva a série (`recurrenceGroup`) e a data (`recurrenceDate`), o que impede gerar duas vezes — inclusive com duas pessoas numa área compartilhada.
 - **Valor estimado:** com *O valor muda a cada mês* marcado (padrão), cada ocorrência nasce como **≈ estimado** (`isEstimated`) até o valor real ser confirmado: botão ✓ na lista, editar o valor (ou marcar *Valor confirmado*) ou marcar como pago. Os cards de totais mostram quanto ainda é estimativa.
 - **Na edição de uma ocorrência:** *Aplicar valor, descrição, categoria e responsável aos próximos meses* (não mexe nos pagos) e *Encerrar recorrência após este lançamento* (remove as futuras não pagas).
-- **Excluir** uma ocorrência pula aquele mês (a regra não recria).
+- **Excluir** um lançamento recorrente pergunta o alcance, mostrando quantos lançamentos cada opção remove:
+  - *Somente esta* — as outras continuam; aquela data não volta a ser gerada.
+  - *Esta e as próximas* — remove as futuras não pagas e encerra a recorrência (futuras já pagas ficam).
+  - *Esta, as próximas e as anteriores não pagas* — também limpa o que ficou para trás sem pagamento; as pagas continuam no histórico. Se nada sobrar, a regra é apagada.
+  Vínculos com receitas dos lançamentos removidos também saem. A exclusão em lote continua removendo só os lançamentos selecionados.
 - **Fixos/Parcelados** lista as recorrências gravadas, com a próxima data e quantas estão estimadas; dá para **encerrar**. Séries antigas, criadas com data final, podem **continuar sem data final**.
 
 ---

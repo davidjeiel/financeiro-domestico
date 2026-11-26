@@ -85,7 +85,9 @@ import { fixedVsVariableReport, suggestRecurringSeries } from "./fixedExpenses";
 import {
   applyFromOccurrence,
   continueSeries,
+  deleteRecurring,
   endRecurrence,
+  recurringDeletePreview,
   listRecurrences,
   materializeRecurrences,
   ruleOfTransaction,
@@ -122,7 +124,7 @@ const recurringTransactionSchema = z
     notes: z.string().optional(),
     frequency: z.enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"]),
     startDate: dateOnlySchema,
-    // Sem data final: repete sem fim (ocorrências geradas com 1 mês de antecedência).
+    // Sem data final: repete sem fim (ocorrências geradas com 1 ano de antecedência).
     endDate: dateOnlySchema.optional().nullable(),
     responsibleUserId: z.number().int().nullable().optional(),
     /** O valor muda a cada mês: as ocorrências ficam como estimadas até confirmar. */
@@ -553,10 +555,20 @@ export const appRouter = router({
         return updateTransaction(id, updates);
       }),
     delete: protectedProcedure
-      .input(z.object({ id: z.number() }))
-      .mutation(({ input }) =>
-        deleteTransaction(input.id)
-      ),
+      .input(
+        z.object({
+          id: z.number(),
+          /** Lançamento recorrente: só este, este e os próximos, ou também os anteriores não pagos. */
+          scope: z.enum(["this", "future", "all_unpaid"]).optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        if (!input.scope || input.scope === "this") return deleteTransaction(input.id);
+        const s = getStore();
+        const result = deleteRecurring(s, input.id, input.scope);
+        await s.commit();
+        return { success: true as const, ...result };
+      }),
     markAsPaid: protectedProcedure
       .input(z.object({ id: z.number(), isPaid: z.boolean() }))
       .mutation(({ input }) => {
@@ -925,6 +937,10 @@ export const appRouter = router({
   }),
 
   recurrence: router({
+    /** Quantos lançamentos cada opção de exclusão alcança. */
+    deletePreview: protectedProcedure
+      .input(z.object({ id: z.number().int() }))
+      .query(({ input }) => recurringDeletePreview(getStore(), input.id)),
     /** Regras (com ou sem data final) e séries antigas, para a tela de Fixos. */
     list: protectedProcedure.query(() => listRecurrences(getStore(), getDataUserId())),
     /** Série antiga (criada com data final): passa a continuar sem fim. */

@@ -150,7 +150,7 @@ async function load(): Promise<Loaded> {
   if (store.select("typologies", t => t.userId === owner.id).length === 0) {
     createDefaultTypologies(store, owner.id);
   }
-  // Lançamentos fixos sem data final: gera o que faltar até o mês seguinte.
+  // Lançamentos fixos sem data final: gera o que faltar até 12 meses à frente.
   materializeRecurrences(store, owner.id);
   lastMaterializedDay = dateKey(new Date());
   await store.commit();
