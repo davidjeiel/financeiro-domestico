@@ -8,6 +8,7 @@
 import type { SheetStore } from "./sheetStore";
 import type { Transaction } from "./schema";
 import { shiftCompetency } from "./competencyLogic";
+import { monthOfTransaction } from "./db";
 
 const isExpense = (t: Transaction) => t.type === "expense" || t.type === "credit_card";
 export const isFixed = (t: Pick<Transaction, "recurrence">) => !!t.recurrence;
@@ -23,21 +24,19 @@ export function fixedVsVariableReport(
   month: number,
   monthsBack = 6
 ) {
-  const competencies = s.select("competencies", c => c.userId === ownerId);
   const compKey = (y: number, m: number) => `${y}-${m}`;
-  const compIdsByKey = new Map<string, number[]>();
-  for (const c of competencies) {
-    const key = compKey(c.year, c.month);
-    compIdsByKey.set(key, [...(compIdsByKey.get(key) ?? []), c.id]);
-  }
-  const txs = s.select("transactions", t => t.userId === ownerId);
+  // Mês de cada lançamento (compras no cartão: mês de vencimento da fatura).
+  const txs = s.select("transactions", t => t.userId === ownerId).map(t => {
+    const m = monthOfTransaction(s, t);
+    return { t, key: m ? compKey(m.year, m.month) : "" };
+  });
 
   const months = Array.from({ length: monthsBack }, (_, i) => {
     const { year: y, month: m } = shiftCompetency(year, month, i - (monthsBack - 1));
-    const ids = new Set(compIdsByKey.get(compKey(y, m)) ?? []);
+    const key = compKey(y, m);
     let fixed = 0, variable = 0, income = 0;
-    for (const t of txs) {
-      if (!ids.has(t.competencyId)) continue;
+    for (const { t, key: txKey } of txs) {
+      if (txKey !== key) continue;
       if (t.type === "income") income += cents(t.amount);
       else if (isExpense(t)) isFixed(t) ? (fixed += cents(t.amount)) : (variable += cents(t.amount));
     }
@@ -51,8 +50,8 @@ export function fixedVsVariableReport(
     };
   });
 
-  const currentIds = new Set(compIdsByKey.get(compKey(year, month)) ?? []);
-  const currentExpenses = txs.filter(t => currentIds.has(t.competencyId) && isExpense(t));
+  const currentKey = compKey(year, month);
+  const currentExpenses = txs.filter(x => x.key === currentKey && isExpense(x.t)).map(x => x.t);
   const byCategory = new Map<string, { fixed: number; variable: number }>();
   for (const t of currentExpenses) {
     const entry = byCategory.get(t.category) ?? { fixed: 0, variable: 0 };

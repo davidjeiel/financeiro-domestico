@@ -87,9 +87,36 @@ export async function createCreditCard(data: Insert<"creditCards">) {
 
 // ─── Transações ──────────────────────────────────────────────────────────────
 
+/**
+ * Mês (ano/mês) em que um lançamento pesa no orçamento: o da competência
+ * dele, exceto compras no cartão, que contam no mês em que a fatura vence
+ * (é quando o dinheiro sai).
+ */
+export function monthOfTransaction(s: SheetStore, t: Transaction): { year: number; month: number } | null {
+  if (t.type === "credit_card" && t.creditCardId) {
+    const due = invoiceDueDateOf(s, t);
+    if (due) return { year: due.getFullYear(), month: due.getMonth() + 1 };
+  }
+  const c = s.find("competencies", x => x.id === t.competencyId);
+  return c ? { year: c.year, month: c.month } : null;
+}
+
+/**
+ * Lançamentos de uma competência. Compras no cartão entram pela fatura que
+ * vence no mês da competência (ex.: em novembro, a fatura que vence em
+ * novembro — e não as compras de novembro, que vencem em dezembro).
+ */
 export async function getCompetencyTransactions(competencyId: number) {
-  return getStore()
-    .select("transactions", t => t.competencyId === competencyId)
+  const s = getStore();
+  const comp = s.find("competencies", c => c.id === competencyId);
+  if (!comp) return [];
+  return s
+    .select("transactions", t => t.userId === comp.userId)
+    .filter(t => {
+      if (t.type !== "credit_card" || !t.creditCardId) return t.competencyId === competencyId;
+      const m = monthOfTransaction(s, t);
+      return !!m && m.year === comp.year && m.month === comp.month;
+    })
     .sort((a, b) => b.transactionDate.getTime() - a.transactionDate.getTime());
 }
 
@@ -365,6 +392,26 @@ export async function setRecurrence(ids: number[], frequency: string | null) {
   return { count: ids.length };
 }
 
+/**
+ * Grava a ordem escolhida ao arrastar: os ids vêm na ordem desejada. Se os
+ * lançamentos já tinham posições, elas são redistribuídas entre eles (para
+ * não embaralhar os que ficaram escondidos por filtros); senão, numera 10, 20…
+ */
+export async function reorderTransactions(ids: number[]) {
+  const s = getStore();
+  const current = ids.map(id => s.find("transactions", t => t.id === id)?.sortOrder ?? null);
+  const usable =
+    current.every((v): v is number => v != null) && new Set(current).size === current.length;
+  const positions = usable
+    ? [...(current as number[])].sort((a, b) => a - b)
+    : ids.map((_, i) => (i + 1) * 10);
+  ids.forEach((id, i) => {
+    s.update("transactions", t => t.id === id, { sortOrder: positions[i] });
+  });
+  await s.commit();
+  return { count: ids.length };
+}
+
 export async function getTransactionById(id: number) {
   return getStore().find("transactions", t => t.id === id);
 }
@@ -486,6 +533,48 @@ export function syncAllInvoices(s: SheetStore, userId: number) {
   });
   const after = JSON.stringify(s.select("invoices").map(i => [i.id, i.totalAmount, i.status]));
   return before === after ? 0 : 1;
+}
+
+/**
+ * Faturas de um cartão, com as compras de cada uma, da mais nova para a mais
+ * antiga (pelo vencimento). Faturas vazias (sem compras e sem pagamento) ficam
+ * de fora.
+ */
+export function invoicesForCard(s: SheetStore, userId: number, creditCardId: number) {
+  syncAllInvoices(s, userId);
+  const purchases = s.select(
+    "transactions",
+    t => t.userId === userId && t.type === "credit_card" && t.creditCardId === creditCardId
+  );
+  return s
+    .select("invoices", i => i.userId === userId && i.creditCardId === creditCardId)
+    .map(inv => {
+      const items = purchases
+        .filter(t => t.competencyId === inv.competencyId)
+        .sort((a, b) => a.transactionDate.getTime() - b.transactionDate.getTime())
+        .map(t => ({
+          id: t.id,
+          transactionDate: t.transactionDate,
+          description: t.description || t.category,
+          category: t.category,
+          amount: Number(t.amount),
+          installments: t.installments,
+          currentInstallment: t.currentInstallment,
+          recurrence: t.recurrence,
+        }));
+      return {
+        id: inv.id,
+        competencyId: inv.competencyId,
+        closingDate: inv.closingDate,
+        dueDate: inv.dueDate,
+        total: Number(inv.totalAmount),
+        paid: Number(inv.paidAmount ?? 0),
+        status: inv.status,
+        items,
+      };
+    })
+    .filter(inv => inv.items.length > 0 || inv.paid > 0)
+    .sort((a, b) => b.dueDate.getTime() - a.dueDate.getTime());
 }
 
 /** Soma um pagamento ao valor já pago da fatura (sem passar do total). */

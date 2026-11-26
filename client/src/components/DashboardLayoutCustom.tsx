@@ -50,12 +50,12 @@ function LoginScreen({ onLogin, error }: { onLogin: () => void; error: { message
 const NAV_ITEMS = [
   { href: "/dashboard", icon: "📊", label: "Dashboard" },
   { href: "/lancamentos", icon: "💳", label: "Lançamentos" },
+  { href: "/filters", icon: "🔍", label: "Filtros" },
+  // As faturas ficam na tela de cartões (selecionar o cartão).
   { href: "/cards", icon: "🏦", label: "Cartões" },
-  { href: "/invoices", icon: "📄", label: "Faturas" },
   { href: "/calendar", icon: "📅", label: "Calendário" },
   { href: "/reports", icon: "📈", label: "Relatórios" },
   { href: "/export", icon: "⬇️", label: "Exportar" },
-  { href: "/filters", icon: "🔍", label: "Filtros" },
   { href: "/competency-config", icon: "📋", label: "Competência" },
   { href: "/recurring-installments", icon: "🔄", label: "Fixos/Parcelados" },
   { href: "/workspaces", icon: "👥", label: "Áreas e pessoas" },

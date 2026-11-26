@@ -19,6 +19,9 @@ import {
   createInstallmentTransactions,
   resolveCompetencyForCreate,
   addInvoicePayment,
+  invoiceDueDateOf,
+  invoicesForCard,
+  reorderTransactions,
   setRecurrence,
   syncAllInvoices,
   updateTransaction,
@@ -339,8 +342,10 @@ export const appRouter = router({
         }
         if (input.type === "credit_card" && input.creditCardId) {
           await upsertInvoiceForCreditCard(getDataUserId(), input.creditCardId, competencyId);
+          // Para avisar em qual fatura (mês de vencimento) a compra entrou.
+          return { ...tx, invoiceDueDate: invoiceDueDateOf(getStore(), tx) };
         }
-        return tx;
+        return { ...tx, invoiceDueDate: null as Date | null };
       }),
     /** Compra/despesa parcelada: uma parcela por mês, com o valor total dividido. */
     createInstallments: protectedProcedure
@@ -375,6 +380,10 @@ export const appRouter = router({
           createdBy: ctx.user.id,
         });
       }),
+    /** Grava a ordem manual (arrastar e soltar) dos lançamentos listados. */
+    reorder: protectedProcedure
+      .input(z.object({ ids: z.array(z.number().int()).min(1).max(2000) }))
+      .mutation(({ input }) => reorderTransactions(input.ids)),
     /** Marca lançamentos como fixos (recorrentes) ou volta a deixá-los variáveis. */
     setRecurrence: protectedProcedure
       .input(
@@ -536,6 +545,15 @@ export const appRouter = router({
       .mutation(({ input }) =>
         updateInvoicePayment(input.invoiceId, input.paidAmount)
       ),
+    /** Faturas de um cartão, com as compras de cada uma (tela de Cartões). */
+    byCard: protectedProcedure
+      .input(z.object({ creditCardId: z.number().int() }))
+      .query(async ({ input }) => {
+        const s = getStore();
+        const result = invoicesForCard(s, getDataUserId(), input.creditCardId);
+        await s.commit(); // grava se o recálculo corrigiu alguma fatura
+        return result;
+      }),
     /** Todas as faturas da área (para agrupar as compras na lista de lançamentos). */
     listAll: protectedProcedure.query(async () => {
       const s = getStore();

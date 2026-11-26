@@ -18,6 +18,22 @@ import LoadingOverlay from "@/components/LoadingOverlay";
 // BulkTransactionActions removido - usando BulkEditModal e BulkDeleteModal
 import BulkActionsFAB from "@/components/BulkActionsFAB";
 import { CalculatorPopover } from "@/components/CalculatorPopover";
+import { DragHandle, SortableTr } from "@/components/SortableRows";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { TransferTransactionsDialog } from "@/components/workspace/TransferTransactionsDialog";
 import BulkEditModal from "@/components/BulkEditModal";
 import BulkDeleteModal from "@/components/BulkDeleteModal";
@@ -281,6 +297,13 @@ export default function TransactionsEnhanced() {
   const [pendingNewCategory, setPendingNewCategory] = useState<string | null>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  // Ordem recém-arrastada, aplicada na hora enquanto a planilha grava.
+  const [localOrder, setLocalOrder] = useState<number[] | null>(null);
+  const reorderMutation = trpc.transaction.reorder.useMutation();
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>(() =>
     toColumnFilters(linkFilters)
   );
@@ -485,7 +508,12 @@ export default function TransactionsEnhanced() {
           ? `${createdTransactions.length} lançamentos recorrentes criados.`
           : data.transactionType === "installment"
             ? `${createdTransactions.length} parcelas de ${formatCurrency(createdTransactions[createdTransactions.length - 1]?.amount ?? 0)} criadas.`
-            : "Movimentação criada com sucesso!"
+            : (() => {
+                const due = (createdTransactions[0] as { invoiceDueDate?: Date | null } | undefined)?.invoiceDueDate;
+                return due
+                  ? `Compra lançada na fatura que vence em ${new Date(due).toLocaleDateString("pt-BR")}.`
+                  : "Movimentação criada com sucesso!";
+              })()
       );
       
       // Salvar links se houver
@@ -620,7 +648,15 @@ export default function TransactionsEnhanced() {
       return 0;
     });
   } else {
+    // Ordem manual (arrastada) primeiro; o resto na ordem automática.
+    const manualIndex = new Map<number, number>();
+    if (localOrder) localOrder.forEach((id, i) => manualIndex.set(id, i));
+    const manualKey = (t: Transaction) =>
+      localOrder ? manualIndex.get(t.id) ?? Number.MAX_SAFE_INTEGER : t.sortOrder ?? Number.MAX_SAFE_INTEGER;
     filteredTransactions = [...filteredTransactions].sort((a, b) => {
+      const ma = manualKey(a);
+      const mb = manualKey(b);
+      if (ma !== mb) return ma - mb;
       const aIsCC = a.type === 'credit_card';
       const bIsCC = b.type === 'credit_card';
       if (aIsCC && bIsCC) {
@@ -698,6 +734,36 @@ export default function TransactionsEnhanced() {
     return sum + Math.min(Number(inv?.paidAmount ?? 0), shown);
   }, 0);
 
+  const rowSortId = (row: DisplayRow) => (row.kind === "invoice" ? `inv:${row.key}` : `tx:${row.transaction.id}`);
+  const dragDisabled = !!sortColumn;
+  const dragDisabledReason = "Para arrastar, volte para a ordem manual (sem ordenação por coluna).";
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const ids = displayRows.map(rowSortId);
+    const from = ids.indexOf(String(active.id));
+    const to = ids.indexOf(String(over.id));
+    if (from < 0 || to < 0) return;
+    const moved = arrayMove(displayRows, from, to);
+    // Fatura arrastada leva todas as compras dela junto.
+    const orderedIds = moved.flatMap(row => (row.kind === "invoice" ? row.items.map(t => t.id) : [row.transaction.id]));
+    setLocalOrder(orderedIds);
+    reorderMutation.mutate(
+      { ids: orderedIds },
+      {
+        onSuccess: async () => {
+          await utils.transaction.list.invalidate();
+          setLocalOrder(null);
+        },
+        onError: error => {
+          setLocalOrder(null);
+          toast.error(error.message || "Não foi possível salvar a nova ordem");
+        },
+      }
+    );
+  };
+
   const renderInvoiceRow = (group: InvoiceGroup) => {
     const invoice = invoicesByKey.get(group.key);
     const card = creditCards?.find(c => c.id === group.creditCardId);
@@ -710,13 +776,17 @@ export default function TransactionsEnhanced() {
     const dueDate = invoice ? new Date(invoice.dueDate) : null;
     const status = paid <= 0 ? "open" : open < 0.005 ? "paid" : "partial";
     return (
-      <tr
+      <SortableTr
         key={`invoice-row-${group.key}`}
+        sortId={`inv:${group.key}`}
+        disabled={dragDisabled}
+        disabledReason={dragDisabledReason}
         className="border-b border-border bg-blue-500/5 hover:bg-blue-500/10 cursor-pointer"
         onClick={() => toggleInvoice(group.key)}
         aria-expanded={expanded}
       >
-        <td className="py-3 px-4">
+        <td className="py-3 pl-2 pr-4 whitespace-nowrap">
+          <DragHandle />
           <button
             type="button"
             className="p-0.5 rounded hover:bg-muted"
@@ -789,16 +859,24 @@ export default function TransactionsEnhanced() {
             </Button>
           )}
         </td>
-      </tr>
+      </SortableTr>
     );
   };
 
   const renderTransactionRow = (transaction: Transaction, nested: boolean) => (
-                    <tr key={transaction.id} className={`border-b border-border hover:bg-muted cursor-pointer ${nested ? "bg-muted/30 text-sm" : ""}`} onClick={() => {
-                      setEditingTransactionId(transaction.id);
-                      setShowEditIndividual(true);
-                    }}>
-                      <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
+                    <SortableTr
+                      key={transaction.id}
+                      sortId={nested ? undefined : `tx:${transaction.id}`}
+                      disabled={dragDisabled}
+                      disabledReason={dragDisabledReason}
+                      className={`border-b border-border hover:bg-muted cursor-pointer ${nested ? "bg-muted/30 text-sm" : ""}`}
+                      onClick={() => {
+                        setEditingTransactionId(transaction.id);
+                        setShowEditIndividual(true);
+                      }}
+                    >
+                      <td className="py-3 pl-2 pr-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        {!nested && <DragHandle />}
                         <input
                           type="checkbox"
                           checked={selectedTransactionIds.includes(transaction.id)}
@@ -809,7 +887,7 @@ export default function TransactionsEnhanced() {
                               setSelectedTransactionIds(selectedTransactionIds.filter(id => id !== transaction.id));
                             }
                           }}
-                          className="w-4 h-4 cursor-pointer"
+                          className={`w-4 h-4 cursor-pointer align-middle ${nested ? "ml-5" : "ml-1"}`}
                         />
                       </td>
                       <td className="py-3 px-4 text-foreground">
@@ -905,7 +983,7 @@ export default function TransactionsEnhanced() {
                           </Button>
                         </div>
                       </td>
-                    </tr>
+                    </SortableTr>
   );
 
   const TYPE_LABELS: Record<string, string> = { income: "Receitas", expense: "Despesas", credit_card: "Cartão" };
@@ -1549,6 +1627,16 @@ export default function TransactionsEnhanced() {
                 )}
                 {showFilters ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
               </Button>
+              {sortColumn && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSortColumn(null)}
+                  title="Voltar para a ordem manual (arrastando as linhas)"
+                >
+                  Ordem manual
+                </Button>
+              )}
               <ColumnSelector columns={columns} onColumnsChange={handleColumnsChange} onSort={handleSort} />
             </div>
           </div>
@@ -1626,7 +1714,8 @@ export default function TransactionsEnhanced() {
                   <table className="w-full">
                       <thead className="border-b border-border">
                         <tr>
-                          <th className="text-left py-3 px-4 font-semibold text-foreground">
+                          <th className="text-left py-3 pl-2 pr-4 font-semibold text-foreground whitespace-nowrap">
+                            <span className="inline-block w-5" aria-hidden />
                             <input
                               type="checkbox"
                               checked={selectedTransactionIds.length === filteredTransactions.length && filteredTransactions.length > 0}
@@ -1766,6 +1855,8 @@ export default function TransactionsEnhanced() {
                           <th className="text-center py-3 px-4 font-semibold text-foreground">Ações</th>
                         </tr>
                       </thead>
+                      <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                      <SortableContext items={displayRows.map(rowSortId)} strategy={verticalListSortingStrategy}>
                       <tbody>
                         {displayRows.map(row =>
                           row.kind === "invoice" ? (
@@ -1779,6 +1870,8 @@ export default function TransactionsEnhanced() {
                           )
                         )}
                       </tbody>
+                      </SortableContext>
+                      </DndContext>
                     </table>
                   </div>
                 ) : (

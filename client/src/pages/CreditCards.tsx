@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { CardInvoicesPanel } from "@/components/invoice/CardInvoicesPanel";
 import DashboardLayoutCustom from "@/components/DashboardLayoutCustom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,10 @@ export default function CreditCards() {
   const utils = trpc.useUtils();
 
   const [open, setOpen] = useState(false);
+  // Cartão cujas faturas aparecem abaixo (padrão: o primeiro).
+  const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
+  const selectedCard =
+    creditCards?.find(c => c.id === selectedCardId) ?? creditCards?.[0] ?? null;
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
 
   const {
@@ -220,9 +225,17 @@ export default function CreditCards() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {creditCards && creditCards.length > 0 ? (
             creditCards.map((card) => (
-              <div
+              <button
+                type="button"
                 key={card.id}
-                className="p-6 rounded-xl border-2 text-white relative overflow-hidden"
+                onClick={() => setSelectedCardId(card.id)}
+                aria-pressed={selectedCard?.id === card.id}
+                title={`Ver faturas do ${card.name}`}
+                className={`text-left p-6 rounded-xl border-2 text-white relative overflow-hidden transition ${
+                  selectedCard?.id === card.id
+                    ? "ring-4 ring-offset-2 ring-offset-background ring-primary scale-[1.01]"
+                    : "opacity-80 hover:opacity-100"
+                }`}
                 style={{
                   backgroundColor: card.color || "#3B82F6",
                   borderColor: card.color || "#3B82F6",
@@ -265,7 +278,7 @@ export default function CreditCards() {
                     </div>
                   )}
                 </div>
-              </div>
+              </button>
             ))
           ) : (
             <div className="col-span-full">
@@ -278,6 +291,9 @@ export default function CreditCards() {
             </div>
           )}
         </div>
+
+        {/* Faturas do cartão selecionado */}
+        {selectedCard && <CardInvoicesPanel card={selectedCard} />}
       </div>
     </DashboardLayoutCustom>
   );

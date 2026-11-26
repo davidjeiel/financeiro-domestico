@@ -107,6 +107,8 @@ export const tables = {
       recurrence: text(),
       // Identifica os lançamentos da mesma série recorrente.
       recurrenceGroup: text(),
+      // Posição escolhida pelo usuário ao arrastar na lista (vazio = ordem automática).
+      sortOrder: int(),
       ...timestamps,
     },
   },
@@ -329,6 +331,7 @@ export type Transaction = {
   createdBy: number | null;
   recurrence: string | null;
   recurrenceGroup: string | null;
+  sortOrder: number | null;
 } & Timestamps;
 
 export type Invoice = {
