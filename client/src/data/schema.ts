@@ -247,7 +247,7 @@ export const tables = {
   },
   recurrenceRules: {
     // Regra de um lançamento fixo/recorrente. Os lançamentos são gerados a
-    // partir dela com 1 mês de antecedência; sem data final, repete sempre.
+    // partir dela com 1 ano (12 meses) de antecedência; sem data final, repete sempre.
     sheet: "Recorrencias",
     columns: {
       id,
