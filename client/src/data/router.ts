@@ -2,6 +2,7 @@
  * Router tRPC executado no próprio navegador (via `unstable_localLink`).
  * Os dados ficam na planilha Google do usuário (ver ./db.ts).
  */
+import { matchesDescription } from "../lib/filterCriteria";
 import { publicProcedure, protectedProcedure, router } from "./trpc";
 import { z } from "zod";
 import {
@@ -170,6 +171,19 @@ function randomToken(bytes = 32) {
   return Array.from(buf, b => b.toString(16).padStart(2, "0")).join("");
 }
 
+const dateInput = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal(""));
+/** Critérios de um filtro salvo (ver client/src/lib/filterCriteria.ts). */
+const savedFilterCriteriaSchema = z.object({
+  startDate: dateInput,
+  endDate: dateInput,
+  description: z.string().optional(),
+  categories: z.array(z.string()).optional(),
+  types: z.array(z.enum(["income", "expense", "credit_card"])).optional(),
+  creditCardIds: z.array(z.number().int()).optional(),
+  minAmount: z.number().nonnegative().nullable().optional(),
+  maxAmount: z.number().nonnegative().nullable().optional(),
+});
+
 export const appRouter = router({
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
@@ -281,7 +295,7 @@ export const appRouter = router({
           if (input.category && tx.category !== input.category) return false;
           if (input.type && tx.type !== input.type) return false;
           if (input.creditCardId && tx.creditCardId !== input.creditCardId) return false;
-          if (input.description && !tx.description?.toLowerCase().includes(input.description.toLowerCase())) return false;
+          if (input.description && !matchesDescription(tx.description, input.description)) return false;
           return true;
         });
       }),
@@ -702,19 +716,8 @@ export const appRouter = router({
         getSavedFilter(input.id)
       ),
     create: protectedProcedure
-      .input(
-        z.object({
-          name: z.string().min(1),
-          startDate: z.date().optional(),
-          endDate: z.date().optional(),
-          categories: z.array(z.string()).optional(),
-          types: z.array(z.enum(["income", "expense", "credit_card"])).optional(),
-          minAmount: z.number().optional(),
-          maxAmount: z.number().optional(),
-          isDefault: z.boolean().optional(),
-        })
-      )
-      .mutation(({ ctx, input }) =>
+      .input(savedFilterCriteriaSchema.extend({ name: z.string().trim().min(1), isDefault: z.boolean().optional() }))
+      .mutation(({ input }) =>
         createSavedFilter(getDataUserId(), input)
       ),
     update: protectedProcedure
@@ -722,13 +725,8 @@ export const appRouter = router({
         z.object({
           id: z.number(),
           name: z.string().optional(),
-          startDate: z.date().optional(),
-          endDate: z.date().optional(),
-          categories: z.array(z.string()).optional(),
-          types: z.array(z.enum(["income", "expense", "credit_card"])).optional(),
-          minAmount: z.number().optional(),
-          maxAmount: z.number().optional(),
           isDefault: z.boolean().optional(),
+          criteria: savedFilterCriteriaSchema.optional(),
         })
       )
       .mutation(({ input }) => {

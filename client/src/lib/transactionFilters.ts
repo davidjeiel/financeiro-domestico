@@ -15,6 +15,8 @@ export type LinkFilters = {
   visao?: ViewMode;
   /** Despesas fixas (recorrentes) ou variáveis. */
   natureza?: "fixa" | "variavel";
+  /** Id de um filtro salvo a aplicar. */
+  filtro?: number;
 };
 
 const TYPES: TxType[] = ["income", "expense", "credit_card"];
@@ -27,6 +29,7 @@ export function buildTransactionsUrl(filters: LinkFilters) {
   if (filters.categoria) params.set("categoria", filters.categoria);
   if (filters.visao) params.set("visao", filters.visao);
   if (filters.natureza) params.set("natureza", filters.natureza);
+  if (filters.filtro != null) params.set("filtro", String(filters.filtro));
   const query = params.toString();
   return `/lancamentos${query ? `?${query}` : ""}`;
 }
@@ -38,6 +41,7 @@ export function parseTransactionsSearch(search: string): LinkFilters {
   const cartao = Number(params.get("cartao"));
   const visao = params.get("visao");
   const natureza = params.get("natureza");
+  const filtro = Number(params.get("filtro"));
   return {
     tipo: tipo && TYPES.includes(tipo) ? tipo : undefined,
     situacao: situacao === "pago" || situacao === "aberto" ? situacao : undefined,
@@ -45,6 +49,7 @@ export function parseTransactionsSearch(search: string): LinkFilters {
     categoria: params.get("categoria") || undefined,
     visao: visao === "monthly" || visao === "competency" ? visao : undefined,
     natureza: natureza === "fixa" || natureza === "variavel" ? natureza : undefined,
+    filtro: Number.isInteger(filtro) && filtro > 0 ? filtro : undefined,
   };
 }
 

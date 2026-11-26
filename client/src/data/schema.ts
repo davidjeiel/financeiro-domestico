@@ -156,8 +156,12 @@ export const tables = {
       name: text(),
       startDate: date(),
       endDate: date(),
+      // Trecho da descrição (busca sem acentos/maiúsculas).
+      description: text(),
       categories: text(),
       types: text(),
+      // Lista JSON de ids de cartão.
+      creditCardIds: text(),
       minAmount: decimal(),
       maxAmount: decimal(),
       isDefault: int(0),

@@ -719,26 +719,53 @@ export function createDefaultTypologies(s: SheetStore, userId: number) {
 
 type FilterInput = {
   name?: string;
-  startDate?: Date;
-  endDate?: Date;
+  /** "YYYY-MM-DD"; string vazia apaga. */
+  startDate?: string;
+  endDate?: string;
+  description?: string;
   categories?: string[];
   types?: string[];
-  minAmount?: number;
-  maxAmount?: number;
+  creditCardIds?: number[];
+  minAmount?: number | null;
+  maxAmount?: number | null;
   isDefault?: boolean;
 };
 
+/** "YYYY-MM-DD" → meia-noite local (evita o dia anterior por causa do UTC). */
+function localDate(value: string | undefined) {
+  if (!value) return null;
+  const [y, m, d] = value.split("-").map(Number);
+  return y && m && d ? new Date(y, m - 1, d) : null;
+}
+
+const jsonList = (list: unknown[] | undefined) => (list && list.length ? JSON.stringify(list) : null);
+const amountText = (n: number | null | undefined) => (typeof n === "number" && Number.isFinite(n) ? n.toFixed(2) : null);
+
+/** Só um filtro padrão por usuário. */
+function clearDefaultFilter(s: SheetStore, userId: number, exceptId?: number) {
+  s.update("savedFilters", f => f.userId === userId && f.id !== exceptId && f.isDefault === 1, { isDefault: 0 });
+}
+
+function filterRow(filter: FilterInput) {
+  return {
+    startDate: localDate(filter.startDate),
+    endDate: localDate(filter.endDate),
+    description: filter.description?.trim() || null,
+    categories: jsonList(filter.categories),
+    types: jsonList(filter.types),
+    creditCardIds: jsonList(filter.creditCardIds),
+    minAmount: amountText(filter.minAmount),
+    maxAmount: amountText(filter.maxAmount),
+  };
+}
+
 export async function createSavedFilter(userId: number, filter: FilterInput & { name: string }) {
   const s = getStore();
+  if (filter.isDefault) clearDefaultFilter(s, userId);
   const created = s.insert("savedFilters", {
     userId,
-    name: filter.name,
-    startDate: filter.startDate ?? null,
-    endDate: filter.endDate ?? null,
-    categories: filter.categories ? JSON.stringify(filter.categories) : null,
-    types: filter.types ? JSON.stringify(filter.types) : null,
-    minAmount: filter.minAmount ? filter.minAmount.toString() : null,
-    maxAmount: filter.maxAmount ? filter.maxAmount.toString() : null,
+    name: filter.name.trim(),
+    ...filterRow(filter),
     isDefault: filter.isDefault ? 1 : 0,
   });
   await s.commit();
@@ -753,17 +780,22 @@ export async function getSavedFilter(filterId: number) {
   return getStore().find("savedFilters", f => f.id === filterId);
 }
 
-export async function updateSavedFilter(filterId: number, filter: FilterInput) {
+/**
+ * Atualiza um filtro. Com `criteria`, regrava todos os critérios (os ausentes
+ * são apagados); sem, muda só nome e padrão.
+ */
+export async function updateSavedFilter(
+  filterId: number,
+  filter: { name?: string; isDefault?: boolean; criteria?: FilterInput }
+) {
   const s = getStore();
+  const current = s.find("savedFilters", f => f.id === filterId);
+  if (!current) throw new Error("Filtro não encontrado");
+  if (filter.isDefault) clearDefaultFilter(s, current.userId, filterId);
   s.update("savedFilters", f => f.id === filterId, {
-    name: filter.name || undefined,
-    startDate: filter.startDate,
-    endDate: filter.endDate,
-    categories: filter.categories ? JSON.stringify(filter.categories) : undefined,
-    types: filter.types ? JSON.stringify(filter.types) : undefined,
-    minAmount: filter.minAmount?.toString(),
-    maxAmount: filter.maxAmount?.toString(),
-    isDefault: filter.isDefault === undefined ? undefined : filter.isDefault ? 1 : 0,
+    ...(filter.name?.trim() ? { name: filter.name.trim() } : {}),
+    ...(filter.criteria ? filterRow(filter.criteria) : {}),
+    ...(filter.isDefault === undefined ? {} : { isDefault: filter.isDefault ? 1 : 0 }),
   });
   await s.commit();
   return { success: true } as const;

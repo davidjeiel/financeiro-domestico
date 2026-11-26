@@ -1,238 +1,181 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Loader2, Save, Trash2 } from "lucide-react";
+import {
+  compactCriteria,
+  countCriteria,
+  describeCriteria,
+  savedFilterToState,
+  stateToSavedFilter,
+  type FilterCriteria,
+} from "@/lib/filterCriteria";
+
+export type AppliedSavedFilter = ReturnType<typeof savedFilterToState> & { id: number; name: string };
 
 interface SavedFiltersProps {
-  currentFilters: {
-    startDate?: string;
-    endDate?: string;
-    categories?: string[];
-    types?: string[];
-    minAmount?: number;
-    maxAmount?: number;
-  };
-  onFilterSelect: (filter: any) => void;
-  onFilterSave: (filterName: string) => void;
+  /** Datas e critérios atuais da tela (o que será salvo). */
+  currentDates: { startDate?: string; endDate?: string };
+  currentCriteria: FilterCriteria;
+  /** Aplica um filtro salvo: troca datas e critérios da tela. */
+  onApply: (filter: AppliedSavedFilter) => void;
+  cardName?: (id: number) => string | undefined;
 }
 
-export default function SavedFiltersSelector({
-  currentFilters,
-  onFilterSelect,
-  onFilterSave,
-}: SavedFiltersProps) {
-  const { data: savedFilters, isLoading } = (trpc.savedFilter?.list?.useQuery?.() || { data: [], isLoading: false }) as any;
-  const createMutation = (trpc.savedFilter?.create?.useMutation?.() || { mutateAsync: async () => {} }) as any;
-  const deleteMutation = (trpc.savedFilter?.delete?.useMutation?.() || { mutateAsync: async () => {} }) as any;
-  const deleteAllMutation = (trpc.savedFilter?.deleteAll?.useMutation?.() || { mutateAsync: async () => {} }) as any;
-  const utils = trpc.useUtils?.() as any;
+export default function SavedFiltersSelector({ currentDates, currentCriteria, onApply, cardName }: SavedFiltersProps) {
+  const utils = trpc.useUtils();
+  const { data: savedFilters = [], isLoading } = trpc.savedFilter.list.useQuery();
+  const createMutation = trpc.savedFilter.create.useMutation();
+  const deleteMutation = trpc.savedFilter.delete.useMutation();
 
   const [selectedFilterId, setSelectedFilterId] = useState<string>("");
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [filterName, setFilterName] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
+
+  // O seletor só mostra um filtro enquanto a tela estiver com os critérios dele;
+  // ao mexer nos filtros (ou limpar), volta para "Aplicar filtro salvo...".
+  const sameState = (id: string) => {
+    const row = savedFilters.find(f => f.id === Number(id));
+    if (!row) return false;
+    const st = savedFilterToState(row);
+    return (
+      st.startDate === (currentDates.startDate ?? "") &&
+      st.endDate === (currentDates.endDate ?? "") &&
+      JSON.stringify(compactCriteria(st.criteria)) === JSON.stringify(compactCriteria(currentCriteria))
+    );
+  };
+  const shownFilterId = selectedFilterId && sameState(selectedFilterId) ? selectedFilterId : "";
+
+  const hasSomething = !!currentDates.startDate || !!currentDates.endDate || countCriteria(currentCriteria) > 0;
+  const summary = [
+    currentDates.startDate || currentDates.endDate
+      ? `Período: ${currentDates.startDate ? new Date(`${currentDates.startDate}T00:00`).toLocaleDateString("pt-BR") : "início"} a ${currentDates.endDate ? new Date(`${currentDates.endDate}T00:00`).toLocaleDateString("pt-BR") : "hoje"}`
+      : null,
+    ...describeCriteria(currentCriteria, cardName),
+  ].filter(Boolean) as string[];
 
   const handleSelectFilter = (filterId: string) => {
     setSelectedFilterId(filterId);
-    const selected = savedFilters?.find((f: any) => f.id === parseInt(filterId));
-    if (selected) {
-      const filter = {
-        startDate: selected.startDate
-          ? new Date(selected.startDate).toISOString().split("T")[0]
-          : "",
-        endDate: selected.endDate
-          ? new Date(selected.endDate).toISOString().split("T")[0]
-          : "",
-        categories: selected.categories
-          ? JSON.parse(selected.categories)
-          : undefined,
-        types: selected.types ? JSON.parse(selected.types) : undefined,
-        minAmount: selected.minAmount ? parseFloat(selected.minAmount) : undefined,
-        maxAmount: selected.maxAmount ? parseFloat(selected.maxAmount) : undefined,
-      };
-      onFilterSelect(filter);
-      toast.success(`Filtro "${selected.name}" carregado e aplicado!`);
-    }
+    const selected = savedFilters.find(f => f.id === Number(filterId));
+    if (!selected) return;
+    onApply({ id: selected.id, name: selected.name, ...savedFilterToState(selected) });
+    toast.success(`Filtro "${selected.name}" aplicado.`);
   };
 
   const handleSaveFilter = async () => {
-    if (!filterName.trim()) {
-      toast.error("Nome do filtro é obrigatório");
-      return;
-    }
-
-    setIsSaving(true);
+    if (!filterName.trim()) return;
     try {
-      await createMutation.mutateAsync({
-        name: filterName,
-        startDate: currentFilters.startDate
-          ? new Date(currentFilters.startDate)
-          : undefined,
-        endDate: currentFilters.endDate
-          ? new Date(currentFilters.endDate)
-          : undefined,
-        categories: currentFilters.categories,
-        types: currentFilters.types as any,
-        minAmount: currentFilters.minAmount,
-        maxAmount: currentFilters.maxAmount,
-      } as any);
-
+      const created = await createMutation.mutateAsync(stateToSavedFilter(filterName, currentDates, currentCriteria));
       await utils.savedFilter.list.invalidate();
+      setSelectedFilterId(String(created.id));
       setFilterName("");
       setShowSaveDialog(false);
-      toast.success("Filtro salvo e aplicado com sucesso!");
+      toast.success("Filtro salvo.");
     } catch (error) {
-      toast.error("Erro ao salvar filtro");
-    } finally {
-      setIsSaving(false);
+      toast.error(error instanceof Error ? error.message : "Erro ao salvar filtro");
     }
   };
 
   const handleDeleteFilter = async (filterId: number) => {
-    if (!confirm("Tem certeza que deseja deletar este filtro?")) return;
-
+    if (!confirm("Excluir este filtro salvo?")) return;
     try {
       await deleteMutation.mutateAsync({ id: filterId });
       await utils.savedFilter.list.invalidate();
       setSelectedFilterId("");
-      toast.success("Filtro deletado com sucesso!");
-    } catch (error) {
-      toast.error("Erro ao deletar filtro");
-    }
-  };
-
-  const handleDeleteAllFilters = async () => {
-    if (!confirm("Tem certeza que deseja deletar TODOS os filtros salvos? Esta ação não pode ser desfeita.")) return;
-
-    try {
-      await deleteAllMutation.mutateAsync();
-      await utils.savedFilter.list.invalidate();
-      setSelectedFilterId("");
-      toast.success("Todos os filtros foram deletados!");
-    } catch (error) {
-      toast.error("Erro ao deletar filtros");
+      toast.success("Filtro excluído.");
+    } catch {
+      toast.error("Erro ao excluir filtro");
     }
   };
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      {/* Selector */}
-      <Select value={selectedFilterId} onValueChange={handleSelectFilter}>
-        <SelectTrigger className="w-48">
-          <SelectValue placeholder="Selecionar filtro salvo..." />
+      <Select value={shownFilterId} onValueChange={handleSelectFilter}>
+        <SelectTrigger className="w-52">
+          <SelectValue placeholder="Aplicar filtro salvo..." />
         </SelectTrigger>
         <SelectContent>
           {isLoading ? (
             <div className="p-2 text-sm text-muted-foreground">Carregando...</div>
-          ) : savedFilters && savedFilters.length > 0 ? (
-            savedFilters.map((filter: any) => (
-              <SelectItem key={filter.id} value={filter.id.toString()}>
+          ) : savedFilters.length > 0 ? (
+            savedFilters.map(filter => (
+              <SelectItem key={filter.id} value={String(filter.id)}>
                 {filter.name}
+                {filter.isDefault ? " (padrão)" : ""}
               </SelectItem>
             ))
           ) : (
-            <div className="p-2 text-sm text-muted-foreground">
-              Nenhum filtro salvo
-            </div>
+            <div className="p-2 text-sm text-muted-foreground">Nenhum filtro salvo</div>
           )}
         </SelectContent>
       </Select>
 
-      {/* Delete Button */}
-      {selectedFilterId && (
+      {shownFilterId && (
         <Button
           variant="ghost"
           size="sm"
-          onClick={() =>
-            handleDeleteFilter(parseInt(selectedFilterId))
-          }
-          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-          title="Deletar este filtro"
+          onClick={() => handleDeleteFilter(Number(shownFilterId))}
+          className="text-red-500 hover:text-red-600"
+          title="Excluir este filtro salvo"
         >
           <Trash2 className="w-4 h-4" />
         </Button>
       )}
 
-      {/* Delete All Button */}
-      {savedFilters && savedFilters.length > 0 && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleDeleteAllFilters}
-          className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-          title="Deletar todos os filtros salvos"
-        >
-          <Trash2 className="w-4 h-4 mr-1" />
-          Limpar Tudo
-        </Button>
-      )}
-
-      {/* Save Dialog */}
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
         <DialogTrigger asChild>
           <Button
             variant="outline"
             size="sm"
             className="gap-2"
+            disabled={!hasSomething}
+            title={hasSomething ? "Salvar os filtros atuais" : "Preencha algum filtro para salvar"}
           >
             <Save className="w-4 h-4" />
-            Salvar Filtro
+            Salvar filtro
           </Button>
         </DialogTrigger>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Salvar Filtro Atual</DialogTitle>
+            <DialogTitle>Salvar filtros atuais</DialogTitle>
+            <DialogDescription>Ficam disponíveis aqui e na página Filtros.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-0.5">
+            {summary.map(line => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          <form
+            className="space-y-4"
+            onSubmit={e => {
+              e.preventDefault();
+              handleSaveFilter();
+            }}
+          >
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Nome do Filtro
-              </label>
+              <label className="form-label block mb-2">Nome do filtro</label>
               <Input
-                placeholder="Ex: Despesas de Alimentação"
+                autoFocus
+                placeholder="Ex: Mercado no cartão"
                 value={filterName}
-                onChange={(e) => setFilterName(e.target.value)}
-                className="w-full"
+                onChange={e => setFilterName(e.target.value)}
+                className="input-elegant"
               />
             </div>
             <div className="flex gap-2 justify-end">
-              <Button
-                variant="outline"
-                onClick={() => setShowSaveDialog(false)}
-              >
+              <Button type="button" variant="outline" onClick={() => setShowSaveDialog(false)}>
                 Cancelar
               </Button>
-              <Button
-                onClick={handleSaveFilter}
-                disabled={isSaving || !filterName.trim()}
-              >
-                {isSaving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Salvando...
-                  </>
-                ) : (
-                  "Salvar"
-                )}
+              <Button type="submit" disabled={createMutation.isPending || !filterName.trim()}>
+                {createMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Salvar
               </Button>
             </div>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

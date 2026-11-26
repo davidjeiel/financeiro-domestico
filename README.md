@@ -13,6 +13,7 @@ Aplicação web para controle de finanças pessoais. Organiza receitas, despesas
 - [Como funciona](#como-funciona)
 - [Configurando o login Google](#configurando-o-login-google)
 - [Áreas de trabalho compartilhadas](#áreas-de-trabalho-compartilhadas)
+- [Filtros de lançamentos](#filtros-de-lançamentos)
 - [Desenvolvimento](#desenvolvimento)
 - [Deploy no GitHub Pages](#deploy-no-github-pages)
 - [Scripts disponíveis](#scripts-disponíveis)
@@ -135,6 +136,13 @@ Os vínculos ficam na aba `Vinculos` (`expenseId`, `incomeId`, `amount`).
 
 ---
 
+## Filtros de lançamentos
+
+- **Painel de filtros** (botão *Filtros* em Lançamentos): período, tipo, categoria, cartão, **descrição** e faixa de valores. A descrição é buscada por trecho, sem diferenciar maiúsculas, acentos ou espaços sobrando ("farmacia" encontra "Farmácia São João"). Cada critério ativo aparece como etiqueta em *Filtrando por*, com × para remover.
+- **Salvar filtro:** grava na planilha (aba *FiltrosSalvos*) o período e todos os critérios do painel. *Aplicar filtro salvo* restaura os dois.
+- **Página Filtros:** cria, edita e exclui filtros salvos; vários tipos, categorias ou cartões marcados valem como "qualquer um deles". *Aplicar* abre Lançamentos já filtrado; *Usar como padrão* aplica o filtro ao abrir Lançamentos quando não há outro filtro ativo (só um filtro é padrão por vez).
+- Sem datas, o filtro vale para o mês aberto na tela.
+
 ## Desenvolvimento
 
 ```sh
@@ -202,7 +210,7 @@ VITE_BASE_URL: /financeiro-domestico/   # GitHub Pages padrão
 | `/` | Landing page pública |
 | `/dashboard` | Resumo financeiro do mês atual |
 | `/lancamentos` | Lista e cadastro de movimentações — visão **Competência** ou **Mensal**; compras no cartão agrupadas por fatura (expansível, com pagamento parcial/total); ordem manual arrastando as linhas |
-| `/filters` | Filtros salvos para movimentações |
+| `/filters` | Filtros salvos: criar, editar, aplicar em Lançamentos e definir o padrão |
 | `/cards` | Cartões de crédito; ao selecionar um cartão, as faturas dele (filtro por ano e mês) |
 | `/calendar` | Visão calendário das movimentações |
 | `/reports` | Gráficos e relatórios financeiros |
