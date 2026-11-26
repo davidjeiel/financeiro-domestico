@@ -114,6 +114,17 @@ Os vínculos ficam na aba `Vinculos` (`expenseId`, `incomeId`, `amount`).
 
 ---
 
+## Lançamentos fixos sem data final
+
+- Ao criar um lançamento **Recorrente** (em Lançamentos ou Fixos/Parcelados), a **data limite é opcional**: em branco, repete sem fim.
+- A planilha guarda a **regra** (aba `Recorrencias`), e o app gera os lançamentos **com 1 mês de antecedência** (até o fim do mês seguinte). Os próximos aparecem sozinhos conforme o tempo passa (ao abrir o app, e uma vez por dia com ele aberto). Cada ocorrência leva a série (`recurrenceGroup`) e a data (`recurrenceDate`), o que impede gerar duas vezes — inclusive com duas pessoas numa área compartilhada.
+- **Valor estimado:** com *O valor muda a cada mês* marcado (padrão), cada ocorrência nasce como **≈ estimado** (`isEstimated`) até o valor real ser confirmado: botão ✓ na lista, editar o valor (ou marcar *Valor confirmado*) ou marcar como pago. Os cards de totais mostram quanto ainda é estimativa.
+- **Na edição de uma ocorrência:** *Aplicar valor, descrição, categoria e responsável aos próximos meses* (não mexe nos pagos) e *Encerrar recorrência após este lançamento* (remove as futuras não pagas).
+- **Excluir** uma ocorrência pula aquele mês (a regra não recria).
+- **Fixos/Parcelados** lista as recorrências gravadas, com a próxima data e quantas estão estimadas; dá para **encerrar**. Séries antigas, criadas com data final, podem **continuar sem data final**.
+
+---
+
 ## Despesas fixas × variáveis (Relatórios)
 
 - **Fixa** = lançamento recorrente. Ao criar um lançamento como **Recorrente** (ou em Fixos/Parcelados), cada lançamento da série guarda a frequência (`Lancamentos.recurrence`) e o id da série (`recurrenceGroup`). Variável = todo o resto (parcelas incluídas).

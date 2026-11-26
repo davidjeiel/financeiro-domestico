@@ -21,6 +21,15 @@ import {
   type IncomeLink,
 } from '@/components/allocation/IncomeLinksEditor';
 
+const FREQUENCY_LABELS: Record<string, string> = {
+  daily: 'diária',
+  weekly: 'semanal',
+  biweekly: 'quinzenal',
+  monthly: 'mensal',
+  quarterly: 'trimestral',
+  annual: 'anual',
+};
+
 interface EditTransactionModalProps {
   isOpen: boolean;
   transactionId: number | null;
@@ -43,6 +52,8 @@ export default function EditTransactionModal({
     category: '__placeholder__',
     responsibleUserId: null as number | null,
     fixed: false,
+    amountConfirmed: true,
+    applyToNext: false,
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -59,6 +70,30 @@ export default function EditTransactionModal({
   const { data: typologies = [], isLoading: isLoadingTypologies, refetch: refetchTypologies } = trpc.typology.list.useQuery();
   const updateMutation = trpc.transaction.update.useMutation();
   const setRecurrenceMutation = trpc.transaction.setRecurrence.useMutation();
+  const applyFromMutation = trpc.recurrence.applyFrom.useMutation();
+  const endRecurrenceMutation = trpc.recurrence.end.useMutation();
+  // Regra de recorrência deste lançamento (se ele for uma ocorrência).
+  const { data: recurrenceInfo } = trpc.recurrence.ofTransaction.useQuery(
+    { transactionId: transactionId || 0 },
+    { enabled: isOpen && transactionId !== null }
+  );
+
+  const handleEndRecurrence = async () => {
+    if (!recurrenceInfo || !transaction) return;
+    const when = new Date(transaction.transactionDate).toLocaleDateString('pt-BR');
+    if (!window.confirm(`Encerrar a recorrência depois de ${when}? Os lançamentos futuros ainda não pagos serão removidos.`)) return;
+    try {
+      const d = new Date(transaction.transactionDate);
+      const lastDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const { removed } = await endRecurrenceMutation.mutateAsync({ groupKey: recurrenceInfo.groupKey, lastDate });
+      await Promise.all([utils.transaction.invalidate(), utils.invoice.invalidate(), utils.recurrence.invalidate()]);
+      toast.success(removed ? `Recorrência encerrada; ${removed} lançamento(s) futuro(s) removido(s).` : 'Recorrência encerrada.');
+      onSuccess();
+      onClose();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível encerrar');
+    }
+  };
   const setAllocationsMutation = trpc.allocation.set.useMutation();
   const workspaceId = useActiveWorkspaceId();
   const { data: allocation } = trpc.allocation.forTransaction.useQuery(
@@ -102,6 +137,8 @@ export default function EditTransactionModal({
         category: transaction.category || '__placeholder__',
         responsibleUserId: transaction.responsibleUserId ?? null,
         fixed: !!transaction.recurrence,
+        amountConfirmed: !transaction.isEstimated,
+        applyToNext: false,
       });
     }
   }, [transaction]);
@@ -161,9 +198,22 @@ export default function EditTransactionModal({
         dueDate: formData.dueDate, // Enviar como string YYYY-MM-DD
         notes: formData.notes,
         responsibleUserId: formData.responsibleUserId,
+        ...(transaction?.isEstimated ? { isEstimated: !formData.amountConfirmed } : {}),
       });
 
-      if (transaction && formData.fixed !== !!transaction.recurrence) {
+      // "Aplicar aos próximos meses": muda a regra e as próximas não pagas.
+      if (recurrenceInfo && formData.applyToNext) {
+        await applyFromMutation.mutateAsync({
+          transactionId: transactionId || 0,
+          amount: formData.amount,
+          description: formData.description,
+          category: formData.category,
+          responsibleUserId: formData.responsibleUserId,
+        });
+        utils.recurrence.invalidate();
+      }
+
+      if (!recurrenceInfo && transaction && formData.fixed !== !!transaction.recurrence) {
         await setRecurrenceMutation.mutateAsync({
           ids: [transaction.id],
           frequency: formData.fixed
@@ -251,9 +301,32 @@ export default function EditTransactionModal({
                   type="number"
                   step="0.01"
                   value={formData.amount}
-                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      amount: e.target.value,
+                      // Mudar o valor de uma estimativa é informar o valor real.
+                      amountConfirmed: transaction?.isEstimated ? true : formData.amountConfirmed,
+                    })
+                  }
                   placeholder="0.00"
                 />
+                {transaction?.isEstimated === 1 && (
+                  <label className="mt-2 flex items-start gap-2 rounded-md bg-amber-500/10 p-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 w-4 h-4"
+                      checked={formData.amountConfirmed}
+                      onChange={(e) => setFormData({ ...formData, amountConfirmed: e.target.checked })}
+                    />
+                    <span>
+                      <span className="font-medium text-amber-700 dark:text-amber-400">Valor estimado pela recorrência.</span>
+                      <span className="block text-xs text-muted-foreground">
+                        Informe o valor real e marque para confirmar (marcar como pago também confirma).
+                      </span>
+                    </span>
+                  </label>
+                )}
               </div>
 
               {/* Data da Transação */}
@@ -278,7 +351,46 @@ export default function EditTransactionModal({
                 />
               </div>
 
-              {/* Natureza: fixa (recorrente) ou variável */}
+              {/* Recorrência (ocorrência gerada por uma regra) */}
+              {recurrenceInfo && (
+                <div className="rounded-md border border-border p-3 space-y-2 text-sm">
+                  <p className="font-medium">
+                    Recorrente · {FREQUENCY_LABELS[recurrenceInfo.frequency] ?? recurrenceInfo.frequency}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Desde {new Date(recurrenceInfo.startDate).toLocaleDateString('pt-BR')}
+                    {recurrenceInfo.endDate
+                      ? ` até ${new Date(recurrenceInfo.endDate).toLocaleDateString('pt-BR')}`
+                      : ' · sem data final'}
+                    {' · '}gerado com 1 mês de antecedência
+                  </p>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 w-4 h-4"
+                      checked={formData.applyToNext}
+                      onChange={(e) => setFormData({ ...formData, applyToNext: e.target.checked })}
+                    />
+                    <span>
+                      Aplicar valor, descrição, categoria e responsável aos próximos meses
+                      <span className="block text-xs text-muted-foreground">Lançamentos já pagos não mudam.</span>
+                    </span>
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600"
+                    onClick={handleEndRecurrence}
+                    disabled={endRecurrenceMutation.isPending}
+                  >
+                    Encerrar recorrência após este lançamento
+                  </Button>
+                </div>
+              )}
+
+              {/* Natureza: fixa (recorrente) ou variável — só para lançamentos sem regra */}
+              {!recurrenceInfo && (
               <label className="flex items-start gap-2 rounded-md border border-border p-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -295,6 +407,7 @@ export default function EditTransactionModal({
                   </span>
                 </span>
               </label>
+              )}
 
               {/* Responsável */}
               <div>
