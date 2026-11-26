@@ -562,7 +562,7 @@ export default function TransactionsEnhanced() {
         });
         setNewTransactionLinks([]);
         setNewIncomeLinks([]);
-        setTimeout(() => setFocus("amount"), 0);
+        setTimeout(() => setFocus("description"), 0);
         utils.allocation.invalidate();
         utils.invoice.invalidate();
         return;
@@ -1165,19 +1165,34 @@ export default function TransactionsEnhanced() {
                 <span className="hidden sm:inline">Nova Movimentação</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl flex flex-col max-h-[90vh] gap-0 p-0 bg-card text-card-foreground border-border">
+            <DialogContent className="max-w-2xl flex flex-col max-h-[90vh] gap-0 p-0 bg-surface-raised text-foreground border-white/10 overflow-hidden">
               {/* Header fixo */}
-              <DialogHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
+              <DialogHeader className="px-6 pt-5 pb-4 border-b border-white/10 bg-black/20 shrink-0">
                 <DialogTitle className="text-foreground">Nova Movimentação</DialogTitle>
+                <p className="text-xs text-muted-foreground">Comece pela descrição; os campos com * são obrigatórios.</p>
               </DialogHeader>
 
               <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
                 {/* Corpo rolável — scroll vertical quando necessário, sem overflow horizontal */}
-                <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-5 space-y-5">
+                {/* Description */}
+                <div>
+                  <label className="form-label">
+                    Descrição
+                  </label>
+                  <input
+                    {...register("description")}
+                    type="text"
+                    autoFocus
+                    placeholder="Ex.: Conta de luz, Mercado, Salário"
+                    className="input-elegant w-full"
+                  />
+                </div>
+
                 {/* Type Selection */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-foreground mb-2 block">
+                    <label className="form-label">
                       Tipo de Transação
                     </label>
                     <select
@@ -1193,7 +1208,7 @@ export default function TransactionsEnhanced() {
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium text-foreground mb-2 block">
+                    <label className="form-label">
                       Tipo de Movimentação
                     </label>
                     <select
@@ -1208,10 +1223,76 @@ export default function TransactionsEnhanced() {
                   </div>
                 </div>
 
+                {/* Valor e data lado a lado */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Amount */}
+                  <div>
+                    <label className="form-label">
+                      {watchTransactionType === "installment" ? "Valor total da compra" : "Valor"} <span className="text-red-600">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        {...register("amount")}
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        placeholder="0.00"
+                        className="input-elegant w-full pr-10"
+                      />
+                      <CalculatorPopover
+                        value={watchAmount}
+                        onApply={value =>
+                          setValue("amount", value, { shouldValidate: true, shouldDirty: true })
+                        }
+                      />
+                    </div>
+                    {errors.amount && <p className="text-red-600 text-sm mt-1">{errors.amount.message}</p>}
+                  </div>
+                {/* Date */}
+                  <div>
+                    <label className="form-label">
+                      {watchTransactionType === "installment" ? "Data da compra (1ª parcela)" : "Data"} <span className="text-red-600">*</span>
+                    </label>
+                    <input
+                      {...register("transactionDate")}
+                      type="date"
+                      className="input-elegant w-full"
+                    />
+                    {errors.transactionDate && <p className="text-red-600 text-sm mt-1">{errors.transactionDate.message}</p>}
+                  </div>
+                </div>
+
+                {/* Credit Card Selection - Required for credit_card type */}
+                {watchType === "credit_card" && (
+                  <div>
+                    <label className="form-label">
+                      Cartão de Crédito <span className="text-red-600">*</span>
+                    </label>
+                    {creditCards && creditCards.length > 0 ? (
+                      <select
+                        {...register("creditCardId")}
+                        className="input-elegant w-full"
+                      >
+                        <option value="">Selecione um cartão</option>
+                        {creditCards.map((card) => (
+                          <option key={card.id} value={card.id.toString()}>
+                            {card.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-sm text-yellow-600">
+                        Nenhum cartão cadastrado. Crie um cartão primeiro em "Cartões".
+                      </div>
+                    )}
+                    {errors.creditCardId && <p className="text-red-600 text-sm mt-1">{errors.creditCardId.message}</p>}
+                  </div>
+                )}
+
                 {/* Category with Add Option */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-medium text-foreground">
+                    <label className="form-label mb-0">
                       Categoria
                     </label>
                     <AddCategoryModal
@@ -1264,7 +1345,7 @@ export default function TransactionsEnhanced() {
 
                 {/* Responsável pelo pagamento */}
                 <div>
-                  <label htmlFor="responsibleUserId" className="text-sm font-medium text-foreground mb-2 block">
+                  <label htmlFor="responsibleUserId" className="form-label">
                     {watchType === "income" ? "Quem recebe" : "Responsável pelo pagamento"}
                   </label>
                   <ResponsibleSelect
@@ -1279,75 +1360,11 @@ export default function TransactionsEnhanced() {
                   )}
                 </div>
 
-                {/* Credit Card Selection - Required for credit_card type */}
-                {watchType === "credit_card" && (
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-2 block">
-                      Cartão de Crédito <span className="text-red-600">*</span>
-                    </label>
-                    {creditCards && creditCards.length > 0 ? (
-                      <select
-                        {...register("creditCardId")}
-                        className="input-elegant w-full"
-                      >
-                        <option value="">Selecione um cartão</option>
-                        {creditCards.map((card) => (
-                          <option key={card.id} value={card.id.toString()}>
-                            {card.name}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-sm text-yellow-600">
-                        Nenhum cartão cadastrado. Crie um cartão primeiro em "Cartões".
-                      </div>
-                    )}
-                    {errors.creditCardId && <p className="text-red-600 text-sm mt-1">{errors.creditCardId.message}</p>}
-                  </div>
-                )}
-
-                {/* Description */}
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">
-                    Descrição
-                  </label>
-                  <input
-                    {...register("description")}
-                    type="text"
-                    placeholder="Descrição da movimentação"
-                    className="input-elegant w-full"
-                  />
-                </div>
-
-                {/* Amount */}
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">
-                    {watchTransactionType === "installment" ? "Valor total da compra" : "Valor"} <span className="text-red-600">*</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      {...register("amount")}
-                      type="number"
-                      step="0.01"
-                      min="0.01"
-                      placeholder="0.00"
-                      className="input-elegant w-full pr-10"
-                    />
-                    <CalculatorPopover
-                      value={watchAmount}
-                      onApply={value =>
-                        setValue("amount", value, { shouldValidate: true, shouldDirty: true })
-                      }
-                    />
-                  </div>
-                  {errors.amount && <p className="text-red-600 text-sm mt-1">{errors.amount.message}</p>}
-                </div>
-
                 {/* Recurring Options */}
                 {watchTransactionType === "recurring" && (
                   <>
                     <div>
-                      <label className="text-sm font-medium text-foreground mb-2 block">
+                      <label className="form-label">
                         Frequência <span className="text-red-600">*</span>
                       </label>
                       <select
@@ -1366,7 +1383,7 @@ export default function TransactionsEnhanced() {
                     </div>
 
                     <div>
-                      <label className="text-sm font-medium text-foreground mb-2 block">
+                      <label className="form-label">
                         Data limite <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
                       </label>
                       <input
@@ -1396,7 +1413,7 @@ export default function TransactionsEnhanced() {
                 {/* Installment Options */}
                 {watchTransactionType === "installment" && (
                   <div>
-                    <label className="text-sm font-medium text-foreground mb-2 block">
+                    <label className="form-label">
                       Número de Parcelas <span className="text-red-600">*</span>
                     </label>
                     <input
@@ -1417,23 +1434,10 @@ export default function TransactionsEnhanced() {
                   </div>
                 )}
 
-                {/* Date */}
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">
-                    {watchTransactionType === "installment" ? "Data da compra (1ª parcela)" : "Data"} <span className="text-red-600">*</span>
-                  </label>
-                  <input
-                    {...register("transactionDate")}
-                    type="date"
-                    className="input-elegant w-full"
-                  />
-                  {errors.transactionDate && <p className="text-red-600 text-sm mt-1">{errors.transactionDate.message}</p>}
-                </div>
-
                 {/* Receita que paga esta despesa */}
                 {canLinkIncome && (
                   <div>
-                    <label className="text-sm font-medium text-foreground mb-1 block">
+                    <label className="form-label">
                       Pago com a receita
                     </label>
                     <p className="text-xs text-muted-foreground mb-2">
@@ -1449,7 +1453,7 @@ export default function TransactionsEnhanced() {
 
                 {/* Notes */}
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">
+                  <label className="form-label">
                     Notas
                   </label>
                   <textarea
@@ -1462,7 +1466,7 @@ export default function TransactionsEnhanced() {
 
                 {/* Links Manager */}
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">
+                  <label className="form-label">
                     Links
                   </label>
                   <div className="space-y-2">
@@ -1518,7 +1522,7 @@ export default function TransactionsEnhanced() {
                 </div>{/* fim do corpo rolável */}
 
                 {/* Footer fixo */}
-                <div className="shrink-0 px-6 py-4 border-t border-border flex gap-2">
+                <div className="shrink-0 px-6 py-4 border-t border-white/10 bg-black/20 flex gap-2">
                   <Button
                     type="button"
                     variant="outline"

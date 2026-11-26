@@ -339,7 +339,7 @@ export default function BulkEditModal({
             </div>
             {updateFields.responsibleUserId && (
               <ResponsibleSelect
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+                className="flex h-9 w-full rounded-md border border-input bg-field hover:bg-field-hover px-3 py-1 text-sm shadow-xs"
                 value={formData.responsibleUserId}
                 onChange={(value) => setFormData({ ...formData, responsibleUserId: value })}
               />
