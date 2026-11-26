@@ -17,7 +17,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 export function JoinWorkspacePage() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { switchTo } = useSwitchWorkspace();
   const [state, setState] = useState<"trying" | "need-picker" | "picking" | "error">("trying");
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +53,15 @@ export function JoinWorkspacePage() {
       }
       await enter();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      setError(
+        message.includes("ainda não tem acesso")
+          ? "A planilha foi selecionada, mas o Google não a liberou para o app. Confira se você " +
+              `entrou no app com o e-mail que recebeu o convite${user?.email ? ` (agora: ${user.email})` : ""}. ` +
+              "Se for o mesmo, avise quem mantém o app: a chave de API precisa ter a Google Picker API " +
+              "liberada e ser do mesmo projeto do Client ID."
+          : message
+      );
       setState("error");
     }
   };
@@ -97,7 +105,8 @@ export function JoinWorkspacePage() {
                 Liberar acesso e entrar
               </Button>
               <p className="text-xs text-muted-foreground">
-                Não recebeu acesso? Confira se entrou com o mesmo e-mail que recebeu o convite.
+                Não recebeu acesso? Confira se entrou com o mesmo e-mail que recebeu o convite
+                {user?.email ? <> — você está como <strong>{user.email}</strong></> : null}.
               </p>
             </>
           )}
