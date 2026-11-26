@@ -99,7 +99,7 @@ describe("parcelamento", () => {
       category: "Compras",
       totalAmount: "300",
       installments: 3,
-      firstDate: new Date(2026, 2, 10), // competência de março → vence 27/04
+      firstDate: new Date(2026, 2, 10), // fecha 20/03 → vence 27/03; 2ª parcela vence 27/04
       creditCardId: card.id,
     });
     await createInstallmentTransactions(1, {
@@ -113,7 +113,7 @@ describe("parcelamento", () => {
     const april = getUserTransactionsByDateRange(1, "2026-04-01", "2026-04-30");
     expect(april.map(t => [t.type, t.currentInstallment])).toEqual([
       ["expense", 2],
-      ["credit_card", 1],
+      ["credit_card", 2],
     ]);
   });
 
@@ -141,22 +141,40 @@ describe("parcelamento", () => {
 describe("competência: fatura no mês do vencimento", () => {
   beforeEach(() => fake.sheets.clear());
 
-  it("em novembro aparece a fatura que vence em novembro, não as compras de novembro", async () => {
+  it("cartão que vence depois do fechamento (fecha 20, vence 27): compras de novembro vencem em novembro", async () => {
     const { s, card } = await setup(); // fechamento dia 20, vencimento dia 27
-    const { getCompetencyTransactions } = await import("./db");
+    const { getCompetencyTransactions, invoiceDueDateOf } = await import("./db");
     const oct = s.insert("competencies", { userId: 1, year: 2026, month: 10, name: "Outubro de 2026" });
     const nov = s.insert("competencies", { userId: 1, year: 2026, month: 11, name: "Novembro de 2026" });
-    // Compra de outubro (competência out) → fatura vence 27/11.
     s.insert("transactions", { userId: 1, competencyId: oct.id, type: "credit_card", creditCardId: card.id, category: "X", description: "Compra out", amount: "100", transactionDate: new Date(2026, 9, 10) });
-    // Compra de novembro (competência nov) → fatura vence 27/12.
-    s.insert("transactions", { userId: 1, competencyId: nov.id, type: "credit_card", creditCardId: card.id, category: "X", description: "Compra nov", amount: "50", transactionDate: new Date(2026, 10, 10) });
-    // Despesa comum de novembro continua em novembro.
+    const novPurchase = s.insert("transactions", { userId: 1, competencyId: nov.id, type: "credit_card", creditCardId: card.id, category: "X", description: "Compra nov", amount: "50", transactionDate: new Date(2026, 10, 10) });
     s.insert("transactions", { userId: 1, competencyId: nov.id, type: "expense", category: "Luz", description: "Luz", amount: "200", transactionDate: new Date(2026, 10, 15) });
 
-    const inNov = await getCompetencyTransactions(nov.id);
-    expect(inNov.map(t => t.description).sort()).toEqual(["Compra out", "Luz"]);
-    const inOct = await getCompetencyTransactions(oct.id);
-    expect(inOct.map(t => t.description)).toEqual([]);
+    expect(invoiceDueDateOf(s, novPurchase)).toEqual(new Date(2026, 10, 27));
+    expect((await getCompetencyTransactions(nov.id)).map(t => t.description).sort()).toEqual(["Compra nov", "Luz"]);
+    expect((await getCompetencyTransactions(oct.id)).map(t => t.description)).toEqual(["Compra out"]);
+  });
+
+  it("cartão que vence antes do fechamento (fecha 28, vence 5): em novembro aparece a fatura de outubro", async () => {
+    const { s } = await setup();
+    const { getCompetencyTransactions } = await import("./db");
+    const card = s.insert("creditCards", { userId: 1, name: "Nubank", cutoffDay: 28, dueDay: 5, isActive: 1 });
+    const oct = s.insert("competencies", { userId: 1, year: 2026, month: 10, name: "Outubro de 2026" });
+    const nov = s.insert("competencies", { userId: 1, year: 2026, month: 11, name: "Novembro de 2026" });
+    s.insert("transactions", { userId: 1, competencyId: oct.id, type: "credit_card", creditCardId: card.id, category: "X", description: "Compra out", amount: "100", transactionDate: new Date(2026, 9, 10) });
+    s.insert("transactions", { userId: 1, competencyId: nov.id, type: "credit_card", creditCardId: card.id, category: "X", description: "Compra nov", amount: "50", transactionDate: new Date(2026, 10, 10) });
+    // Fecha 28/10 → vence 05/11.
+    expect((await getCompetencyTransactions(nov.id)).map(t => t.description)).toEqual(["Compra out"]);
+  });
+
+  it("faturas antigas com vencimento errado são corrigidas no recálculo", async () => {
+    const { s, card } = await setup();
+    const { syncAllInvoices } = await import("./db");
+    const nov = s.insert("competencies", { userId: 1, year: 2026, month: 11, name: "Novembro de 2026" });
+    s.insert("transactions", { userId: 1, competencyId: nov.id, type: "credit_card", creditCardId: card.id, category: "X", description: "Compra", amount: "50", transactionDate: new Date(2026, 10, 10) });
+    s.insert("invoices", { userId: 1, creditCardId: card.id, competencyId: nov.id, closingDate: new Date(2026, 10, 20), dueDate: new Date(2026, 11, 27), totalAmount: "50.00", paidAmount: "0.00", status: "open" });
+    expect(syncAllInvoices(s, 1)).toBe(1);
+    expect(s.select("invoices")[0].dueDate).toEqual(new Date(2026, 10, 27));
   });
 });
 
@@ -179,5 +197,38 @@ describe("ordem manual", () => {
     // Arrastando só parte (ex.: lista filtrada), os outros não saem do lugar.
     await reorderTransactions([ids[1], ids[0]]); // B antes de A
     expect(order()).toEqual(["C", "B", "D", "A"]);
+  });
+});
+
+describe("hotfix: compras antigas na fatura errada", () => {
+  beforeEach(() => fake.sheets.clear());
+
+  it("encontra compras fora da fatura certa (pela data e fechamento) e corrige só as confirmadas", async () => {
+    const { s, card } = await setup(); // fecha 20, vence 27
+    const { findMisplacedCardPurchases, fixMisplacedCardPurchases } = await import("./db");
+    const nov = s.insert("competencies", { userId: 1, year: 2026, month: 11, name: "nov" });
+    const dec = s.insert("competencies", { userId: 1, year: 2026, month: 12, name: "dez" });
+    const add = (competencyId: number, description: string, date: Date, extra = {}) =>
+      s.insert("transactions", { userId: 1, competencyId, type: "credit_card", creditCardId: card.id, category: "X", description, amount: "10", transactionDate: date, ...extra });
+    // Gravadas no mês aberto na tela (dezembro), mas são de antes do fechamento de novembro.
+    const a = add(dec.id, "Farmácia", new Date(2026, 10, 5));
+    const b = add(dec.id, "Mercado", new Date(2026, 10, 12));
+    add(nov.id, "Certa", new Date(2026, 10, 8)); // já está certa
+    add(dec.id, "Parcela 2/3", new Date(2026, 10, 9), { installments: 3, currentInstallment: 2 }); // parcela: fica
+    add(dec.id, "Depois do fechamento", new Date(2026, 10, 22)); // 22/11 ≥ 20: dezembro está certo
+
+    const found = findMisplacedCardPurchases(s, 1);
+    expect(found.map(f => f.description)).toEqual(["Farmácia", "Mercado"]);
+    expect(found[0]).toMatchObject({ fromDueDate: new Date(2026, 11, 27), toDueDate: new Date(2026, 10, 27), cardName: "Nubank" });
+
+    const { moved } = await fixMisplacedCardPurchases(1, [a.id]); // só a confirmada
+    expect(moved).toBe(1);
+    expect(s.find("transactions", t => t.id === a.id)!.competencyId).toBe(nov.id);
+    expect(s.find("transactions", t => t.id === b.id)!.competencyId).toBe(dec.id);
+    expect(findMisplacedCardPurchases(s, 1).map(f => f.description)).toEqual(["Mercado"]);
+    // Faturas recalculadas: novembro com Farmácia + Certa; dezembro com Mercado + parcela + depois do fechamento.
+    const totals = Object.fromEntries(s.select("invoices").map(i => [i.competencyId, i.totalAmount]));
+    expect(totals[nov.id]).toBe("20.00");
+    expect(totals[dec.id]).toBe("30.00");
   });
 });

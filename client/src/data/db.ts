@@ -124,14 +124,16 @@ export async function getCompetencyTransactions(competencyId: number) {
 /** Vencimento da fatura em que uma compra no cartão é cobrada. */
 export function invoiceDueDateOf(s: SheetStore, t: Transaction): Date | null {
   if (t.type !== "credit_card" || !t.creditCardId) return null;
+  // Sempre a partir do cartão e da competência (datas gravadas em faturas
+  // antigas podiam estar erradas).
+  const card = s.find("creditCards", c => c.id === t.creditCardId);
+  const competency = s.find("competencies", c => c.id === t.competencyId);
+  if (card && competency) return calculateInvoiceDates(card, competency.year, competency.month).dueDate;
   const invoice = s.find(
     "invoices",
     i => i.creditCardId === t.creditCardId && i.competencyId === t.competencyId
   );
-  if (invoice?.dueDate) return invoice.dueDate;
-  const card = s.find("creditCards", c => c.id === t.creditCardId);
-  const competency = s.find("competencies", c => c.id === t.competencyId);
-  return card && competency ? calculateInvoiceDates(card, competency.year, competency.month).dueDate : null;
+  return invoice?.dueDate ?? null;
 }
 
 /**
@@ -429,14 +431,15 @@ export function recalcInvoice(s: SheetStore, userId: number, creditCardId: numbe
   const where = (i: { creditCardId: number; competencyId: number }) =>
     i.creditCardId === creditCardId && i.competencyId === competencyId;
 
+  const { closingDate, dueDate } = calculateInvoiceDates(card, competency.year, competency.month);
   const existing = s.find("invoices", where);
   if (existing) {
     // Mudou o total (compra nova/excluída): o status acompanha o valor já pago.
     const paid = parseFloat(String(existing.paidAmount ?? 0)) || 0;
     const status = paid <= 0 ? "open" : paid + 0.005 >= total ? "paid" : "partial";
-    s.update("invoices", where, { totalAmount: total.toFixed(2), status });
+    // Datas sempre pela regra atual do cartão (corrige faturas antigas).
+    s.update("invoices", where, { totalAmount: total.toFixed(2), status, closingDate, dueDate });
   } else {
-    const { closingDate, dueDate } = calculateInvoiceDates(card, competency.year, competency.month);
     s.insert("invoices", {
       userId,
       creditCardId,
@@ -477,7 +480,11 @@ export async function updateInvoicePayment(invoiceId: number, paidAmount: number
  * quantas faturas mudaram.
  */
 export function syncAllInvoices(s: SheetStore, userId: number) {
-  const before = JSON.stringify(s.select("invoices").map(i => [i.id, i.totalAmount, i.status]));
+  const snapshot = () =>
+    JSON.stringify(
+      s.select("invoices").map(i => [i.id, i.totalAmount, i.status, i.closingDate?.getTime(), i.dueDate?.getTime()])
+    );
+  const before = snapshot();
   const groups = new Set<string>();
   for (const t of s.select("transactions", t => t.userId === userId && t.type === "credit_card" && !!t.creditCardId)) {
     groups.add(`${t.creditCardId}:${t.competencyId}`);
@@ -490,7 +497,7 @@ export function syncAllInvoices(s: SheetStore, userId: number) {
     const [card, comp] = key.split(":").map(Number);
     recalcInvoice(s, userId, card, comp);
   });
-  const after = JSON.stringify(s.select("invoices").map(i => [i.id, i.totalAmount, i.status]));
+  const after = snapshot();
   return before === after ? 0 : 1;
 }
 
@@ -534,6 +541,67 @@ export function invoicesForCard(s: SheetStore, userId: number, creditCardId: num
     })
     .filter(inv => inv.items.length > 0 || inv.paid > 0)
     .sort((a, b) => b.dueDate.getTime() - a.dueDate.getTime());
+}
+
+/**
+ * Compras no cartão gravadas na fatura errada: a fatura certa sai da data da
+ * compra e do dia de fechamento do cartão. Antes da correção das faturas, uma
+ * compra simples ia para o mês aberto na tela. Parcelas (2/10…) ficam de fora:
+ * elas avançam uma fatura por parcela de propósito.
+ */
+export function findMisplacedCardPurchases(s: SheetStore, userId: number) {
+  const competencies = new Map(s.select("competencies", c => c.userId === userId).map(c => [c.id, c]));
+  const cards = new Map(s.select("creditCards", c => c.userId === userId).map(c => [c.id, c]));
+  return s
+    .select(
+      "transactions",
+      t => t.userId === userId && t.type === "credit_card" && !!t.creditCardId && (t.installments ?? 1) <= 1
+    )
+    .flatMap(t => {
+      const card = cards.get(t.creditCardId!);
+      const current = competencies.get(t.competencyId);
+      if (!card || !current) return [];
+      const expected = getCompetencyForTransaction(t.transactionDate, card);
+      if (expected.year === current.year && expected.month === current.month) return [];
+      return [
+        {
+          id: t.id,
+          description: t.description || t.category,
+          transactionDate: t.transactionDate,
+          amount: Number(t.amount),
+          cardName: card.name,
+          isPaid: t.isPaid,
+          fromDueDate: calculateInvoiceDates(card, current.year, current.month).dueDate,
+          toDueDate: calculateInvoiceDates(card, expected.year, expected.month).dueDate,
+        },
+      ];
+    })
+    .sort((a, b) => a.transactionDate.getTime() - b.transactionDate.getTime());
+}
+
+/** Move as compras escolhidas para a fatura certa e recalcula as faturas afetadas. */
+export async function fixMisplacedCardPurchases(userId: number, ids: number[]) {
+  const s = getStore();
+  const wanted = new Set(ids);
+  const touched = new Set<string>();
+  let moved = 0;
+  for (const t of s.select("transactions", x => wanted.has(x.id) && x.userId === userId && x.type === "credit_card")) {
+    const card = s.find("creditCards", c => c.id === t.creditCardId);
+    if (!card) continue;
+    const { year, month } = getCompetencyForTransaction(t.transactionDate, card);
+    const competencyId = ensureCompetency(s, userId, year, month);
+    if (competencyId === t.competencyId) continue;
+    touched.add(`${card.id}:${t.competencyId}`);
+    touched.add(`${card.id}:${competencyId}`);
+    s.update("transactions", x => x.id === t.id, { competencyId });
+    moved++;
+  }
+  touched.forEach(k => {
+    const [card, comp] = k.split(":").map(Number);
+    recalcInvoice(s, userId, card, comp);
+  });
+  await s.commit();
+  return { moved };
 }
 
 /** Soma um pagamento ao valor já pago da fatura (sem passar do total). */

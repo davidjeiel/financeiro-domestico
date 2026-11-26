@@ -197,9 +197,31 @@ describe("competencyLogic", () => {
         updatedAt: new Date(),
       };
 
+      // Fecha 10/03 e vence 25/03 (vencimento depois do fechamento: mesmo mês).
       const result = calculateInvoiceDates(creditCard, 2026, 3);
       expect(result.closingDate).toEqual(new Date(2026, 2, 10));
-      expect(result.dueDate).toEqual(new Date(2026, 3, 25));
+      expect(result.dueDate).toEqual(new Date(2026, 2, 25));
+    });
+
+    it("vence no mês seguinte quando o dia de vencimento é antes do fechamento", () => {
+      const card = { cutoffDay: 28, dueDay: 5 };
+      expect(calculateInvoiceDates(card, 2026, 11)).toEqual({
+        closingDate: new Date(2026, 10, 28),
+        dueDate: new Date(2026, 11, 5),
+      });
+      // Virada de ano.
+      expect(calculateInvoiceDates(card, 2026, 12).dueDate).toEqual(new Date(2027, 0, 5));
+    });
+
+    it("caso relatado: fecha dia 18 e vence dia 25 — compras de novembro vencem em 25/11", () => {
+      expect(calculateInvoiceDates({ cutoffDay: 18, dueDay: 25 }, 2026, 11).dueDate).toEqual(new Date(2026, 10, 25));
+    });
+
+    it("dia inexistente no mês usa o último dia (fevereiro)", () => {
+      expect(calculateInvoiceDates({ cutoffDay: 30, dueDay: 31 }, 2026, 2)).toEqual({
+        closingDate: new Date(2026, 1, 28),
+        dueDate: new Date(2026, 1, 28),
+      });
     });
   });
 
