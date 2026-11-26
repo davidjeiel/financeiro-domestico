@@ -49,6 +49,7 @@ import { PersonBadge } from "@/components/workspace/PersonBadge";
 import { useActiveWorkspaceId, usePeople } from "@/components/workspace/useWorkspaces";
 import { IncomeLinksEditor, type IncomeLink } from "@/components/allocation/IncomeLinksEditor";
 import { InvoicePaymentDialog, type InvoiceToPay } from "@/components/invoice/InvoicePaymentDialog";
+import { MisplacedPurchasesBanner } from "@/components/invoice/MisplacedPurchasesBanner";
 import {
   parseTransactionsSearch,
   toColumnFilters,
@@ -1638,6 +1639,9 @@ export default function TransactionsEnhanced() {
             )}
           </div>
         )}
+
+        {/* Compras antigas na fatura errada (correção com prévia) */}
+        <MisplacedPurchasesBanner />
 
         {/* Filtros ativos (inclusive os vindos do dashboard) */}
         {activeFilterChips.length > 0 && (

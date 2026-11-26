@@ -119,21 +119,22 @@ export function getCompetencyForTransaction(
  * - dueDate: The date when payment is due (dueDay)
  */
 export function calculateInvoiceDates(
-  creditCard: CreditCard,
+  creditCard: Pick<CreditCard, "cutoffDay" | "dueDay">,
   year: number,
   month: number
 ): { closingDate: Date; dueDate: Date } {
-  // Closing date is the cutoff day of the month
-  const closingDate = new Date(year, month - 1, creditCard.cutoffDay);
+  const clampDay = (y: number, m0: number, day: number) =>
+    new Date(y, m0, Math.min(day, new Date(y, m0 + 1, 0).getDate()));
 
-  // Due date is the dueDay of the NEXT month
-  let dueMonth = month + 1;
-  let dueYear = year;
-  if (dueMonth > 12) {
-    dueMonth = 1;
-    dueYear += 1;
-  }
-  const dueDate = new Date(dueYear, dueMonth - 1, creditCard.dueDay);
+  // A competência é o mês em que a fatura fecha.
+  const closingDate = clampDay(year, month - 1, creditCard.cutoffDay);
+
+  // O vencimento é o próximo dia `dueDay` depois do fechamento: no mesmo mês
+  // quando vence depois do dia de fechamento (fecha 18, vence 25), ou no mês
+  // seguinte quando vence antes (fecha 28, vence 5).
+  const sameMonth = creditCard.dueDay > creditCard.cutoffDay;
+  const dueIndex = year * 12 + (month - 1) + (sameMonth ? 0 : 1);
+  const dueDate = clampDay(Math.floor(dueIndex / 12), dueIndex % 12, creditCard.dueDay);
 
   return { closingDate, dueDate };
 }

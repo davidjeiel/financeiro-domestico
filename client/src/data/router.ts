@@ -21,6 +21,8 @@ import {
   addInvoicePayment,
   invoiceDueDateOf,
   invoicesForCard,
+  findMisplacedCardPurchases,
+  fixMisplacedCardPurchases,
   reorderTransactions,
   setRecurrence,
   syncAllInvoices,
@@ -587,6 +589,14 @@ export const appRouter = router({
       .mutation(({ input }) =>
         updateInvoicePayment(input.invoiceId, input.paidAmount)
       ),
+    /** Compras antigas gravadas na fatura errada (prévia da correção). */
+    misplacedPurchases: protectedProcedure.query(() =>
+      findMisplacedCardPurchases(getStore(), getDataUserId())
+    ),
+    /** Move as compras escolhidas para a fatura certa (depois da confirmação). */
+    fixMisplacedPurchases: protectedProcedure
+      .input(z.object({ ids: z.array(z.number().int()).min(1) }))
+      .mutation(({ input }) => fixMisplacedCardPurchases(getDataUserId(), input.ids)),
     /** Faturas de um cartão, com as compras de cada uma (tela de Cartões). */
     byCard: protectedProcedure
       .input(z.object({ creditCardId: z.number().int() }))

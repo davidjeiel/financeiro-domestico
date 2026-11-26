@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { CardInvoicesPanel } from "@/components/invoice/CardInvoicesPanel";
+import { MisplacedPurchasesBanner } from "@/components/invoice/MisplacedPurchasesBanner";
 import DashboardLayoutCustom from "@/components/DashboardLayoutCustom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -89,6 +90,9 @@ export default function CreditCards() {
   return (
     <DashboardLayoutCustom title="Cartões de Crédito">
       <div className="space-y-6">
+        {/* Compras antigas na fatura errada (correção com prévia) */}
+        <MisplacedPurchasesBanner />
+
         {/* Add Card Dialog */}
         <div className="flex justify-end">
           <Dialog open={open} onOpenChange={setOpen}>
