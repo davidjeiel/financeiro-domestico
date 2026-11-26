@@ -105,6 +105,17 @@ Os vínculos ficam na aba `Vinculos` (`expenseId`, `incomeId`, `amount`).
 
 ---
 
+## Período da competência
+
+Em **Configurar Competência** (`/competency-config`) escolha o **dia de início** da competência. Ela vai desse dia até a véspera dele no mês seguinte e leva o nome do mês em que começa:
+
+- início **1** (padrão): mês do calendário;
+- início **30**: *Novembro* = 30/11 a 29/12, *Dezembro* = 30/12 a 29/01. Em meses mais curtos a competência começa no último dia do mês (*Fevereiro* = 28/02 a 29/03).
+
+Os lançamentos (fora do cartão) entram na competência pela **data**, inclusive recorrências e parcelas; mudar a data muda a competência. Compras no cartão seguem a fatura, e a fatura entra na competência que contém o vencimento. Ao salvar um novo dia, o app mostra quantos lançamentos mudam e os reorganiza. A visão **Competência** de Lançamentos mostra o período (ex.: "30/11 a 29/12") abaixo do nome. Na área compartilhada a configuração vale para todos (fica em `Usuarios.competencyStartDay` do dono da planilha).
+
+---
+
 ## Cartão de crédito nos lançamentos
 
 - **Faturas agrupadas:** na lista de lançamentos, as compras de um cartão aparecem numa única linha **Fatura &lt;cartão&gt;**, com o vencimento e o valor total. Clique na linha (ou na seta) para expandir e ver cada compra; as compras continuam editáveis e selecionáveis.
@@ -223,7 +234,7 @@ VITE_BASE_URL: /financeiro-domestico/   # GitHub Pages padrão
 | `/calendar` | Visão calendário das movimentações |
 | `/reports` | Gráficos e relatórios financeiros |
 | `/export` | Exportação de dados (CSV/XLSX) |
-| `/competency-config` | Configuração de datas de competência |
+| `/competency-config` | Dia de início da competência (ex.: 30 a 29) |
 | `/recurring-installments` | Despesas fixas e parcelamentos |
 | `/settings` | Configurações da conta |
 | `/accounts` | Contas bancárias |

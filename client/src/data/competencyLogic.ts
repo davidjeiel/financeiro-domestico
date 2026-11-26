@@ -317,3 +317,50 @@ export function shiftCompetency(year: number, month: number, months: number) {
   const index = year * 12 + (month - 1) + months;
   return { year: Math.floor(index / 12), month: (index % 12) + 1 };
 }
+
+// ─── Período da competência ──────────────────────────────────────────────────
+//
+// A competência pode começar num dia diferente do dia 1 (ex.: quem recebe no
+// dia 30). Ela vai do dia inicial até a véspera do dia inicial do mês seguinte
+// e leva o nome do mês em que começa: com início no dia 30, "Novembro" vai de
+// 30/11 a 29/12. Em meses mais curtos o início cai no último dia do mês
+// (início 30 → 28/02), sem buracos nem sobreposição entre competências.
+
+/** Dia inicial válido (1–31); qualquer outro valor vira 1 (mês do calendário). */
+export function normalizeStartDay(day: unknown): number {
+  const n = Number(day);
+  return Number.isInteger(n) && n >= 1 && n <= 31 ? n : 1;
+}
+
+/** Último dia da competência, para exibir (0 = último dia do mês, como no cadastro). */
+export function competencyEndDayFor(startDay: number): number {
+  const start = normalizeStartDay(startDay);
+  return start === 1 ? 0 : start - 1;
+}
+
+/** Primeiro dia da competência ano/mês (mês 1–12). */
+export function competencyStartDate(year: number, month: number, startDay: number): Date {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  return new Date(year, month - 1, Math.min(normalizeStartDay(startDay), daysInMonth));
+}
+
+/** Intervalo de datas (inclusivo, à meia-noite local) da competência ano/mês. */
+export function competencyPeriod(
+  year: number,
+  month: number,
+  startDay: number
+): { start: Date; end: Date } {
+  const start = competencyStartDate(year, month, startDay);
+  const next = shiftCompetency(year, month, 1);
+  const nextStart = competencyStartDate(next.year, next.month, startDay);
+  const end = new Date(nextStart.getFullYear(), nextStart.getMonth(), nextStart.getDate() - 1);
+  return { start, end };
+}
+
+/** Competência (ano/mês) a que uma data pertence. */
+export function competencyOfDate(date: Date, startDay: number): { year: number; month: number } {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const start = competencyStartDate(year, month, startDay);
+  return date.getDate() >= start.getDate() ? { year, month } : shiftCompetency(year, month, -1);
+}

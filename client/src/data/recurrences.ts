@@ -16,7 +16,7 @@
 import type { SheetStore } from "./sheetStore";
 import type { RecurrenceRule, Transaction, TransactionType } from "./schema";
 import { generateRecurringDates, getCompetencyForTransaction, type RecurrenceFrequency } from "./competencyLogic";
-import { ensureCompetency, newRecurrenceGroup, recalcInvoice } from "./db";
+import { competencyOfDateFor, ensureCompetency, newRecurrenceGroup, recalcInvoice } from "./db";
 
 /** Meses de antecedência com que as ocorrências são geradas (1 ano). */
 export const HORIZON_MONTHS = 12;
@@ -125,7 +125,9 @@ export function materializeRecurrences(s: SheetStore, ownerId: number, today = n
     for (const date of generateRecurringDates(rule.startDate, end, rule.frequency as RecurrenceFrequency)) {
       const key = dateKey(date);
       if (skipped.has(key) || byDate.has(key)) continue;
-      const { year, month } = getCompetencyForTransaction(date, card);
+      const { year, month } = card
+        ? getCompetencyForTransaction(date, card)
+        : competencyOfDateFor(s, ownerId, date);
       const competencyId = ensureCompetency(s, ownerId, year, month);
       created.push(
         s.insert("transactions", {

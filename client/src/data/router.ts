@@ -8,6 +8,9 @@ import { z } from "zod";
 import {
   getOrCreateCurrentCompetency,
   getOrCreateCompetencyByYearMonth,
+  getCompetencyConfig,
+  previewCompetencyStartDay,
+  setCompetencyStartDay,
   getUserCompetencies,
   getUserCreditCards,
   createCreditCard,
@@ -225,6 +228,15 @@ export const appRouter = router({
       .query(({ ctx, input }) =>
         getOrCreateCompetencyByYearMonth(getDataUserId(), input.year, input.month)
       ),
+    /** Dia em que a competência começa (1 = mês do calendário). */
+    config: protectedProcedure.query(() => getCompetencyConfig(getDataUserId())),
+    /** Quantos lançamentos mudariam de competência com outro dia inicial. */
+    previewStartDay: protectedProcedure
+      .input(z.object({ startDay: z.number().int().min(1).max(31) }))
+      .query(({ input }) => previewCompetencyStartDay(getDataUserId(), input.startDay)),
+    setStartDay: protectedProcedure
+      .input(z.object({ startDay: z.number().int().min(1).max(31) }))
+      .mutation(({ input }) => setCompetencyStartDay(getDataUserId(), input.startDay)),
   }),
 
   calendar: router({
