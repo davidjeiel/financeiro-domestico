@@ -39,6 +39,8 @@ import BulkEditModal from "@/components/BulkEditModal";
 import BulkDeleteModal from "@/components/BulkDeleteModal";
 import EditTransactionModal from "@/components/EditTransactionModal";
 import SavedFiltersSelector, { type AppliedSavedFilter } from "@/components/SavedFiltersSelector";
+import { PaymentStatusIcon, PaymentStatusUnknown, paymentStatusOf } from "@/components/PaymentStatusIcon";
+import { CARD_ROW_CLASS, cardRowStyle } from "@/lib/cardTint";
 import {
   applyFilterCriteria,
   countCriteria,
@@ -838,13 +840,16 @@ export default function TransactionsEnhanced() {
     const expanded = expandedInvoices.has(group.key);
     const dueDate = invoice ? new Date(invoice.dueDate) : null;
     const status = paid <= 0 ? "open" : open < 0.005 ? "paid" : "partial";
+    const payStatus =
+      status === "paid" ? "paid" : status === "partial" ? "partial" : paymentStatusOf(false, dueDate);
     return (
       <SortableTr
         key={`invoice-row-${group.key}`}
         sortId={`inv:${group.key}`}
         disabled={dragDisabled}
         disabledReason={dragDisabledReason}
-        className="border-b border-border bg-blue-500/5 hover:bg-blue-500/10 cursor-pointer"
+        className={`border-b border-border cursor-pointer ${CARD_ROW_CLASS}`}
+        style={cardRowStyle(card?.color, "invoice")}
         onClick={() => toggleInvoice(group.key)}
         aria-expanded={expanded}
       >
@@ -891,14 +896,18 @@ export default function TransactionsEnhanced() {
         </td>
         {showAllocationColumn && <td className="py-3 px-4" />}
         <td className="py-3 px-4 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
-          {status === "paid" ? (
-            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-600">Paga</span>
-          ) : status === "partial" ? (
-            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-600" title={`Pago ${formatCurrency(paid)}`}>
-              Parcial · falta {formatCurrency(open)}
-            </span>
-          ) : (
-            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">Aberta</span>
+          <PaymentStatusIcon
+            status={payStatus}
+            hint={
+              status === "partial"
+                ? `pago ${formatCurrency(paid)}, falta ${formatCurrency(open)}`
+                : status === "paid"
+                  ? "fatura quitada"
+                  : `fatura em aberto${dueDate ? `, vence ${formatDate(dueDate)}` : ""} — use "Pagar"`
+            }
+          />
+          {status === "partial" && (
+            <span className="block text-[11px] text-muted-foreground mt-0.5">falta {formatCurrency(open)}</span>
           )}
         </td>
         <td className="py-3 px-4 text-center" onClick={e => e.stopPropagation()}>
@@ -926,13 +935,19 @@ export default function TransactionsEnhanced() {
     );
   };
 
-  const renderTransactionRow = (transaction: Transaction, nested: boolean) => (
+  const renderTransactionRow = (transaction: Transaction, nested: boolean) => {
+    const card = transaction.type === "credit_card" ? creditCards?.find(c => c.id === transaction.creditCardId) : undefined;
+    const invoiceOfTx = card ? invoicesByKey.get(invoiceKey(transaction.creditCardId, transaction.competencyId)) : undefined;
+    return (
                     <SortableTr
                       key={transaction.id}
                       sortId={nested ? undefined : `tx:${transaction.id}`}
                       disabled={dragDisabled}
                       disabledReason={dragDisabledReason}
-                      className={`border-b border-border hover:bg-muted cursor-pointer ${nested ? "bg-muted/30 text-sm" : ""}`}
+                      className={`border-b border-border cursor-pointer ${
+                        card ? CARD_ROW_CLASS : `hover:bg-muted ${nested ? "bg-muted/30" : ""}`
+                      } ${nested ? "text-sm" : ""}`}
+                      style={card ? cardRowStyle(card.color, "purchase") : undefined}
                       onClick={() => {
                         setEditingTransactionId(transaction.id);
                         setShowEditIndividual(true);
@@ -1018,22 +1033,32 @@ export default function TransactionsEnhanced() {
                       )}
                       <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                         {transaction.type === "credit_card" ? (
-                          <span
-                            className="inline-flex items-center justify-center w-4 h-4 rounded border border-border opacity-40 cursor-not-allowed"
-                            title="O pagamento é feito na linha da fatura"
-                          />
+                          invoiceOfTx ? (
+                            (() => {
+                              const invTotal = Number(invoiceOfTx.totalAmount);
+                              const invPaid = Number(invoiceOfTx.paidAmount ?? 0);
+                              const st =
+                                invPaid + 0.005 >= invTotal && invTotal > 0
+                                  ? "paid"
+                                  : invPaid > 0
+                                    ? "partial"
+                                    : paymentStatusOf(false, invoiceOfTx.dueDate);
+                              return <PaymentStatusIcon status={st} hint="o pagamento é feito na fatura" />;
+                            })()
+                          ) : (
+                            <PaymentStatusUnknown title="Compra sem fatura — o pagamento é feito na fatura do cartão" />
+                          )
                         ) : (
-                          <input
-                            type="checkbox"
-                            checked={transaction.isPaid === 1}
-                            onChange={(e) => {
-                              markAsPaidMutation.mutate({
-                                id: transaction.id,
-                                isPaid: e.target.checked,
-                              });
-                            }}
-                            className="w-4 h-4 cursor-pointer"
-                            title={transaction.isPaid === 1 ? "Marcar como não pago" : "Marcar como pago"}
+                          <PaymentStatusIcon
+                            status={paymentStatusOf(
+                              transaction.isPaid === 1,
+                              transaction.type === "expense" ? transaction.dueDate ?? transaction.transactionDate : null
+                            )}
+                            kind={transaction.type === "income" ? "income" : "expense"}
+                            loading={markAsPaidMutation.isPending && markAsPaidMutation.variables?.id === transaction.id}
+                            onToggle={() =>
+                              markAsPaidMutation.mutate({ id: transaction.id, isPaid: transaction.isPaid !== 1 })
+                            }
                           />
                         )}
                       </td>
@@ -1069,7 +1094,8 @@ export default function TransactionsEnhanced() {
                         </div>
                       </td>
                     </SortableTr>
-  );
+    );
+  };
 
   const TYPE_LABELS: Record<string, string> = { income: "Receitas", expense: "Despesas", credit_card: "Cartão" };
   const activeFilterChips: { key: string; label: string; keys: string[]; onRemove?: () => void }[] = [];
