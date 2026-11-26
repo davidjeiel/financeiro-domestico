@@ -2,7 +2,7 @@ import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from "@shared/const";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { User } from "./schema";
-import { getCurrentUser, syncSharedStore } from "./session";
+import { ensureRecurrences, getCurrentUser, syncSharedStore } from "./session";
 
 export type TrpcContext = {
   user: User | null;
@@ -32,6 +32,7 @@ const requireUser = t.middleware(async opts => {
   // Área compartilhada: pega o que outras pessoas gravaram antes de gravar
   // (e, nas consultas, se a cópia em memória estiver velha).
   await syncSharedStore(type === "mutation");
+  await ensureRecurrences();
 
   return next({
     ctx: {

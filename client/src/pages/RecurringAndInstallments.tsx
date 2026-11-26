@@ -18,8 +18,10 @@ const recurringSchema = z.object({
   category: z.string().optional(),
   frequency: z.enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"]),
   startDate: z.string().min(1, "Data inicial obrigatória"),
-  endDate: z.string().min(1, "Data limite obrigatória"),
-}).refine(data => data.endDate >= data.startDate, {
+  // Opcional: em branco, repete sem fim.
+  endDate: z.string().optional(),
+  variableAmount: z.boolean().optional(),
+}).refine(data => !data.endDate || data.endDate >= data.startDate, {
   path: ["endDate"],
   message: "A data limite deve ser igual ou posterior à data inicial",
 });
@@ -41,7 +43,10 @@ function formatInputDate(value: string) {
 }
 
 export default function RecurringAndInstallments() {
-  const [recurringTransactions, setRecurringTransactions] = useState<any[]>([]);
+  // Recorrências gravadas na planilha (regras e séries antigas).
+  const { data: recurrences = [] } = trpc.recurrence.list.useQuery();
+  const endRecurrence = trpc.recurrence.end.useMutation();
+  const continueSeries = trpc.recurrence.continueSeries.useMutation();
   const [installments, setInstallments] = useState<any[]>([]);
   const createRecurringMutation = trpc.transaction.createRecurring.useMutation();
   const createInstallmentsMutation = trpc.transaction.createInstallments.useMutation();
@@ -49,7 +54,32 @@ export default function RecurringAndInstallments() {
 
   const recurringForm = useForm<RecurringFormData>({
     resolver: zodResolver(recurringSchema),
+    defaultValues: { variableAmount: true },
   });
+
+  const refreshAll = () =>
+    Promise.all([utils.recurrence.invalidate(), utils.transaction.invalidate(), utils.invoice.invalidate()]);
+
+  const handleEnd = async (groupKey: string, description: string) => {
+    if (!window.confirm(`Encerrar "${description}" hoje? Os lançamentos futuros ainda não pagos serão removidos.`)) return;
+    try {
+      const { removed } = await endRecurrence.mutateAsync({ groupKey });
+      await refreshAll();
+      toast.success(removed ? `Recorrência encerrada; ${removed} lançamento(s) futuro(s) removido(s).` : "Recorrência encerrada.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível encerrar");
+    }
+  };
+
+  const handleContinue = async (groupKey: string) => {
+    try {
+      await continueSeries.mutateAsync({ groupKey });
+      await refreshAll();
+      toast.success("A série agora continua sem data final.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível continuar a série");
+    }
+  };
 
   const installmentForm = useForm<InstallmentFormData>({
     resolver: zodResolver(installmentSchema),
@@ -64,20 +94,14 @@ export default function RecurringAndInstallments() {
         amount: Number(data.amount).toString(),
         frequency: data.frequency,
         startDate: data.startDate,
-        endDate: data.endDate,
+        endDate: data.endDate || null,
+        variableAmount: data.variableAmount !== false,
       });
-      const newRecurring = {
-        id: Date.now(),
-        ...data,
-        amount: parseFloat(data.amount),
-        isActive: true,
-        occurrenceCount: created.length,
-      };
-      setRecurringTransactions(current => [...current, newRecurring]);
-      utils.transaction.list.invalidate();
-      utils.invoice.list.invalidate();
-      toast.success(`${created.length} lançamentos recorrentes criados.`);
-      recurringForm.reset();
+      await refreshAll();
+      toast.success(
+        `${created.length} lançamento(s) gerado(s) até o mês que vem; os próximos são gerados automaticamente.`
+      );
+      recurringForm.reset({ variableAmount: true });
     } catch (error) {
       console.error("Erro ao criar débito/crédito fixo:", error);
       toast.error(error instanceof Error ? error.message : "Erro ao criar débito/crédito fixo");
@@ -200,13 +224,12 @@ export default function RecurringAndInstallments() {
 
                 <div>
                   <label className="text-sm font-medium text-foreground mb-2 block">
-                    Data limite <span className="text-red-600">*</span>
+                    Data limite <span className="text-xs font-normal text-muted-foreground">(opcional — em branco, sem fim)</span>
                   </label>
                   <Input
                     {...recurringForm.register("endDate")}
                     type="date"
                     min={recurringForm.watch("startDate") || undefined}
-                    required
                     className="input-elegant"
                   />
                   {recurringForm.formState.errors.endDate && (
@@ -226,6 +249,19 @@ export default function RecurringAndInstallments() {
                 </div>
               </div>
 
+              <label className="flex items-start gap-2 text-sm cursor-pointer">
+                <input type="checkbox" className="mt-0.5 w-4 h-4" {...recurringForm.register("variableAmount")} />
+                <span>
+                  O valor muda a cada mês
+                  <span className="block text-xs text-muted-foreground">
+                    Os lançamentos aparecem como valor estimado até você confirmar o valor real.
+                  </span>
+                </span>
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Os lançamentos são gerados com 1 mês de antecedência; os seguintes aparecem automaticamente.
+              </p>
+
               <Button
                 type="submit"
                 disabled={createRecurringMutation.isPending}
@@ -237,58 +273,85 @@ export default function RecurringAndInstallments() {
             </form>
           </Card>
 
-          {/* Lista de Débitos/Créditos Fixos */}
-          {recurringTransactions.length > 0 && (
+          {/* Recorrências gravadas na planilha */}
+          {recurrences.length > 0 && (
             <Card className="p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4">Débitos/Créditos Ativos</h3>
+              <h3 className="text-lg font-semibold text-foreground mb-4">Débitos/Créditos Fixos</h3>
               <div className="space-y-3">
-                {recurringTransactions.map(recurring => (
+                {recurrences.map(r => (
                   <div
-                    key={recurring.id}
-                    className="flex items-center justify-between p-4 rounded-lg border border-border bg-card hover:bg-muted transition-all"
+                    key={r.groupKey}
+                    className={`flex flex-wrap items-center justify-between gap-3 p-4 rounded-lg border border-border bg-card ${
+                      r.ended ? "opacity-60" : ""
+                    }`}
                   >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-medium text-foreground">{recurring.description}</p>
+                    <div className="flex-1 min-w-[14rem]">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <p className="font-medium text-foreground">{r.description}</p>
                         <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                          recurring.type === "income"
-                            ? "bg-green-500/20 text-green-600"
-                            : "bg-red-500/20 text-red-600"
+                          r.type === "income" ? "bg-green-500/20 text-green-600" : "bg-red-500/20 text-red-600"
                         }`}>
-                          {recurring.type === "income" ? "Receita" : "Despesa"}
+                          {r.type === "income" ? "Receita" : r.type === "credit_card" ? "Cartão" : "Despesa"}
                         </span>
+                        {r.kind === "rule" && !r.endDate && !r.ended && (
+                          <span className="text-xs px-2 py-1 rounded bg-primary/10 text-primary">sem data final</span>
+                        )}
+                        {r.ended && <span className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground">encerrada</span>}
+                        {r.pendingConfirmation > 0 && (
+                          <span className="text-xs px-2 py-1 rounded bg-amber-500/10 text-amber-600">
+                            {r.pendingConfirmation} com valor estimado
+                          </span>
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <DollarSign className="w-3 h-3" />
-                          R$ {parseFloat(recurring.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          {r.variableAmount ? "≈ " : ""}R$ {r.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                         </span>
-                        <span>{frequencyLabels[recurring.frequency as keyof typeof frequencyLabels]}</span>
+                        <span>{frequencyLabels[r.frequency as keyof typeof frequencyLabels] ?? r.frequency}</span>
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
-                          {formatInputDate(recurring.startDate)}
+                          desde {new Date(r.startDate).toLocaleDateString("pt-BR")}
                         </span>
-                        <span>
-                          até {formatInputDate(recurring.endDate)}
-                        </span>
-                        <span>{recurring.occurrenceCount} lançamentos gerados</span>
+                        {r.endDate && <span>até {new Date(r.endDate).toLocaleDateString("pt-BR")}</span>}
+                        {r.nextDate && !r.ended && (
+                          <span>próximo: {new Date(r.nextDate).toLocaleDateString("pt-BR")}</span>
+                        )}
+                        <span>{r.count} lançamento(s) gerado(s)</span>
+                        <span>{r.category}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button size="sm" variant="outline">
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => setRecurringTransactions(recurringTransactions.filter(r => r.id !== recurring.id))}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      {r.kind === "legacy" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleContinue(r.groupKey)}
+                          disabled={continueSeries.isPending}
+                          title="Criada com data final: passa a continuar automaticamente"
+                        >
+                          Continuar sem data final
+                        </Button>
+                      )}
+                      {r.kind === "rule" && !r.ended && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600"
+                          onClick={() => handleEnd(r.groupKey, r.description)}
+                          disabled={endRecurrence.isPending}
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" /> Encerrar
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
+              <p className="text-xs text-muted-foreground mt-3">
+                Para mudar o valor dos próximos meses, edite um lançamento da série e marque
+                "Aplicar aos próximos meses".
+              </p>
             </Card>
           )}
         </TabsContent>

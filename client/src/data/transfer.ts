@@ -20,6 +20,7 @@ import type { SheetStore } from "./sheetStore";
 import type { CreditCard, Transaction, User } from "./schema";
 import { competencyName, recalcInvoice } from "./db";
 import { removeAllocationsOf } from "./allocations";
+import { skipOccurrence } from "./recurrences";
 
 /** Para cada cartão de origem: id de um cartão do destino ou "new" (criar cópia). */
 export type CardMap = Record<string, number | "new">;
@@ -216,6 +217,8 @@ export function transferTransactions(
 
   // Origem: remove os lançamentos e os vínculos deles.
   const ids = new Set(txs.map(t => t.id));
+  // Ocorrências de recorrência: a regra da origem não deve recriá-las.
+  txs.forEach(t => skipOccurrence(source, t));
   source.delete("transactions", t => ids.has(t.id));
   let allocationsRemoved = 0;
   ids.forEach(id => (allocationsRemoved += removeAllocationsOf(source, id)));

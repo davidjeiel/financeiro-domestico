@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate, getLocalDateStringSaoPaulo } from "@/lib/formatting";
-import { Plus, Loader2, Filter, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import { Plus, Loader2, Filter, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, CalendarDays, CheckCircle2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -71,6 +71,8 @@ const transactionSchema = z.object({
   accountId: z.string().optional(),
   frequency: z.enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"]).optional().or(z.literal("")),
   endDate: z.string().optional(),
+  /** Recorrência: o valor muda a cada mês (fica estimado até confirmar). */
+  variableAmount: z.boolean().optional(),
   installments: z.string().optional(),
   notes: z.string().optional(),
 }).superRefine((data, context) => {
@@ -83,13 +85,8 @@ const transactionSchema = z.object({
       message: "Frequência obrigatória",
     });
   }
-  if (!data.endDate) {
-    context.addIssue({
-      code: "custom",
-      path: ["endDate"],
-      message: "Data limite obrigatória",
-    });
-  } else if (data.endDate < data.transactionDate) {
+  // Data limite é opcional: em branco, a recorrência não tem fim.
+  if (data.endDate && data.endDate < data.transactionDate) {
     context.addIssue({
       code: "custom",
       path: ["endDate"],
@@ -300,6 +297,14 @@ export default function TransactionsEnhanced() {
   // Ordem recém-arrastada, aplicada na hora enquanto a planilha grava.
   const [localOrder, setLocalOrder] = useState<number[] | null>(null);
   const reorderMutation = trpc.transaction.reorder.useMutation();
+  const confirmAmountMutation = trpc.transaction.confirmAmount.useMutation({
+    onSuccess: () => {
+      utils.transaction.list.invalidate();
+      utils.invoice.invalidate();
+      toast.success("Valor confirmado.");
+    },
+    onError: error => toast.error(error.message),
+  });
   const dndSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -370,6 +375,7 @@ export default function TransactionsEnhanced() {
       type: "expense",
       transactionType: "simple",
       transactionDate: getLocalDateString(),
+      variableAmount: true,
     },
   });
 
@@ -407,6 +413,7 @@ export default function TransactionsEnhanced() {
         type: "expense",
         transactionType: "simple",
         transactionDate: getLocalDateString(),
+        variableAmount: true,
       });
       setSelectedType("expense");
       setNewTransactionLinks([]);
@@ -474,15 +481,16 @@ export default function TransactionsEnhanced() {
           responsibleUserId,
         });
       } else if (data.transactionType === "recurring") {
-        if (!data.frequency || !data.endDate) {
-          toast.error("Informe a frequência e a data limite");
+        if (!data.frequency) {
+          toast.error("Informe a frequência");
           return;
         }
         createdTransactions = await createRecurringMutation.mutateAsync({
           ...transactionData,
           frequency: data.frequency,
           startDate: data.transactionDate,
-          endDate: data.endDate,
+          endDate: data.endDate || null,
+          variableAmount: data.variableAmount !== false,
         });
       } else {
         if (!activeCompetency) {
@@ -505,7 +513,9 @@ export default function TransactionsEnhanced() {
 
       toast.success(
         data.transactionType === "recurring"
-          ? `${createdTransactions.length} lançamentos recorrentes criados.`
+          ? data.endDate
+            ? `Recorrência criada: ${createdTransactions.length} lançamento(s) até o mês que vem; os demais são gerados com 1 mês de antecedência.`
+            : `Recorrência sem data final criada: ${createdTransactions.length} lançamento(s) até o mês que vem; os próximos são gerados automaticamente.`
           : data.transactionType === "installment"
             ? `${createdTransactions.length} parcelas de ${formatCurrency(createdTransactions[createdTransactions.length - 1]?.amount ?? 0)} criadas.`
             : (() => {
@@ -545,6 +555,7 @@ export default function TransactionsEnhanced() {
           frequency: data.frequency,
           endDate: data.endDate,
           installments: data.installments,
+          variableAmount: data.variableAmount,
           description: "",
           amount: "",
           notes: "",
@@ -560,6 +571,7 @@ export default function TransactionsEnhanced() {
         type: "expense",
         transactionType: "simple",
         transactionDate: getLocalDateString(),
+        variableAmount: true,
       });
       setSelectedType("expense");
       setNewTransactionLinks([]);
@@ -670,6 +682,19 @@ export default function TransactionsEnhanced() {
       return new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime();
     });
   }
+
+  // Parte dos totais que ainda é estimativa (recorrências sem valor confirmado).
+  const estimatedTotals = filteredTransactions.reduce(
+    (acc, t) => {
+      if (!t.isEstimated) return acc;
+      const amt = parseFloat(t.amount) || 0;
+      if (t.type === 'income') acc.income += amt;
+      else if (t.type === 'expense') acc.expense += amt;
+      else acc.creditCard += amt;
+      return acc;
+    },
+    { income: 0, expense: 0, creditCard: 0 }
+  );
 
   const totals = filteredTransactions.reduce(
     (acc, t) => {
@@ -933,7 +958,16 @@ export default function TransactionsEnhanced() {
                           ? "text-green-600"
                           : "text-red-600"
                       }`}>
-                        {transaction.type === "income" ? "+" : "-"}{formatCurrency(transaction.amount)}
+                        {transaction.isEstimated ? (
+                          <span className="italic opacity-80" title="Valor estimado pela recorrência — confirme o valor real">
+                            ≈ {transaction.type === "income" ? "+" : "-"}{formatCurrency(transaction.amount)}
+                            <span className="block text-[10px] font-medium not-italic uppercase tracking-wide text-amber-600">
+                              estimado
+                            </span>
+                          </span>
+                        ) : (
+                          <>{transaction.type === "income" ? "+" : "-"}{formatCurrency(transaction.amount)}</>
+                        )}
                       </td>
                       {showAllocationColumn && (
                         <td className="py-3 px-4 text-xs whitespace-nowrap">
@@ -967,6 +1001,19 @@ export default function TransactionsEnhanced() {
                       </td>
                       <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                         <div className="flex gap-1 justify-center">
+                          {transaction.isEstimated === 1 && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => confirmAmountMutation.mutate({ id: transaction.id })}
+                              disabled={confirmAmountMutation.isPending}
+                              className="text-green-600 hover:text-green-700 hover:bg-green-500/10 p-1 h-auto"
+                              title="Confirmar o valor estimado (para outro valor, abra a edição)"
+                              aria-label="Confirmar valor"
+                            >
+                              <CheckCircle2 className="w-5 h-5" />
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"
@@ -1320,17 +1367,29 @@ export default function TransactionsEnhanced() {
 
                     <div>
                       <label className="text-sm font-medium text-foreground mb-2 block">
-                        Data limite <span className="text-red-600">*</span>
+                        Data limite <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
                       </label>
                       <input
                         {...register("endDate")}
                         type="date"
                         min={watch("transactionDate") || undefined}
                         className="input-elegant w-full"
-                        required
                       />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Em branco, repete sem fim. Os lançamentos são gerados com 1 mês de antecedência.
+                      </p>
                       {errors.endDate && <p className="text-red-600 text-sm mt-1">{errors.endDate.message}</p>}
                     </div>
+
+                    <label className="flex items-start gap-2 text-sm cursor-pointer">
+                      <input type="checkbox" className="mt-0.5 w-4 h-4" {...register("variableAmount")} />
+                      <span>
+                        O valor muda a cada mês
+                        <span className="block text-xs text-muted-foreground">
+                          Os próximos lançamentos aparecem como <strong>valor estimado</strong> até você confirmar o valor real.
+                        </span>
+                      </span>
+                    </label>
                   </>
                 )}
 
@@ -1513,16 +1572,25 @@ export default function TransactionsEnhanced() {
                 <p className="text-xs text-muted-foreground">Receitas</p>
                 <p className="text-base font-semibold text-green-600">+{formatCurrency(totals.income)}</p>
                 <p className="text-xs text-muted-foreground">Pago: {formatCurrency(totals.incomePaid)}</p>
+                {estimatedTotals.income > 0 && (
+                  <p className="text-xs text-amber-600">inclui ≈ {formatCurrency(estimatedTotals.income)} estimado</p>
+                )}
               </div>
               <div className="p-3 bg-red-500/10 rounded-lg">
                 <p className="text-xs text-muted-foreground">Despesas</p>
                 <p className="text-base font-semibold text-red-600">-{formatCurrency(totals.expense)}</p>
                 <p className="text-xs text-muted-foreground">Pago: {formatCurrency(totals.expensePaid)}</p>
+                {estimatedTotals.expense > 0 && (
+                  <p className="text-xs text-amber-600">inclui ≈ {formatCurrency(estimatedTotals.expense)} estimado</p>
+                )}
               </div>
               <div className="p-3 bg-blue-500/10 rounded-lg">
                 <p className="text-xs text-muted-foreground">Cartão</p>
                 <p className="text-base font-semibold text-blue-600">-{formatCurrency(totals.creditCard)}</p>
                 <p className="text-xs text-muted-foreground">Pago: {formatCurrency(totals.creditCardPaid)}</p>
+                {estimatedTotals.creditCard > 0 && (
+                  <p className="text-xs text-amber-600">inclui ≈ {formatCurrency(estimatedTotals.creditCard)} estimado</p>
+                )}
               </div>
               <div className="p-3 bg-purple-500/10 rounded-lg">
                 <p className="text-xs text-muted-foreground">Saldo</p>

@@ -109,6 +109,10 @@ export const tables = {
       recurrenceGroup: text(),
       // Posição escolhida pelo usuário ao arrastar na lista (vazio = ordem automática).
       sortOrder: int(),
+      // Data da ocorrência na série recorrente (YYYY-MM-DD): evita gerar duas vezes.
+      recurrenceDate: text(),
+      // 1 = valor estimado (gerado pela regra), até o usuário confirmar o valor real.
+      isEstimated: int(0),
       ...timestamps,
     },
   },
@@ -237,6 +241,33 @@ export const tables = {
       ...timestamps,
     },
   },
+  recurrenceRules: {
+    // Regra de um lançamento fixo/recorrente. Os lançamentos são gerados a
+    // partir dela com 1 mês de antecedência; sem data final, repete sempre.
+    sheet: "Recorrencias",
+    columns: {
+      id,
+      userId: int(),
+      // Mesmo valor de Lancamentos.recurrenceGroup nas ocorrências.
+      groupKey: text(),
+      type: text(),
+      category: text(),
+      description: text(),
+      amount: decimal(),
+      creditCardId: int(),
+      responsibleUserId: int(),
+      notes: text(),
+      frequency: text("monthly"),
+      startDate: date(),
+      endDate: date(),
+      // 1 = o valor muda a cada mês (ocorrências ficam como estimadas).
+      variableAmount: int(1),
+      // Datas (YYYY-MM-DD) puladas pelo usuário, em JSON.
+      skippedDates: text(),
+      createdBy: int(),
+      ...timestamps,
+    },
+  },
   incomeAllocations: {
     // Quanto de uma receita paga uma despesa (ou compra no cartão).
     sheet: "Vinculos",
@@ -332,6 +363,8 @@ export type Transaction = {
   recurrence: string | null;
   recurrenceGroup: string | null;
   sortOrder: number | null;
+  recurrenceDate: string | null;
+  isEstimated: number;
 } & Timestamps;
 
 export type Invoice = {
@@ -434,6 +467,25 @@ export type TransactionResponsibility = {
   notes: string | null;
 } & Timestamps;
 
+export type RecurrenceRule = {
+  id: number;
+  userId: number;
+  groupKey: string;
+  type: TransactionType;
+  category: string;
+  description: string | null;
+  amount: string;
+  creditCardId: number | null;
+  responsibleUserId: number | null;
+  notes: string | null;
+  frequency: string;
+  startDate: Date;
+  endDate: Date | null;
+  variableAmount: number;
+  skippedDates: string | null;
+  createdBy: number | null;
+} & Timestamps;
+
 export type IncomeAllocation = {
   id: number;
   /** Lançamento de despesa ou cartão. */
@@ -470,6 +522,7 @@ export type RowTypes = {
   sharedAccounts: SharedAccount;
   transactionResponsibilities: TransactionResponsibility;
   incomeAllocations: IncomeAllocation;
+  recurrenceRules: RecurrenceRule;
   auditLog: AuditLog;
 };
 

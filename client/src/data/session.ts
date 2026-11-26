@@ -19,6 +19,7 @@ import {
 import { findOrCreateSpreadsheet, SheetStore } from "./sheetStore";
 import type { User } from "./schema";
 import { createDefaultTypologies } from "./db";
+import { dateKey, materializeRecurrences } from "./recurrences";
 import {
   getActiveWorkspaceId,
   getWorkspaceFile,
@@ -38,6 +39,8 @@ type Loaded = {
 const SHARED_REFRESH_MS = 20_000;
 
 let loading: Promise<Loaded> | null = null;
+/** Dia em que as recorrências foram geradas pela última vez (YYYY-MM-DD). */
+let lastMaterializedDay: string | null = null;
 let loaded: Loaded | null = null;
 let lastRefresh = 0;
 let refreshing: Promise<void> | null = null;
@@ -143,6 +146,9 @@ async function load(): Promise<Loaded> {
   if (store.select("typologies", t => t.userId === owner.id).length === 0) {
     createDefaultTypologies(store, owner.id);
   }
+  // Lançamentos fixos sem data final: gera o que faltar até o mês seguinte.
+  materializeRecurrences(store, owner.id);
+  lastMaterializedDay = dateKey(new Date());
   await store.commit();
   lastRefresh = Date.now();
 
@@ -219,6 +225,8 @@ export async function syncSharedStore(force: boolean) {
       .refresh()
       .then(() => {
         lastRefresh = Date.now();
+        // Outra pessoa pode ter criado regras: confere de novo (sem duplicar).
+        lastMaterializedDay = null;
       })
       .finally(() => {
         refreshing = null;
@@ -242,6 +250,21 @@ export async function openOtherWorkspace(id: string) {
     createDefaultTypologies(store, owner.id);
   }
   return { store, workspace, user, ownerId: owner.id };
+}
+
+/**
+ * Gera as ocorrências de recorrências que faltarem (no máximo uma vez por dia,
+ * ou depois de reler uma área compartilhada) — cobre o app aberto na virada
+ * do mês.
+ */
+export async function ensureRecurrences() {
+  if (!loaded) return;
+  const today = dateKey(new Date());
+  if (lastMaterializedDay === today) return;
+  lastMaterializedDay = today;
+  const store = loaded.store;
+  const { created, duplicatesRemoved } = materializeRecurrences(store, findOwner(store)?.id ?? loaded.user.id);
+  if (created.length || duplicatesRemoved) await store.commit();
 }
 
 /** Troca a área de trabalho ativa e carrega a planilha dela. */

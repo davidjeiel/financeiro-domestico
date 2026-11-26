@@ -14,6 +14,7 @@ import {
 } from "./competencyLogic";
 import { getStore } from "./session";
 import { cleanupAllocationsAfterUpdate, removeAllocationsOf } from "./allocations";
+import { createRule, materializeRecurrences, skipOccurrence } from "./recurrences";
 import type { SheetStore } from "./sheetStore";
 import type {
   Account,
@@ -191,6 +192,11 @@ export async function createTransaction(data: Insert<"transactions">) {
   return created;
 }
 
+/**
+ * Lançamento fixo/recorrente: grava a regra (aba Recorrencias) e gera as
+ * ocorrências até o fim do mês seguinte. Sem `endDate`, repete sem fim — as
+ * próximas ocorrências são geradas conforme o tempo passa.
+ */
 export async function createRecurringTransactions(
   userId: number,
   data: {
@@ -202,88 +208,33 @@ export async function createRecurringTransactions(
     notes?: string;
     frequency: RecurrenceFrequency;
     startDate: Date;
-    endDate: Date;
+    endDate?: Date | null;
     responsibleUserId?: number | null;
     createdBy?: number | null;
-  }
+    /** O valor muda a cada mês: ocorrências ficam como estimadas até confirmar. */
+    variableAmount?: boolean;
+  },
+  today = new Date()
 ) {
   const s = getStore();
-  const creditCard = data.type === "credit_card" && data.creditCardId
-    ? s.find(
-        "creditCards",
-        card => card.id === data.creditCardId && card.userId === userId && card.isActive === 1
-      )
-    : null;
-
-  if (data.type === "credit_card" && !creditCard) {
-    throw new Error("Selecione um cartão de crédito ativo.");
-  }
-
-  const competencies = new Map<string, number>();
-  const created: Transaction[] = [];
-  // Marca a série como recorrente (despesa/receita fixa).
-  const recurrenceGroup = newRecurrenceGroup();
-  const invoiceCompetencies = new Set<number>();
-
-  for (const transactionDate of generateRecurringDates(
-    data.startDate,
-    data.endDate,
-    data.frequency
-  )) {
-    const { year, month } = getCompetencyForTransaction(transactionDate, creditCard);
-    const competencyKey = `${year}-${month}`;
-    let competencyId = competencies.get(competencyKey);
-
-    if (competencyId === undefined) {
-      let competency = s.find(
-        "competencies",
-        item => item.userId === userId && item.year === year && item.month === month
-      );
-      if (!competency) {
-        competency = s.insert("competencies", {
-          userId,
-          year,
-          month,
-          name: competencyName(year, month),
-        });
-      }
-      competencyId = competency.id;
-      competencies.set(competencyKey, competencyId);
-    }
-
-    created.push(
-      s.insert("transactions", {
-        userId,
-        competencyId,
-        creditCardId: creditCard?.id,
-        type: data.type,
-        category: data.category,
-        description: data.description ?? "",
-        amount: data.amount,
-        transactionDate,
-        notes: data.notes ?? "",
-        responsibleUserId: data.responsibleUserId ?? null,
-        createdBy: data.createdBy ?? null,
-        recurrence: data.frequency,
-        recurrenceGroup,
-      })
-    );
-
-    if (creditCard) invoiceCompetencies.add(competencyId);
-  }
-
-  if (creditCard) {
-    invoiceCompetencies.forEach(competencyId =>
-      recalcInvoice(s, userId, creditCard.id, competencyId)
-    );
-  }
-
+  const rule = createRule(
+    s,
+    userId,
+    {
+      ...data,
+      creditCardId: data.type === "credit_card" ? data.creditCardId ?? null : null,
+    },
+    data.createdBy ?? null
+  );
+  materializeRecurrences(s, userId, today);
   await s.commit();
-  return created;
+  return s
+    .select("transactions", t => t.recurrenceGroup === rule.groupKey)
+    .sort((a, b) => a.transactionDate.getTime() - b.transactionDate.getTime());
 }
 
 /** Garante a competência (ano/mês) do usuário e devolve o id. */
-function ensureCompetency(s: SheetStore, userId: number, year: number, month: number) {
+export function ensureCompetency(s: SheetStore, userId: number, year: number, month: number) {
   const existing = s.find(
     "competencies",
     c => c.userId === userId && c.year === year && c.month === month
@@ -387,7 +338,13 @@ export async function setRecurrence(ids: number[], frequency: string | null) {
   const s = getStore();
   const set = new Set(ids);
   const group = frequency ? newRecurrenceGroup() : null;
-  s.update("transactions", t => set.has(t.id), { recurrence: frequency, recurrenceGroup: group });
+  // Ocorrências de uma regra que saem da série: a regra não deve recriá-las.
+  s.select("transactions", t => set.has(t.id)).forEach(t => skipOccurrence(s, t));
+  s.update("transactions", t => set.has(t.id), {
+    recurrence: frequency,
+    recurrenceGroup: group,
+    recurrenceDate: null,
+  });
   await s.commit();
   return { count: ids.length };
 }
@@ -432,6 +389,8 @@ export async function deleteTransaction(id: number) {
   s.delete("transactions", t => t.id === id);
   syncInvoicesTouchedBy(s, before, null);
   removeAllocationsOf(s, id);
+  // Ocorrência de uma recorrência: não gerar de novo esta data.
+  if (before) skipOccurrence(s, before);
   await s.commit();
   return { success: true } as const;
 }

@@ -80,6 +80,14 @@ import {
 import { previewTransfer, transferTransactions } from "./transfer";
 import { fixedVsVariableReport, suggestRecurringSeries } from "./fixedExpenses";
 import {
+  applyFromOccurrence,
+  continueSeries,
+  endRecurrence,
+  listRecurrences,
+  materializeRecurrences,
+  ruleOfTransaction,
+} from "./recurrences";
+import {
   allocationTotals,
   allocationsOf,
   incomeOptions,
@@ -111,11 +119,14 @@ const recurringTransactionSchema = z
     notes: z.string().optional(),
     frequency: z.enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"]),
     startDate: dateOnlySchema,
-    endDate: dateOnlySchema,
+    // Sem data final: repete sem fim (ocorrências geradas com 1 mês de antecedência).
+    endDate: dateOnlySchema.optional().nullable(),
     responsibleUserId: z.number().int().nullable().optional(),
+    /** O valor muda a cada mês: as ocorrências ficam como estimadas até confirmar. */
+    variableAmount: z.boolean().optional(),
   })
   .superRefine((input, context) => {
-    if (input.endDate < input.startDate) {
+    if (input.endDate && input.endDate < input.startDate) {
       context.addIssue({
         code: "custom",
         path: ["endDate"],
@@ -472,7 +483,7 @@ export const appRouter = router({
         return createRecurringTransactions(getDataUserId(), {
           ...input,
           startDate: toLocalDate(input.startDate),
-          endDate: toLocalDate(input.endDate),
+          endDate: input.endDate ? toLocalDate(input.endDate) : null,
           responsibleUserId:
             input.responsibleUserId === undefined ? ctx.user.id : input.responsibleUserId,
           createdBy: ctx.user.id,
@@ -493,13 +504,25 @@ export const appRouter = router({
           installments: z.number().optional(),
           notes: z.string().optional(),
           responsibleUserId: z.number().int().nullable().optional(),
+          /** false = valor real confirmado (ocorrência de recorrência). */
+          isEstimated: z.boolean().optional(),
         })
       )
       .mutation(({ input }) => {
         assertResponsible(input.responsibleUserId);
-        const { id, transactionDate, dueDate, ...rest } = input;
+        const { id, transactionDate, dueDate, isEstimated, ...rest } = input;
         
         const updates: any = { ...rest };
+        // Valor estimado vira confirmado quando o usuário confirma ou muda o valor.
+        const current = getStore().find("transactions", t => t.id === id);
+        if (isEstimated !== undefined) updates.isEstimated = isEstimated ? 1 : 0;
+        else if (
+          current?.isEstimated &&
+          input.amount !== undefined &&
+          Number(input.amount).toFixed(2) !== Number(current.amount).toFixed(2)
+        ) {
+          updates.isEstimated = 0;
+        }
         
         if (transactionDate) {
           const [year, month, day] = transactionDate.split('-').map(Number);
@@ -525,8 +548,27 @@ export const appRouter = router({
         return updateTransaction(input.id, {
           isPaid: input.isPaid ? 1 : 0,
           paidDate,
+          // Pagar confirma o valor (deixa de ser estimado).
+          ...(input.isPaid ? { isEstimated: 0 } : {}),
         });
       }),
+    /** Confirma o valor real de uma ocorrência estimada (opcionalmente com outro valor). */
+    confirmAmount: protectedProcedure
+      .input(
+        z.object({
+          id: z.number().int(),
+          amount: z
+            .string()
+            .refine(v => Number.isFinite(Number(v)) && Number(v) > 0, "Valor inválido")
+            .optional(),
+        })
+      )
+      .mutation(({ input }) =>
+        updateTransaction(input.id, {
+          isEstimated: 0,
+          ...(input.amount ? { amount: Number(input.amount).toFixed(2) } : {}),
+        })
+      ),
   }),
 
   invoice: router({
@@ -872,6 +914,72 @@ export const appRouter = router({
     switch: protectedProcedure
       .input(z.object({ id: z.string().min(1).nullable() }))
       .mutation(({ input }) => switchWorkspace(input.id)),
+  }),
+
+  recurrence: router({
+    /** Regras (com ou sem data final) e séries antigas, para a tela de Fixos. */
+    list: protectedProcedure.query(() => listRecurrences(getStore(), getDataUserId())),
+    /** Série antiga (criada com data final): passa a continuar sem fim. */
+    continueSeries: protectedProcedure
+      .input(z.object({ groupKey: z.string().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        const s = getStore();
+        continueSeries(s, getDataUserId(), input.groupKey, ctx.user.id);
+        materializeRecurrences(s, getDataUserId());
+        await s.commit();
+        return { success: true } as const;
+      }),
+    /** Encerra a recorrência depois da data informada (padrão: hoje). */
+    end: protectedProcedure
+      .input(z.object({ groupKey: z.string().min(1), lastDate: dateOnlySchema.optional() }))
+      .mutation(async ({ input }) => {
+        const s = getStore();
+        const last = input.lastDate
+          ? (() => {
+              const [y, m, d] = input.lastDate.split("-").map(Number);
+              return new Date(y, m - 1, d);
+            })()
+          : new Date();
+        const result = endRecurrence(s, input.groupKey, getDataUserId(), last);
+        await s.commit();
+        return result;
+      }),
+    /** "Alterar a partir deste mês": valor/descrição/categoria/responsável das próximas. */
+    applyFrom: protectedProcedure
+      .input(
+        z.object({
+          transactionId: z.number().int(),
+          amount: z.string().optional(),
+          description: z.string().optional(),
+          category: z.string().optional(),
+          responsibleUserId: z.number().int().nullable().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        assertResponsible(input.responsibleUserId);
+        const s = getStore();
+        const { transactionId, ...changes } = input;
+        const result = applyFromOccurrence(s, transactionId, changes);
+        await s.commit();
+        return result;
+      }),
+    /** Dados da recorrência de um lançamento (para a tela de edição). */
+    ofTransaction: protectedProcedure
+      .input(z.object({ transactionId: z.number().int() }))
+      .query(({ input }) => {
+        const s = getStore();
+        const t = s.find("transactions", x => x.id === input.transactionId);
+        const rule = t ? ruleOfTransaction(s, t) : null;
+        return rule
+          ? {
+              groupKey: rule.groupKey,
+              frequency: rule.frequency,
+              startDate: rule.startDate,
+              endDate: rule.endDate,
+              variableAmount: rule.variableAmount === 1,
+            }
+          : null;
+      }),
   }),
 
   report: router({
