@@ -5,22 +5,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card } from '@/components/ui/card';
 import { X, Filter } from 'lucide-react';
 import CreditCardMultiSelect from './CreditCardMultiSelect';
+import { countCriteria, type FilterCriteria } from '@/lib/filterCriteria';
 
-export interface TransactionFilters {
-  category?: string;
-  accountId?: string;
-  creditCardId?: string;
-  creditCardIds?: number[]; // Para múltipla seleção
-  type?: 'income' | 'expense' | 'credit_card';
-  description?: string;
-}
+/** Critérios aplicados com applyFilterCriteria (lib/filterCriteria). */
+export type TransactionFilters = FilterCriteria & { accountId?: string };
 
 interface AdvancedFiltersProps {
   filters: TransactionFilters;
   onFiltersChange: (filters: TransactionFilters) => void;
   accounts?: Array<{ id: number; name: string }>;
   creditCards?: Array<{ id: number; name: string }>;
+  /** Categorias existentes (das tipologias e dos lançamentos). */
+  categoryOptions?: string[];
   onClearFilters?: () => void;
+  /** Dentro de outro painel: sempre aberto, sem o botão de expandir. */
+  embedded?: boolean;
 }
 
 export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
@@ -28,17 +27,28 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
   onFiltersChange,
   accounts = [],
   creditCards = [],
+  categoryOptions,
   onClearFilters,
+  embedded = false,
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [expandedState, setIsExpanded] = useState(false);
+  const isExpanded = embedded || expandedState;
 
-  const hasActiveFilters = Object.values(filters).some((v) => v !== undefined && v !== '');
+  const activeCount = countCriteria(filters) + (filters.accountId ? 1 : 0);
+  const hasActiveFilters = activeCount > 0;
 
   const handleFilterChange = (key: keyof TransactionFilters, value: string | undefined) => {
-    onFiltersChange({
-      ...filters,
-      [key]: value === '' ? undefined : value,
-    });
+    const next: TransactionFilters = { ...filters, [key]: value === '' ? undefined : value };
+    // Escolher um tipo/categoria/cartão pelo select substitui a lista de um filtro salvo.
+    if (key === 'type') next.types = undefined;
+    if (key === 'category') next.categories = undefined;
+    if (key === 'creditCardId') next.creditCardIds = undefined;
+    onFiltersChange(next);
+  };
+
+  const handleAmountChange = (key: 'minAmount' | 'maxAmount', raw: string) => {
+    const value = raw.trim() === '' ? undefined : Number(raw.replace(',', '.'));
+    onFiltersChange({ ...filters, [key]: value !== undefined && Number.isFinite(value) ? value : undefined });
   };
 
   const handleClear = () => {
@@ -52,12 +62,15 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
     expense: ["Alimentação", "Transporte", "Moradia", "Saúde", "Educação", "Lazer", "Outros"],
     credit_card: ["Alimentação", "Compras", "Serviços", "Outros"],
   };
-  const categories = filters.type
-    ? defaultCategories[filters.type as keyof typeof defaultCategories] || []
-    : Array.from(new Set(Object.values(defaultCategories).flat()));
+  const categories = categoryOptions?.length
+    ? categoryOptions
+    : filters.type
+      ? defaultCategories[filters.type as keyof typeof defaultCategories] || []
+      : Array.from(new Set(Object.values(defaultCategories).flat()));
 
   return (
     <div className="space-y-3">
+      {!embedded && (
       <div className="flex items-center gap-2">
         <Button
           variant={hasActiveFilters ? 'default' : 'outline'}
@@ -69,7 +82,7 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
           Filtros
           {hasActiveFilters && (
             <span className="ml-1 px-2 py-0.5 bg-primary-foreground text-primary rounded text-xs font-medium">
-              {Object.values(filters).filter((v) => v !== undefined && v !== '').length}
+              {activeCount}
             </span>
           )}
         </Button>
@@ -86,9 +99,10 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
           </Button>
         )}
       </div>
+      )}
 
       {isExpanded && (
-        <Card className="p-4 space-y-3 bg-muted/50">
+        <Card className={embedded ? "p-0 space-y-3 bg-transparent border-0 shadow-none" : "p-4 space-y-3 bg-muted/50"}>
           {/* Type Filter */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -96,7 +110,7 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                 Tipo
               </label>
               <Select
-                value={filters.type || 'all'}
+                value={filters.types?.length ? 'multi' : filters.type || 'all'}
                 onValueChange={(value) =>
                   handleFilterChange('type', value === 'all' ? undefined : (value as 'income' | 'expense' | 'credit_card'))
                 }
@@ -106,6 +120,9 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos os tipos</SelectItem>
+                  {!!filters.types?.length && (
+                    <SelectItem value="multi" disabled>{filters.types.length} tipos (filtro salvo)</SelectItem>
+                  )}
                   <SelectItem value="income">Receita</SelectItem>
                   <SelectItem value="expense">Despesa</SelectItem>
                   <SelectItem value="credit_card">Cartão de Crédito</SelectItem>
@@ -119,7 +136,7 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                 Categoria
               </label>
               <Select
-                value={filters.category || 'all'}
+                value={filters.categories?.length ? 'multi' : filters.category || 'all'}
                 onValueChange={(value) =>
                   handleFilterChange('category', value === 'all' ? undefined : value)
                 }
@@ -129,6 +146,9 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas as categorias</SelectItem>
+                  {!!filters.categories?.length && (
+                    <SelectItem value="multi" disabled>{filters.categories.join(", ")}</SelectItem>
+                  )}
                   {categories.map((cat: string) => (
                     <SelectItem key={cat} value={cat}>
                       {cat}
@@ -182,6 +202,7 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                   onSelectionChange={(ids) =>
                     onFiltersChange({
                       ...filters,
+                      creditCardId: undefined,
                       creditCardIds: ids.length === 0 ? undefined : ids,
                     })
                   }
@@ -193,7 +214,7 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                   Cartão de Crédito
                 </label>
                 <Select
-                  value={filters.creditCardId || 'all'}
+                  value={filters.creditCardIds?.length ? 'multi' : filters.creditCardId || 'all'}
                   onValueChange={(value) =>
                     handleFilterChange('creditCardId', value === 'all' ? undefined : value)
                   }
@@ -203,6 +224,9 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos os cartões</SelectItem>
+                    {!!filters.creditCardIds?.length && (
+                      <SelectItem value="multi" disabled>{filters.creditCardIds.length} cartões (filtro salvo)</SelectItem>
+                    )}
                     {creditCards.map((card) => (
                       <SelectItem key={card.id} value={card.id.toString()}>
                         {card.name}
@@ -224,6 +248,38 @@ export const AdvancedFilters: React.FC<AdvancedFiltersProps> = ({
                 onChange={(e) =>
                   handleFilterChange('description', e.target.value || undefined)
                 }
+                className="h-8 text-sm"
+              />
+            </div>
+
+            {/* Faixa de valores */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                Valor mínimo (R$)
+              </label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                placeholder="0,00"
+                value={filters.minAmount ?? ''}
+                onChange={(e) => handleAmountChange('minAmount', e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                Valor máximo (R$)
+              </label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                placeholder="Sem limite"
+                value={filters.maxAmount ?? ''}
+                onChange={(e) => handleAmountChange('maxAmount', e.target.value)}
                 className="h-8 text-sm"
               />
             </div>

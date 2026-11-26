@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import DashboardLayoutCustom from "@/components/DashboardLayoutCustom";
 import { Card } from "@/components/ui/card";
@@ -38,7 +38,17 @@ import { TransferTransactionsDialog } from "@/components/workspace/TransferTrans
 import BulkEditModal from "@/components/BulkEditModal";
 import BulkDeleteModal from "@/components/BulkDeleteModal";
 import EditTransactionModal from "@/components/EditTransactionModal";
-import SavedFiltersSelector from "@/components/SavedFiltersSelector";
+import SavedFiltersSelector, { type AppliedSavedFilter } from "@/components/SavedFiltersSelector";
+import {
+  applyFilterCriteria,
+  countCriteria,
+  describeCriteria,
+  matchesDescription,
+  savedFilterToState,
+  selectedCardIds,
+  selectedCategories,
+  selectedTypes,
+} from "@/lib/filterCriteria";
 import { ColumnSelector, ColumnConfig } from "@/components/ColumnSelector";
 import { AdvancedFilters, TransactionFilters } from "@/components/AdvancedFilters";
 import TransactionLinksManager from "@/components/TransactionLinksManager";
@@ -325,6 +335,31 @@ export default function TransactionsEnhanced() {
     }
   };
 
+  // Filtro salvo: troca o período e os critérios da tela pelos do filtro.
+  const applySavedFilter = (filter: AppliedSavedFilter) => {
+    setFilterStartDate(filter.startDate);
+    setFilterEndDate(filter.endDate);
+    handleAdvancedFiltersChange(filter.criteria);
+  };
+
+  // Abre com um filtro salvo: o da URL (?filtro=id, vindo da página Filtros)
+  // ou, sem nenhum outro filtro, o marcado como padrão.
+  const { data: savedFilterList } = trpc.savedFilter.list.useQuery();
+  const savedFilterApplied = useRef(false);
+  useEffect(() => {
+    if (savedFilterApplied.current || !savedFilterList) return;
+    savedFilterApplied.current = true;
+    const fromUrl = linkFilters.filtro ? savedFilterList.find(f => f.id === linkFilters.filtro) : undefined;
+    const noOtherFilter =
+      !linkFilters.tipo && !linkFilters.situacao && !linkFilters.cartao && !linkFilters.categoria &&
+      !linkFilters.natureza && countCriteria(advancedFilters) === 0;
+    const chosen = fromUrl ?? (noOtherFilter ? savedFilterList.find(f => f.isDefault === 1) : undefined);
+    if (!chosen) return;
+    applySavedFilter({ id: chosen.id, name: chosen.name, ...savedFilterToState(chosen) });
+    if (fromUrl) toast.success(`Filtro "${chosen.name}" aplicado.`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedFilterList]);
+
   const handleColumnsChange = (newColumns: ColumnConfig[]) => {
     setColumns(newColumns);
     if (typeof window !== 'undefined') {
@@ -606,7 +641,9 @@ export default function TransactionsEnhanced() {
       new Date(t.transactionDate).toISOString().split('T')[0] === columnFilters.transactionDate);
   if (columnFilters.description)
     filteredTransactions = filteredTransactions.filter(t =>
-      t.description?.toLowerCase().includes(columnFilters.description.toLowerCase()));
+      matchesDescription(t.description, columnFilters.description));
+  // Painel de filtros / filtro salvo: descrição, tipos, categorias, cartões e valores.
+  filteredTransactions = applyFilterCriteria(filteredTransactions, advancedFilters);
   if (columnFilters.category)
     filteredTransactions = filteredTransactions.filter(t => t.category === columnFilters.category);
   if (columnFilters.recurrence)
@@ -1035,7 +1072,66 @@ export default function TransactionsEnhanced() {
   );
 
   const TYPE_LABELS: Record<string, string> = { income: "Receitas", expense: "Despesas", credit_card: "Cartão" };
-  const activeFilterChips: { key: string; label: string; keys: string[] }[] = [];
+  const activeFilterChips: { key: string; label: string; keys: string[]; onRemove?: () => void }[] = [];
+  // Critérios do painel de filtros / filtro salvo.
+  const cardNameOf = (id: number) => creditCards?.find(c => c.id === id)?.name;
+  const removeCriteria = (...keys: (keyof TransactionFilters)[]) => () => {
+    const next = { ...advancedFilters };
+    keys.forEach(k => delete next[k]);
+    handleAdvancedFiltersChange(next);
+  };
+  if (advancedFilters.description?.trim())
+    activeFilterChips.push({
+      key: "adv-description",
+      label: describeCriteria({ description: advancedFilters.description })[0],
+      keys: [],
+      onRemove: removeCriteria("description"),
+    });
+  if (selectedTypes(advancedFilters).length)
+    activeFilterChips.push({
+      key: "adv-types",
+      label: `Tipo: ${describeCriteria({ types: selectedTypes(advancedFilters) })[0]}`,
+      keys: [],
+      onRemove: removeCriteria("type", "types"),
+    });
+  if (selectedCategories(advancedFilters).length)
+    activeFilterChips.push({
+      key: "adv-categories",
+      label: describeCriteria({ categories: selectedCategories(advancedFilters) })[0],
+      keys: [],
+      onRemove: removeCriteria("category", "categories"),
+    });
+  if (selectedCardIds(advancedFilters).length)
+    activeFilterChips.push({
+      key: "adv-cards",
+      label: describeCriteria({ creditCardIds: selectedCardIds(advancedFilters) }, cardNameOf)[0],
+      keys: [],
+      onRemove: removeCriteria("creditCardId", "creditCardIds"),
+    });
+  if (advancedFilters.minAmount != null || advancedFilters.maxAmount != null)
+    activeFilterChips.push({
+      key: "adv-amount",
+      label: describeCriteria({ minAmount: advancedFilters.minAmount, maxAmount: advancedFilters.maxAmount })[0],
+      keys: [],
+      onRemove: removeCriteria("minAmount", "maxAmount"),
+    });
+  if (columnFilters.description)
+    activeFilterChips.push({
+      key: "col-description",
+      label: describeCriteria({ description: columnFilters.description })[0],
+      keys: ["description"],
+    });
+  if (filterStartDate || filterEndDate) {
+    const br = (d: string) => new Date(`${d}T00:00`).toLocaleDateString("pt-BR");
+    activeFilterChips.push({
+      key: "dates",
+      label: filterStartDate && filterEndDate
+        ? `De ${br(filterStartDate)} a ${br(filterEndDate)}`
+        : filterStartDate ? `A partir de ${br(filterStartDate)}` : `Até ${br(filterEndDate)}`,
+      keys: [],
+      onRemove: () => { setFilterStartDate(""); setFilterEndDate(""); },
+    });
+  }
   if (columnFilters.type) {
     activeFilterChips.push({
       key: "type",
@@ -1088,9 +1184,17 @@ export default function TransactionsEnhanced() {
     });
   }
 
+  // Categorias para o filtro: as cadastradas e as já usadas nos lançamentos.
+  const filterCategoryOptions = Array.from(
+    new Set([
+      ...(allTypologies ?? []).filter(t => t.isActive !== 0).map(t => t.name),
+      ...(transactions ?? []).map(t => t.category),
+    ].filter((c): c is string => !!c))
+  ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+
   const hasActiveFilters =
     !!filterStartDate || !!filterEndDate ||
-    Object.keys(advancedFilters).length > 0 ||
+    countCriteria(advancedFilters) > 0 ||
     Object.keys(columnFilters).length > 0;
 
   return (
@@ -1657,7 +1761,7 @@ export default function TransactionsEnhanced() {
                   type="button"
                   className="ml-1 rounded-full hover:bg-primary/20 px-1"
                   aria-label={`Remover filtro ${chip.label}`}
-                  onClick={() => chip.keys.forEach(k => handleColumnFilter(k, undefined))}
+                  onClick={() => chip.onRemove ? chip.onRemove() : chip.keys.forEach(k => handleColumnFilter(k, undefined))}
                 >
                   ×
                 </button>
@@ -1669,6 +1773,9 @@ export default function TransactionsEnhanced() {
               onClick={() => {
                 setColumnFilters({});
                 setFilterPriority([]);
+                handleAdvancedFiltersChange({});
+                setFilterStartDate("");
+                setFilterEndDate("");
               }}
             >
               Limpar filtros
@@ -1763,21 +1870,21 @@ export default function TransactionsEnhanced() {
               </div>
 
               <AdvancedFilters
+                embedded
                 filters={advancedFilters}
                 onFiltersChange={handleAdvancedFiltersChange}
                 creditCards={creditCards}
+                categoryOptions={filterCategoryOptions}
                 onClearFilters={() => handleAdvancedFiltersChange({})}
               />
 
               <div className="flex items-center justify-between pt-2 border-t border-border">
                 <span className="text-sm font-medium text-muted-foreground">Filtros Salvos:</span>
                 <SavedFiltersSelector
-                  currentFilters={{ startDate: filterStartDate, endDate: filterEndDate }}
-                  onFilterSelect={(filter) => {
-                    if (filter.startDate) setFilterStartDate(filter.startDate);
-                    if (filter.endDate) setFilterEndDate(filter.endDate);
-                  }}
-                  onFilterSave={() => {}}
+                  currentDates={{ startDate: filterStartDate, endDate: filterEndDate }}
+                  currentCriteria={advancedFilters}
+                  onApply={applySavedFilter}
+                  cardName={cardNameOf}
                 />
               </div>
             </div>
