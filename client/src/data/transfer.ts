@@ -3,27 +3,35 @@
  *
  * Cada área é uma planilha com seus próprios ids, então transferir é
  * recriar o lançamento na planilha de destino (com as referências
- * traduzidas) e removê-lo da origem:
+ * traduzidas). Ao **mover**, ele é removido da origem; ao **copiar**, a
+ * origem fica como está:
  *
- * - competência: a mesma (ano/mês), criada no destino se faltar;
+ * - competência: no cartão, a mesma (ano/mês) da fatura; nos demais, a
+ *   competência da data pelo período configurado no destino; criada se faltar;
  * - categoria: o mesmo nome; a categoria é criada no destino se faltar;
  * - cartão: um cartão do destino escolhido pelo usuário, ou uma cópia do
  *   cartão de origem criada no destino (padrão: o de mesmo nome);
  * - responsável: a pessoa de mesmo e-mail no destino (ou, sem e-mail, de
  *   mesmo nome); sem correspondente, fica sem responsável;
- * - vínculos com receitas: removidos (as receitas ficam na origem);
- * - faturas dos cartões afetados são recalculadas nos dois lados.
+ * - vínculos com receitas: não vão para o destino; ao mover, são removidos
+ *   da origem (ao copiar, continuam lá);
+ * - faturas dos cartões afetados são recalculadas no destino (e, ao mover,
+ *   na origem).
  *
  * Funções puras sobre os stores, para testar sem sessão.
  */
 import type { SheetStore } from "./sheetStore";
 import type { CreditCard, Transaction, User } from "./schema";
-import { competencyName, recalcInvoice } from "./db";
+import { competencyName, competencyStartDayOf, recalcInvoice } from "./db";
+import { competencyOfDate } from "./competencyLogic";
 import { removeAllocationsOf } from "./allocations";
 import { skipOccurrence } from "./recurrences";
 
 /** Para cada cartão de origem: id de um cartão do destino ou "new" (criar cópia). */
 export type CardMap = Record<string, number | "new">;
+
+/** "move" tira os lançamentos da origem; "copy" mantém a origem como está. */
+export type TransferMode = "move" | "copy";
 
 const norm = (v?: string | null) => (v ?? "").trim().toLowerCase();
 
@@ -103,8 +111,8 @@ export function previewTransfer(
 }
 
 /**
- * Recria os lançamentos no destino e os remove da origem (em memória; quem
- * chama grava o destino primeiro e depois a origem).
+ * Recria os lançamentos no destino e, ao mover, os remove da origem (em
+ * memória; quem chama grava o destino primeiro e depois a origem).
  */
 export function transferTransactions(
   source: SheetStore,
@@ -116,31 +124,44 @@ export function transferTransactions(
     /** Quem está transferindo, na aba Usuarios do destino. */
     actorTargetUserId: number;
     cardMap?: CardMap;
+    /** Padrão: mover. */
+    mode?: TransferMode;
   }
 ) {
+  const mode: TransferMode = opts.mode ?? "move";
   const txs = selectTransactions(source, opts.sourceOwnerId, opts.ids);
   const usersById = new Map(source.select("users").map(u => [u.id, u]));
 
-  const competencyIds = new Map<number, number>();
-  const targetCompetency = (sourceCompetencyId: number) => {
-    const cached = competencyIds.get(sourceCompetencyId);
+  const competencyIds = new Map<string, number>();
+  const competencyIn = (year: number, month: number) => {
+    const key = `${year}-${month}`;
+    const cached = competencyIds.get(key);
     if (cached) return cached;
-    const c = source.find("competencies", x => x.id === sourceCompetencyId);
-    if (!c) throw new Error("Competência do lançamento não encontrada.");
     const existing = target.find(
       "competencies",
-      x => x.userId === opts.targetOwnerId && x.year === c.year && x.month === c.month
+      x => x.userId === opts.targetOwnerId && x.year === year && x.month === month
     );
     const id =
       existing?.id ??
       target.insert("competencies", {
         userId: opts.targetOwnerId,
-        year: c.year,
-        month: c.month,
-        name: competencyName(c.year, c.month),
+        year,
+        month,
+        name: competencyName(year, month),
       }).id;
-    competencyIds.set(sourceCompetencyId, id);
+    competencyIds.set(key, id);
     return id;
+  };
+  // O destino pode ter outro dia de início da competência.
+  const targetStartDay = competencyStartDayOf(target, opts.targetOwnerId);
+  const targetCompetency = (t: Transaction) => {
+    if (t.type !== "credit_card") {
+      const { year, month } = competencyOfDate(t.transactionDate, targetStartDay);
+      return competencyIn(year, month);
+    }
+    const c = source.find("competencies", x => x.id === t.competencyId);
+    if (!c) throw new Error("Competência do lançamento não encontrada.");
+    return competencyIn(c.year, c.month);
   };
 
   const cardIds = new Map<number, number>();
@@ -198,7 +219,7 @@ export function transferTransactions(
 
   for (const t of txs) {
     ensureCategory(t);
-    const competencyId = targetCompetency(t.competencyId);
+    const competencyId = targetCompetency(t);
     const creditCardId = t.type === "credit_card" && t.creditCardId ? targetCard(t.creditCardId) : null;
     const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = t;
     created.push(
@@ -215,6 +236,14 @@ export function transferTransactions(
     if (t.type === "credit_card" && t.creditCardId) touchedSource.add(`${t.creditCardId}:${t.competencyId}`);
   }
 
+  touchedTarget.forEach(key => {
+    const [card, comp] = key.split(":").map(Number);
+    recalcInvoice(target, opts.targetOwnerId, card, comp);
+  });
+
+  // Cópia: a origem fica como está.
+  if (mode === "copy") return { created, allocationsRemoved: 0, mode };
+
   // Origem: remove os lançamentos e os vínculos deles.
   const ids = new Set(txs.map(t => t.id));
   // Ocorrências de recorrência: a regra da origem não deve recriá-las.
@@ -223,14 +252,10 @@ export function transferTransactions(
   let allocationsRemoved = 0;
   ids.forEach(id => (allocationsRemoved += removeAllocationsOf(source, id)));
 
-  touchedTarget.forEach(key => {
-    const [card, comp] = key.split(":").map(Number);
-    recalcInvoice(target, opts.targetOwnerId, card, comp);
-  });
   touchedSource.forEach(key => {
     const [card, comp] = key.split(":").map(Number);
     recalcInvoice(source, opts.sourceOwnerId, card, comp);
   });
 
-  return { created, allocationsRemoved };
+  return { created, allocationsRemoved, mode };
 }

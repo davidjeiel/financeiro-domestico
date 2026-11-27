@@ -81,16 +81,22 @@ Na lista de lançamentos há a coluna **Responsável** (com filtro e ordenação
 
 **Colunas novas na planilha**: `Lancamentos.responsibleUserId` e `Lancamentos.createdBy`; `Usuarios.status` e `Usuarios.color`. Planilhas existentes são atualizadas automaticamente no primeiro acesso.
 
-**Transferir lançamentos entre áreas**
+**Mover ou copiar lançamentos para outra área**
 
-Selecione lançamentos na lista e use o botão **Transferir** (ou **Transferir** na edição de um lançamento) para movê-los para outra área de trabalho. Antes de confirmar, o app mostra o que muda:
+Selecione lançamentos na lista e use o botão **Transferir** (ou **Transferir** na edição de um lançamento). Escolha:
 
-- **Cartões:** cada cartão de origem é ligado a um cartão da área de destino (sugestão: o de mesmo nome) ou a uma cópia criada lá; as faturas são recalculadas nos dois lados.
+- **Mover** — o lançamento sai desta área e vai para a outra;
+- **Copiar** — o lançamento continua aqui e ganha uma cópia na outra área (a origem não é alterada).
+
+Antes de confirmar, o app mostra o que muda:
+
+- **Cartões:** cada cartão de origem é ligado a um cartão da área de destino (sugestão: o de mesmo nome) ou a uma cópia criada lá; as faturas são recalculadas no destino (e, ao mover, na origem).
 - **Responsável:** vira a pessoa de mesmo e-mail na área de destino (ou, para pessoas sem acesso, de mesmo nome); sem correspondente, fica sem responsável.
-- **Vínculos com receitas** da área de origem são desfeitos.
-- Competência, categoria, notas e links são mantidos; categorias que faltarem são criadas no destino.
+- **Vínculos com receitas** não vão para o destino: ao mover, são desfeitos; ao copiar, continuam só na origem.
+- **Competência:** segue a data pelo período configurado no destino (no cartão, a fatura).
+- Categoria, notas, links e situação de pagamento são mantidos; categorias que faltarem são criadas no destino.
 
-Os lançamentos são gravados primeiro no destino e só depois removidos da origem.
+Ao mover, os lançamentos são gravados primeiro no destino e só depois removidos da origem.
 
 **Despesa paga com receita**
 

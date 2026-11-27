@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { skipToken } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRightLeft, Loader2, Users, User } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, Copy, Loader2, Users, User } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -15,9 +15,16 @@ import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
 import { useActiveWorkspaceId, useSwitchWorkspace } from "./useWorkspaces";
 
+type Mode = "move" | "copy";
+
+const MODES: { mode: Mode; label: string; hint: string; Icon: typeof Copy }[] = [
+  { mode: "move", label: "Mover", hint: "Sai desta área e vai para a outra", Icon: ArrowRightLeft },
+  { mode: "copy", label: "Copiar", hint: "Fica nesta área e ganha uma cópia na outra", Icon: Copy },
+];
+
 /**
- * Move os lançamentos selecionados da área ativa para outra área de trabalho.
- * Mostra antes o que muda (cartões, vínculos, responsáveis).
+ * Move ou copia os lançamentos selecionados da área ativa para outra área de
+ * trabalho. Mostra antes o que muda (cartões, vínculos, responsáveis).
  */
 export function TransferTransactionsDialog({
   open,
@@ -37,6 +44,7 @@ export function TransferTransactionsDialog({
   const targets = (list?.workspaces ?? []).filter(w => !w.isActive);
 
   const [targetId, setTargetId] = useState("");
+  const [mode, setMode] = useState<Mode>("move");
   const [cardMap, setCardMap] = useState<Record<string, number | "new">>({});
 
   useEffect(() => {
@@ -44,6 +52,7 @@ export function TransferTransactionsDialog({
       setTargetId(prev => (targets.some(t => t.id === prev) ? prev : targets[0]?.id ?? ""));
     } else {
       setCardMap({});
+      setMode("move");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, list]);
@@ -74,6 +83,7 @@ export function TransferTransactionsDialog({
         sourceWorkspaceId,
         targetWorkspaceId: targetId,
         cardMap,
+        mode,
       });
       await Promise.all([
         utils.transaction.invalidate(),
@@ -82,8 +92,12 @@ export function TransferTransactionsDialog({
         utils.typology.invalidate(),
         utils.creditCard.invalidate(),
       ]);
+      const what =
+        mode === "copy"
+          ? result.count === 1 ? "lançamento copiado" : "lançamentos copiados"
+          : result.count === 1 ? "lançamento movido" : "lançamentos movidos";
       toast.success(
-        `${result.count} ${result.count === 1 ? "lançamento transferido" : "lançamentos transferidos"} para "${result.target.name}".`,
+        `${result.count} ${what} para "${result.target.name}".`,
         {
           action: {
             label: "Abrir área",
@@ -103,6 +117,7 @@ export function TransferTransactionsDialog({
   };
 
   const p = preview.data;
+  const noun = ids.length === 1 ? "lançamento" : "lançamentos";
 
   return (
     <Dialog open={open} onOpenChange={o => !o && onClose()}>
@@ -110,10 +125,12 @@ export function TransferTransactionsDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ArrowRightLeft className="w-5 h-5" />
-            Transferir {ids.length} {ids.length === 1 ? "lançamento" : "lançamentos"}
+            Transferir {ids.length} {noun}
           </DialogTitle>
           <DialogDescription>
-            Os lançamentos saem desta área e passam para a área escolhida.
+            {mode === "copy"
+              ? `Os ${noun} continuam nesta área e uma cópia é criada na área escolhida.`
+              : `Os ${noun} saem desta área e passam para a área escolhida.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -123,6 +140,32 @@ export function TransferTransactionsDialog({
           </p>
         ) : (
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>O que fazer</Label>
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Mover ou copiar">
+                {MODES.map(({ mode: m, label, hint, Icon }) => (
+                  <label
+                    key={m}
+                    className={`flex flex-col gap-0.5 rounded-md border p-2 cursor-pointer text-sm ${
+                      m === mode ? "border-primary bg-primary/5" : "border-border hover:bg-muted"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="transfer-mode"
+                      className="sr-only"
+                      checked={m === mode}
+                      onChange={() => setMode(m)}
+                    />
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <Icon className="w-4 h-4" /> {label}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{hint}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label>Área de destino</Label>
               <div className="space-y-1.5" role="radiogroup">
@@ -185,12 +228,12 @@ export function TransferTransactionsDialog({
                   </div>
                 )}
 
-                {(p.allocationsRemoved > 0 || p.responsiblesUnmatched > 0) && (
+                {((mode === "move" && p.allocationsRemoved > 0) || p.responsiblesUnmatched > 0) && (
                   <div className="rounded-md bg-amber-500/10 p-3 text-sm space-y-1">
                     <p className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
                       <AlertTriangle className="w-4 h-4" /> Atenção
                     </p>
-                    {p.allocationsRemoved > 0 && (
+                    {mode === "move" && p.allocationsRemoved > 0 && (
                       <p>
                         {p.allocationsRemoved} {p.allocationsRemoved === 1 ? "vínculo" : "vínculos"} com
                         receitas desta área {p.allocationsRemoved === 1 ? "será desfeito" : "serão desfeitos"}.
@@ -206,7 +249,9 @@ export function TransferTransactionsDialog({
                   </div>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Competência, categoria, notas e links são mantidos; categorias que faltarem são criadas no destino.
+                  Categoria, notas, links e situação de pagamento são mantidos; categorias que faltarem são
+                  criadas no destino. A competência segue a data (no cartão, a fatura).
+                  {mode === "copy" && p.allocationsRemoved > 0 && " Os vínculos com receitas ficam só nesta área."}
                 </p>
               </>
             )}
@@ -220,7 +265,7 @@ export function TransferTransactionsDialog({
             disabled={!p || preview.isFetching || transfer.isPending || !targetId}
           >
             {transfer.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            Transferir
+            {mode === "copy" ? `Copiar ${noun}` : `Mover ${noun}`}
           </Button>
         </DialogFooter>
       </DialogContent>
