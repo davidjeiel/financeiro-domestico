@@ -5,7 +5,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Loader2, Save, Trash2 } from "lucide-react";
+import { Loader2, Save, Settings2, Trash2 } from "lucide-react";
+import { Link } from "wouter";
 import {
   compactCriteria,
   countCriteria,
@@ -126,6 +127,15 @@ export default function SavedFiltersSelector({ currentDates, currentCriteria, on
         </Button>
       )}
 
+      {savedFilters.length > 0 && (
+        <Button variant="ghost" size="sm" asChild title="Editar filtros salvos e escolher o padrão">
+          <Link href="/filters">
+            <Settings2 className="w-4 h-4 mr-1" />
+            Gerenciar
+          </Link>
+        </Button>
+      )}
+
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
         <DialogTrigger asChild>
           <Button
@@ -142,7 +152,7 @@ export default function SavedFiltersSelector({ currentDates, currentCriteria, on
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Salvar filtros atuais</DialogTitle>
-            <DialogDescription>Ficam disponíveis aqui e na página Filtros.</DialogDescription>
+            <DialogDescription>Ficam disponíveis aqui, em "Aplicar filtro salvo".</DialogDescription>
           </DialogHeader>
           <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-0.5">
             {summary.map(line => (
