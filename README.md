@@ -146,8 +146,9 @@ Os lançamentos (fora do cartão) entram na competência pela **data**, inclusiv
 - **Na edição de uma ocorrência:** *Aplicar valor, descrição, categoria e responsável aos próximos meses* (não mexe nos pagos) e *Encerrar recorrência após este lançamento* (remove as futuras não pagas).
 - **Excluir** um lançamento recorrente pergunta o alcance, mostrando quantos lançamentos cada opção remove:
   - *Somente esta* — as outras continuam; aquela data não volta a ser gerada.
+  - *Esta e as anteriores não pagas* — limpa o que ficou para trás sem pagamento; as próximas continuam e a recorrência segue.
   - *Esta e as próximas* — remove as futuras não pagas e encerra a recorrência (futuras já pagas ficam).
-  - *Esta, as próximas e as anteriores não pagas* — também limpa o que ficou para trás sem pagamento; as pagas continuam no histórico. Se nada sobrar, a regra é apagada.
+  - *Todas as não pagas* — remove esta e todas as não pagas, anteriores e próximas, e encerra a recorrência; as pagas continuam no histórico. Se nada sobrar, a regra é apagada.
   Vínculos com receitas dos lançamentos removidos também saem. A exclusão em lote continua removendo só os lançamentos selecionados.
 - **Fixos/Parcelados** lista as recorrências gravadas, com a próxima data e quantas estão estimadas; dá para **encerrar**. Séries antigas, criadas com data final, podem **continuar sem data final**.
 

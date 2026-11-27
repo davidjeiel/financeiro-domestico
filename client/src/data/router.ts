@@ -91,6 +91,7 @@ import {
   deleteRecurring,
   endRecurrence,
   recurringDeletePreview,
+  RECURRING_DELETE_SCOPES,
   listRecurrences,
   materializeRecurrences,
   ruleOfTransaction,
@@ -576,8 +577,8 @@ export const appRouter = router({
       .input(
         z.object({
           id: z.number(),
-          /** Lançamento recorrente: só este, este e os próximos, ou também os anteriores não pagos. */
-          scope: z.enum(["this", "future", "all_unpaid"]).optional(),
+          /** Lançamento recorrente: só este, este e os anteriores não pagos, este e os próximos, ou todos os não pagos. */
+          scope: z.enum(RECURRING_DELETE_SCOPES).optional(),
         })
       )
       .mutation(async ({ input }) => {

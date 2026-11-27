@@ -270,6 +270,24 @@ describe("excluir lançamento recorrente", () => {
     expect(dates(s, group)).toHaveLength(15);
   });
 
+  it("esta e as anteriores não pagas: as próximas continuam e a recorrência segue", async () => {
+    const { s, group, nov } = await scenario();
+    const result = deleteRecurring(s, nov.id, "past_unpaid");
+    expect(result).toMatchObject({ removed: 2, keptPaid: 2, ended: false }); // nov + out
+    const left = dates(s, group);
+    expect(left).toContain("2026-08-10");
+    expect(left).toContain("2026-09-10");
+    expect(left).not.toContain("2026-10-10");
+    expect(left).not.toContain("2026-11-10");
+    expect(left).toContain("2026-12-10");
+    expect(left).toHaveLength(14); // 2 pagas + 12 próximas
+    // Removidas não voltam; a regra continua gerando depois.
+    expect(s.find("recurrenceRules", r => r.groupKey === group)!.endDate ?? null).toBeNull();
+    materializeRecurrences(s, 1, day(2027, 3, 1));
+    expect(dates(s, group)).not.toContain("2026-10-10");
+    expect(dates(s, group)).toContain("2028-03-10");
+  });
+
   it("esta e as próximas: remove as futuras não pagas e encerra a recorrência", async () => {
     const { s, group, nov, byKey } = await scenario();
     // Uma futura já paga (adiantada) fica.

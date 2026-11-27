@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 
-type Scope = "this" | "future" | "all_unpaid";
+type Scope = "this" | "past_unpaid" | "future" | "all_unpaid";
 
 interface Props {
   transactionId: number | null;
@@ -28,8 +28,9 @@ const br = (key: string) => {
 };
 
 /**
- * Pergunta o alcance da exclusão de um lançamento recorrente: só este, este e
- * os próximos (encerra a recorrência) ou também os anteriores não pagos.
+ * Pergunta o alcance da exclusão de um lançamento recorrente: só este; este e
+ * os anteriores não pagos; este e os próximos (encerra a recorrência); ou
+ * todos os não pagos (encerra também).
  */
 export function RecurringDeleteDialog({ transactionId, open, onClose, onDeleted }: Props) {
   const utils = trpc.useUtils();
@@ -58,6 +59,19 @@ export function RecurringDeleteDialog({ transactionId, open, onClose, onDeleted 
           count: 1,
         },
         {
+          value: "past_unpaid",
+          title: `Esta e as anteriores ${unpaidWordPl}`,
+          detail:
+            (preview.pastUnpaid > 0
+              ? `Remove também ${plural(preview.pastUnpaid, `anterior ${unpaidWord}`, `anteriores ${unpaidWordPl}`)}.`
+              : `Não há anteriores ${unpaidWordPl}.`) +
+            " As próximas continuam e a recorrência segue." +
+            (preview.pastPaid > 0
+              ? ` ${plural(preview.pastPaid, `${income ? "recebida" : "paga"} continua`, `${paidWordPl} continuam`)} no histórico.`
+              : ""),
+          count: 1 + preview.pastUnpaid,
+        },
+        {
           value: "future",
           title: "Esta e as próximas",
           detail:
@@ -71,13 +85,13 @@ export function RecurringDeleteDialog({ transactionId, open, onClose, onDeleted 
         },
         {
           value: "all_unpaid",
-          title: `Esta, as próximas e as anteriores ${unpaidWordPl}`,
+          title: `Todas as ${unpaidWordPl}`,
           detail:
-            (preview.pastUnpaid > 0
-              ? `Além das próximas, remove ${plural(preview.pastUnpaid, `anterior ${unpaidWord}`, `anteriores ${unpaidWordPl}`)}.`
-              : `Não há anteriores ${unpaidWordPl}.`) +
-            (preview.pastPaid > 0
-              ? ` ${plural(preview.pastPaid, `${income ? "recebida" : "paga"} continua`, `${paidWordPl} continuam`)} no histórico.`
+            `Remove esta e todas as ocorrências ${unpaidWordPl}, anteriores e próximas ` +
+            `(${plural(preview.pastUnpaid, "anterior", "anteriores")} e ${plural(preview.futureUnpaid, "próxima", "próximas")}). ` +
+            "A recorrência é encerrada." +
+            (preview.pastPaid + preview.futurePaid > 0
+              ? ` ${plural(preview.pastPaid + preview.futurePaid, `${income ? "recebida" : "paga"} continua`, `${paidWordPl} continuam`)} no histórico.`
               : ""),
           count: 1 + preview.futureUnpaid + preview.pastUnpaid,
         },
