@@ -171,6 +171,42 @@ export async function unshareWorkspaceFile(id: string, email: string) {
   );
 }
 
+// ─── Excluir / sair de áreas ─────────────────────────────────────────────────
+
+const HIDDEN_KEY = "fd.hiddenWorkspaces";
+
+/**
+ * Áreas compartilhadas que o usuário tirou da lista (saiu de uma área de outra
+ * pessoa, ou excluiu e o Drive ainda a devolve na busca). Por usuário Google.
+ */
+export function getHiddenWorkspaceIds(sub: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(`${HIDDEN_KEY}.${sub}`);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function setWorkspaceHidden(sub: string, id: string, hidden: boolean) {
+  const ids = getHiddenWorkspaceIds(sub);
+  if (hidden) ids.add(id);
+  else ids.delete(id);
+  try {
+    localStorage.setItem(`${HIDDEN_KEY}.${sub}`, JSON.stringify(Array.from(ids)));
+  } catch {
+    // sem armazenamento: vale só nesta visita
+  }
+}
+
+/** Manda a planilha da área para a lixeira do Drive (recuperável por 30 dias). */
+export async function trashWorkspaceFile(id: string) {
+  await googleFetch(`${DRIVE_API}/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ trashed: true }),
+  });
+}
+
 /** Link que a pessoa convidada abre para entrar na área. */
 export function joinLink(id: string) {
   const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");

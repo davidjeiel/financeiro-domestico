@@ -358,7 +358,7 @@ export default function TransactionsEnhanced() {
     handleAdvancedFiltersChange(filter.criteria);
   };
 
-  // Abre com um filtro salvo: o da URL (?filtro=id, vindo da página Filtros)
+  // Abre com um filtro salvo: o da URL (?filtro=id, vindo de "Gerenciar filtros")
   // ou, sem nenhum outro filtro, o marcado como padrão.
   const { data: savedFilterList } = trpc.savedFilter.list.useQuery();
   const savedFilterApplied = useRef(false);

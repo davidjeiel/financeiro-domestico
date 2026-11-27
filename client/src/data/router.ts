@@ -76,6 +76,7 @@ import {
   getActiveWorkspace,
   getDataUserId,
   getPersonalWorkspaceId,
+  getSignedInProfile,
   getSpreadsheetUrl,
   getStore,
   openOtherWorkspace,
@@ -87,6 +88,7 @@ import {
 import { previewTransfer, transferTransactions } from "./transfer";
 import { fixedVsVariableReport, suggestRecurringSeries } from "./fixedExpenses";
 import { consolidateWorkspace } from "./allWorkspaces";
+import { GoogleApiError } from "./google";
 import {
   applyFromOccurrence,
   continueSeries,
@@ -109,8 +111,12 @@ import {
 import {
   createSharedWorkspaceFile,
   joinLink,
+  getHiddenWorkspaceIds,
+  getWorkspaceFile,
   listSharedWorkspaces,
   renameWorkspaceFile,
+  setWorkspaceHidden,
+  trashWorkspaceFile,
   shareWorkspaceFile,
   unshareWorkspaceFile,
   type WorkspaceRef,
@@ -188,7 +194,10 @@ const seriesScopeSchema = z.enum(["selected", "following", "all"]).default("sele
 async function listWorkspacesWithActive() {
   const active = getActiveWorkspace();
   const personalId = getPersonalWorkspaceId();
-  const shared = await listSharedWorkspaces();
+  const profile = getSignedInProfile();
+  const hidden = profile ? getHiddenWorkspaceIds(profile.sub) : new Set<string>();
+  // Áreas excluídas ou de que o usuário saiu não aparecem (a ativa sempre aparece).
+  const shared = (await listSharedWorkspaces()).filter(w => !hidden.has(w.id) || w.id === active?.id);
   const personal: WorkspaceRef | null = personalId
     ? {
         id: personalId,
@@ -1000,6 +1009,54 @@ export const appRouter = router({
         await renameWorkspaceFile(active.id, input.name);
         await reload();
         return getActiveWorkspace();
+      }),
+    /**
+     * Exclui ou sai de áreas compartilhadas. Criada por mim: a planilha vai para
+     * a lixeira do Drive (todos perdem o acesso; dá para recuperar por 30 dias).
+     * De outra pessoa: tiro minha permissão (se o Drive deixar) e a área sai da
+     * minha lista; os dados continuam com o dono. A área pessoal não pode ser
+     * excluída. Se a ativa estiver entre elas, volta para a pessoal.
+     */
+    remove: protectedProcedure
+      .input(z.object({ ids: z.array(z.string().min(1)).min(1).max(50) }))
+      .mutation(async ({ input }) => {
+        const profile = getSignedInProfile();
+        if (!profile) throw new Error("Entre com sua conta Google de novo.");
+        const personalId = getPersonalWorkspaceId();
+        const activeId = getActiveWorkspace()?.id;
+        const results: { id: string; name: string; action: "deleted" | "left" | "error"; error?: string }[] = [];
+
+        for (const id of Array.from(new Set(input.ids))) {
+          if (id === personalId) {
+            results.push({ id, name: "Pessoal", action: "error", error: "A área pessoal não pode ser excluída." });
+            continue;
+          }
+          try {
+            const file = await getWorkspaceFile(id);
+            if (file.kind !== "shared") throw new Error("Esta planilha não é uma área compartilhada.");
+            if (file.ownedByMe) {
+              await trashWorkspaceFile(id);
+              results.push({ id, name: file.name, action: "deleted" });
+            } else {
+              // Sem permissão para tirar a si mesmo, a área ainda sai da lista.
+              await unshareWorkspaceFile(id, profile.email).catch(() => undefined);
+              results.push({ id, name: file.name, action: "left" });
+            }
+            setWorkspaceHidden(profile.sub, id, true);
+          } catch (error) {
+            // Já não existe ou não há mais acesso: só tira da lista.
+            if (error instanceof GoogleApiError && (error.status === 404 || error.status === 403)) {
+              setWorkspaceHidden(profile.sub, id, true);
+              results.push({ id, name: id, action: "left" });
+            } else {
+              results.push({ id, name: id, action: "error", error: workspaceAccessMessage(error) });
+            }
+          }
+        }
+
+        const activeRemoved = !!activeId && results.some(r => r.id === activeId && r.action !== "error");
+        if (activeRemoved) await switchWorkspace(null);
+        return { results, switchedToPersonal: activeRemoved };
       }),
     /** Troca a área ativa. `id` nulo volta para a área pessoal. */
     switch: protectedProcedure

@@ -25,6 +25,7 @@ import {
   getWorkspaceFile,
   setActiveWorkspaceId,
   type WorkspaceRef,
+  setWorkspaceHidden,
 } from "./workspaces";
 
 type Loaded = {
@@ -212,6 +213,11 @@ export function getPersonalWorkspaceId(): string | null {
   return loaded?.personalId ?? null;
 }
 
+/** Usuário Google logado (para preferências guardadas no navegador). */
+export function getSignedInProfile(): GoogleProfile | null {
+  return loaded?.profile ?? null;
+}
+
 export function getSpreadsheetUrl(): string | null {
   return loaded?.store.url ?? null;
 }
@@ -298,6 +304,8 @@ export async function switchWorkspace(id: string | null) {
     }
   }
   setActiveWorkspaceId(current.profile.sub, target);
+  // Abrir uma área de propósito a traz de volta para a lista, se tinha saído dela.
+  if (target) setWorkspaceHidden(current.profile.sub, target, false);
   loaded = null;
   const next = await ensureLoaded();
   // A planilha foi encontrada mas não abriu: o load voltou para a pessoal.

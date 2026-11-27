@@ -32,6 +32,7 @@ import {
 import { isPickerConfigured, pickSharedSpreadsheet } from "@/data/google";
 import { useSwitchWorkspace } from "@/components/workspace/useWorkspaces";
 import { PersonBadge } from "@/components/workspace/PersonBadge";
+import { RemoveWorkspacesDialog, type RemovableWorkspace } from "@/components/workspace/RemoveWorkspacesDialog";
 
 const COLORS = [
   "#3B82F6", "#EC4899", "#10B981", "#F59E0B", "#8B5CF6",
@@ -65,6 +66,17 @@ export function WorkspacesPage() {
   const [editing, setEditing] = useState<{ id: number; name: string; color: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [picking, setPicking] = useState(false);
+  // Áreas marcadas para excluir/sair, e as que o diálogo está confirmando.
+  const [selectedAreas, setSelectedAreas] = useState<Set<string>>(new Set());
+  const [removing, setRemoving] = useState<RemovableWorkspace[] | null>(null);
+  const sharedAreas = (list?.workspaces ?? []).filter(w => w.kind === "shared");
+  const toggleArea = (id: string, on: boolean) =>
+    setSelectedAreas(prev => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
 
   const isShared = active?.kind === "shared";
   const visiblePeople = people.filter(p => p.status !== "removed");
@@ -190,9 +202,20 @@ export function WorkspacesPage() {
           <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
             <div>
               <CardTitle>Suas áreas</CardTitle>
-              <CardDescription>Escolha em qual área você está lançando.</CardDescription>
+              <CardDescription>
+                Escolha em qual área você está lançando. Marque áreas compartilhadas para excluí-las ou sair delas.
+              </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2 justify-end">
+              {selectedAreas.size > 0 && (
+                <Button
+                  variant="destructive"
+                  onClick={() => setRemoving(sharedAreas.filter(w => selectedAreas.has(w.id)))}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Excluir {selectedAreas.size} {selectedAreas.size === 1 ? "área" : "áreas"}
+                </Button>
+              )}
               <Button variant="outline" onClick={handleJoinWithPicker} disabled={picking || !isPickerConfigured()}
                 title={isPickerConfigured() ? undefined : "Configure VITE_GOOGLE_API_KEY e VITE_GOOGLE_APP_ID"}>
                 {picking ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <LogIn className="w-4 h-4 mr-2" />}
@@ -215,6 +238,21 @@ export function WorkspacesPage() {
               >
                 <div className="flex items-center gap-3 min-w-0">
                   {w.kind === "shared" ? (
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 shrink-0 cursor-pointer"
+                      checked={selectedAreas.has(w.id)}
+                      onChange={e => toggleArea(w.id, e.target.checked)}
+                      aria-label={`Selecionar ${w.name}`}
+                    />
+                  ) : (
+                    <span
+                      className="w-4 h-4 shrink-0"
+                      title="A área pessoal não pode ser excluída"
+                      aria-hidden
+                    />
+                  )}
+                  {w.kind === "shared" ? (
                     <Users className="w-5 h-5 text-primary shrink-0" />
                   ) : (
                     <User className="w-5 h-5 text-muted-foreground shrink-0" />
@@ -235,6 +273,17 @@ export function WorkspacesPage() {
                     className="p-2 rounded-md hover:bg-muted text-muted-foreground">
                     <ExternalLink className="w-4 h-4" />
                   </a>
+                  {w.kind === "shared" && (
+                    <button
+                      type="button"
+                      className="p-2 rounded-md hover:bg-red-500/10 text-muted-foreground hover:text-red-500"
+                      title={w.ownedByMe ? "Excluir esta área" : "Sair desta área"}
+                      aria-label={w.ownedByMe ? `Excluir ${w.name}` : `Sair de ${w.name}`}
+                      onClick={() => setRemoving([w])}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                   {w.isActive ? (
                     <Badge>Ativa</Badge>
                   ) : (
@@ -419,6 +468,12 @@ export function WorkspacesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <RemoveWorkspacesDialog
+        open={!!removing}
+        workspaces={removing ?? []}
+        onClose={() => setRemoving(null)}
+        onDone={() => setSelectedAreas(new Set())}
+      />
     </DashboardLayoutCustom>
   );
 }

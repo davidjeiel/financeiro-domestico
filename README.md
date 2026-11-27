@@ -71,6 +71,14 @@ A área ativa é escolhida no seletor da barra lateral.
 
 > **O botão "Abrir" do e-mail do Google abre só a planilha, não o app.** Quem entrar no app pelo endereço normal não verá a área até liberá-la: no seletor **Área de trabalho** da barra lateral, escolha **➕ Entrar em área compartilhada comigo…** (ou o botão de mesmo nome em **Áreas e pessoas**) e selecione a planilha. Se a área não abrir, o app agora mostra o motivo em vez de voltar em silêncio para a Pessoal.
 
+**Excluir ou sair de áreas**
+
+Em **Áreas e pessoas**, marque uma ou mais áreas compartilhadas e use **Excluir N áreas** (ou a lixeira de cada linha). O app confirma o que acontece com cada uma:
+
+- **Criada por você:** a planilha vai para a lixeira do Google Drive e todos os participantes perdem o acesso; dá para recuperá-la pela lixeira do Drive por 30 dias. Exige marcar a confirmação.
+- **De outra pessoa:** você sai da área — o app tenta tirar sua permissão na planilha e a área some da sua lista; os dados continuam com o dono. Para voltar, use *Entrar em área compartilhada comigo* ou peça um novo convite.
+- A área **Pessoal** não pode ser excluída. Se a área ativa estiver entre as excluídas, o app volta para a Pessoal.
+
 **Responsável pelo pagamento**
 
 Todo lançamento (receita, despesa ou cartão) tem o campo **Responsável pelo pagamento** (em receitas, **Quem recebe**). O padrão é quem está lançando. As opções são as pessoas da área:
@@ -145,7 +153,7 @@ Os lançamentos (fora do cartão) entram na competência pela **data**, inclusiv
 
 ## Lançamentos fixos sem data final
 
-- Ao criar um lançamento **Recorrente** (em Lançamentos ou Fixos/Parcelados), a **data limite é opcional**: em branco, repete sem fim.
+- Ao criar um lançamento **Recorrente** (em Lançamentos), a **data limite é opcional**: em branco, repete sem fim.
 - A planilha guarda a **regra** (aba `Recorrencias`), e o app gera os lançamentos **com 1 ano de antecedência** (até o fim do 12º mês à frente), então a despesa ou receita aparece em todos os meses do próximo ano. Os seguintes aparecem sozinhos conforme o tempo passa (ao abrir o app, e uma vez por dia com ele aberto). Cada ocorrência leva a série (`recurrenceGroup`) e a data (`recurrenceDate`), o que impede gerar duas vezes — inclusive com duas pessoas numa área compartilhada.
 - **Valor estimado:** com *O valor muda a cada mês* marcado (padrão), cada ocorrência nasce como **≈ estimado** (`isEstimated`) até o valor real ser confirmado: botão ✓ na lista, editar o valor (ou marcar *Valor confirmado*) ou marcar como pago. Os cards de totais mostram quanto ainda é estimativa.
 - **Na edição de uma ocorrência:** *Aplicar valor, descrição, categoria e responsável aos próximos meses* (não mexe nos pagos) e *Encerrar recorrência após este lançamento* (remove as futuras não pagas).
@@ -155,13 +163,13 @@ Os lançamentos (fora do cartão) entram na competência pela **data**, inclusiv
   - *Esta e as próximas* — remove as futuras não pagas e encerra a recorrência (futuras já pagas ficam).
   - *Todas as não pagas* — remove esta e todas as não pagas, anteriores e próximas, e encerra a recorrência; as pagas continuam no histórico. Se nada sobrar, a regra é apagada.
   Vínculos com receitas dos lançamentos removidos também saem. A exclusão em lote continua removendo só os lançamentos selecionados.
-- **Fixos/Parcelados** lista as recorrências gravadas, com a próxima data e quantas estão estimadas; dá para **encerrar**. Séries antigas, criadas com data final, podem **continuar sem data final**.
+- A tela **Fixos/Parcelados** (`/recurring-installments`, fora do menu) lista as recorrências gravadas, com a próxima data e quantas estão estimadas; dá para **encerrar**. Séries antigas, criadas com data final, podem **continuar sem data final**.
 
 ---
 
 ## Despesas fixas × variáveis (Relatórios)
 
-- **Fixa** = lançamento recorrente. Ao criar um lançamento como **Recorrente** (ou em Fixos/Parcelados), cada lançamento da série guarda a frequência (`Lancamentos.recurrence`) e o id da série (`recurrenceGroup`). Variável = todo o resto (parcelas incluídas).
+- **Fixa** = lançamento recorrente. Ao criar um lançamento como **Recorrente**, cada lançamento da série guarda a frequência (`Lancamentos.recurrence`) e o id da série (`recurrenceGroup`). Variável = todo o resto (parcelas incluídas).
 - Em **Relatórios**, a seção *Despesas fixas × variáveis* (despesas e compras no cartão, por competência) mostra: total de fixas e variáveis do mês e a fatia de cada uma, quanto da receita as fixas comprometem, a evolução dos últimos 6 meses, a divisão por categoria e a lista das fixas do mês. Os números e valores da tabela abrem os lançamentos filtrados.
 - **Dados antigos:** séries criadas antes dessa marca aparecem como variáveis. O relatório sugere as despesas que se repetem (mesmo tipo, categoria, descrição, valor e cartão em 3+ competências) para marcar como fixas de uma vez. Também dá para marcar/desmarcar na edição do lançamento (*Despesa fixa (recorrente)*) ou em lote (*Atualizar natureza*). Na lista, lançamentos fixos têm o selo **fixa**.
 
@@ -171,7 +179,7 @@ Os lançamentos (fora do cartão) entram na competência pela **data**, inclusiv
 
 - **Painel de filtros** (botão *Filtros* em Lançamentos): período, tipo, categoria, cartão, **descrição** e faixa de valores. A descrição é buscada por trecho, sem diferenciar maiúsculas, acentos ou espaços sobrando ("farmacia" encontra "Farmácia São João"). Cada critério ativo aparece como etiqueta em *Filtrando por*, com × para remover.
 - **Salvar filtro:** grava na planilha (aba *FiltrosSalvos*) o período e todos os critérios do painel. *Aplicar filtro salvo* restaura os dois.
-- **Página Filtros:** cria, edita e exclui filtros salvos; vários tipos, categorias ou cartões marcados valem como "qualquer um deles". *Aplicar* abre Lançamentos já filtrado; *Usar como padrão* aplica o filtro ao abrir Lançamentos quando não há outro filtro ativo (só um filtro é padrão por vez).
+- **Gerenciar filtros** (botão no painel de filtros salvos, quando há algum; tela `/filters`, fora do menu): cria, edita e exclui filtros salvos; vários tipos, categorias ou cartões marcados valem como "qualquer um deles". *Aplicar* abre Lançamentos já filtrado; *Usar como padrão* aplica o filtro ao abrir Lançamentos quando não há outro filtro ativo (só um filtro é padrão por vez).
 - Sem datas, o filtro vale para o mês aberto na tela.
 
 ## Todas as áreas
@@ -255,13 +263,13 @@ VITE_BASE_URL: /financeiro-domestico/   # GitHub Pages padrão
 | `/dashboard` | Resumo financeiro do mês atual |
 | `/lancamentos` | Lista e cadastro de movimentações — visão **Competência** ou **Mensal**; compras no cartão agrupadas por fatura (expansível, com pagamento parcial/total); ordem manual arrastando as linhas |
 | `/todas-areas` | Movimentações de todas as áreas de trabalho, lado a lado (só leitura) |
-| `/filters` | Filtros salvos: criar, editar, aplicar em Lançamentos e definir o padrão |
+| `/filters` | Filtros salvos: criar, editar, aplicar em Lançamentos e definir o padrão (pelo botão *Gerenciar* do painel de filtros) |
 | `/cards` | Cartões de crédito; ao selecionar um cartão, as faturas dele (filtro por ano e mês) |
 | `/calendar` | Visão calendário das movimentações |
 | `/reports` | Gráficos e relatórios financeiros, por competência ou mês do calendário |
 | `/export` | Exportação de dados (CSV/XLSX) |
 | `/competency-config` | Dia de início da competência (ex.: 30 a 29) |
-| `/recurring-installments` | Despesas fixas e parcelamentos |
+| `/recurring-installments` | Despesas fixas e parcelamentos (fora do menu) |
 | `/settings` | Configurações da conta |
 | `/accounts` | Contas bancárias |
 | `/categories` | Categorias (tipologias) |
