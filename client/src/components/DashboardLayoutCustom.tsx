@@ -50,6 +50,7 @@ function LoginScreen({ onLogin, error }: { onLogin: () => void; error: { message
 const NAV_ITEMS = [
   { href: "/dashboard", icon: "📊", label: "Dashboard" },
   { href: "/lancamentos", icon: "💳", label: "Lançamentos" },
+  { href: "/todas-areas", icon: "🗂️", label: "Todas as áreas" },
   { href: "/filters", icon: "🔍", label: "Filtros" },
   // As faturas ficam na tela de cartões (selecionar o cartão).
   { href: "/cards", icon: "🏦", label: "Cartões" },

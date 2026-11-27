@@ -31,19 +31,29 @@ function useIsDark() {
 const pct = (part: number, total: number) => (total > 0 ? Math.round((part / total) * 100) : 0);
 
 /** Comparativo de despesas fixas (recorrentes) × variáveis. */
-export function FixedVsVariableSection({ year, month, name }: { year: number; month: number; name: string }) {
+export function FixedVsVariableSection({
+  year,
+  month,
+  name,
+  mode = "competency",
+}: {
+  year: number;
+  month: number;
+  name: string;
+  mode?: "competency" | "monthly";
+}) {
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   const colors = SERIES[useIsDark() ? "dark" : "light"];
 
-  const { data, isLoading } = trpc.report.fixedVsVariable.useQuery({ year, month, months: 6 });
+  const { data, isLoading } = trpc.report.fixedVsVariable.useQuery({ year, month, months: 6, mode });
   const { data: suggestions = [] } = trpc.report.recurringSuggestions.useQuery();
   const setRecurrence = trpc.transaction.setRecurrence.useMutation();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   useEffect(() => setSelected(new Set(suggestions.map(s => s.key))), [suggestions]);
 
   const open = (natureza: "fixa" | "variavel", categoria?: string) =>
-    navigate(buildTransactionsUrl({ natureza, categoria, visao: "competency" }));
+    navigate(buildTransactionsUrl({ natureza, categoria, visao: mode }));
 
   const chartData = useMemo(
     () => (data?.months ?? []).map(m => ({ ...m, total: m.fixed + m.variable })),

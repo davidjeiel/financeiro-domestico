@@ -14,6 +14,8 @@ Aplicação web para controle de finanças pessoais. Organiza receitas, despesas
 - [Configurando o login Google](#configurando-o-login-google)
 - [Áreas de trabalho compartilhadas](#áreas-de-trabalho-compartilhadas)
 - [Filtros de lançamentos](#filtros-de-lançamentos)
+- [Todas as áreas](#todas-as-áreas)
+- [Relatórios](#relatórios)
 - [Desenvolvimento](#desenvolvimento)
 - [Deploy no GitHub Pages](#deploy-no-github-pages)
 - [Scripts disponíveis](#scripts-disponíveis)
@@ -98,6 +100,8 @@ Antes de confirmar, o app mostra o que muda:
 
 Ao mover, os lançamentos são gravados primeiro no destino e só depois removidos da origem.
 
+**Lançamento recorrente:** se algum selecionado faz parte de uma recorrência, o app pergunta o que levar — *só os selecionados*, *este e os próximos da série* ou *a série inteira* — mostrando quantos lançamentos vão em cada opção. Com os próximos ou a série inteira, a **regra** vai junto (com o cartão e o responsável traduzidos) e a recorrência passa a ser gerada na área de destino. Ao **mover**, a regra sai da origem (série inteira) ou termina no dia anterior (desta em diante); ao **copiar**, a origem continua igual.
+
 **Despesa paga com receita**
 
 Uma despesa (ou compra no cartão) pode ser vinculada a uma ou mais receitas — "a conta de luz sai do salário de março" —, informando quanto sai de cada uma. O vínculo é feito no cadastro (lançamentos simples) ou na edição da despesa, em **Pago com a receita**.
@@ -170,6 +174,19 @@ Os lançamentos (fora do cartão) entram na competência pela **data**, inclusiv
 - **Página Filtros:** cria, edita e exclui filtros salvos; vários tipos, categorias ou cartões marcados valem como "qualquer um deles". *Aplicar* abre Lançamentos já filtrado; *Usar como padrão* aplica o filtro ao abrir Lançamentos quando não há outro filtro ativo (só um filtro é padrão por vez).
 - Sem datas, o filtro vale para o mês aberto na tela.
 
+## Todas as áreas
+
+Em **Todas as áreas** (menu lateral) aparecem, numa lista só, as movimentações do período de todas as áreas de trabalho que o app consegue abrir:
+
+- **Competência** (a competência de cada área, com o dia de início de cada uma) ou **Mensal** (mês do calendário), com navegação entre meses; compras no cartão entram pela fatura, como em Lançamentos.
+- Totais (receitas, despesas, cartão e saldo) das áreas visíveis; cada área mostra quantos lançamentos tem e o saldo, e pode ser escondida com um clique.
+- Busca por descrição e filtro por tipo; cor da área em cada linha, cor do cartão nas compras e ícone de situação de pagamento.
+- É só leitura: **Abrir** troca para a área e vai para Lançamentos. Áreas que não abrem (ex.: compartilhada ainda não liberada no Google Picker) aparecem com o motivo.
+
+## Relatórios
+
+Em **Relatórios**, escolha **Competência** ou **Mensal** e navegue entre os meses (a escolha fica salva, separada da de Lançamentos). Os totais, os gráficos por tipo e categoria e o comparativo de despesas fixas × variáveis seguem a visão escolhida: na competência, cada lançamento conta na competência dele; na mensal, pelo mês da data (no cartão, pelo vencimento da fatura).
+
 ## Desenvolvimento
 
 ```sh
@@ -237,10 +254,11 @@ VITE_BASE_URL: /financeiro-domestico/   # GitHub Pages padrão
 | `/` | Landing page pública |
 | `/dashboard` | Resumo financeiro do mês atual |
 | `/lancamentos` | Lista e cadastro de movimentações — visão **Competência** ou **Mensal**; compras no cartão agrupadas por fatura (expansível, com pagamento parcial/total); ordem manual arrastando as linhas |
+| `/todas-areas` | Movimentações de todas as áreas de trabalho, lado a lado (só leitura) |
 | `/filters` | Filtros salvos: criar, editar, aplicar em Lançamentos e definir o padrão |
 | `/cards` | Cartões de crédito; ao selecionar um cartão, as faturas dele (filtro por ano e mês) |
 | `/calendar` | Visão calendário das movimentações |
-| `/reports` | Gráficos e relatórios financeiros |
+| `/reports` | Gráficos e relatórios financeiros, por competência ou mês do calendário |
 | `/export` | Exportação de dados (CSV/XLSX) |
 | `/competency-config` | Dia de início da competência (ex.: 30 a 29) |
 | `/recurring-installments` | Despesas fixas e parcelamentos |

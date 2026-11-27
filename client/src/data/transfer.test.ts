@@ -36,6 +36,7 @@ vi.mock("./google", async importOriginal => ({
 
 import { SheetStore } from "./sheetStore";
 import { previewTransfer, transferTransactions } from "./transfer";
+import { createRule, materializeRecurrences } from "./recurrences";
 import { setAllocations } from "./allocations";
 
 async function setup() {
@@ -189,5 +190,108 @@ describe("transferência entre áreas", () => {
     expect(compOf(created.find(t => t.category === "Pet")!.competencyId)).toMatchObject({ year: 2026, month: 2 });
     // Compra no cartão continua na competência da fatura (março).
     expect(compOf(created.find(t => t.category === "Compras")!.competencyId)).toMatchObject({ year: 2026, month: 3 });
+  });
+});
+
+describe("transferir lançamento recorrente", () => {
+  beforeEach(() => fake.files.clear());
+
+  // Aluguel mensal de Ana desde set/2026, visto em 25/11/2026 (gerado até nov/2027).
+  async function series() {
+    const base = await setup();
+    const { source, ana } = base;
+    const today = new Date(2026, 10, 25);
+    const rule = createRule(
+      source,
+      ana.id,
+      { type: "expense", category: "Moradia", description: "Aluguel", amount: "2000", frequency: "monthly", startDate: new Date(2026, 8, 10), responsibleUserId: ana.id },
+      ana.id
+    );
+    materializeRecurrences(source, ana.id, today);
+    const occ = source
+      .select("transactions", t => t.recurrenceGroup === rule.groupKey)
+      .sort((a, b) => a.transactionDate.getTime() - b.transactionDate.getTime());
+    source.update("transactions", t => t.id === occ[0].id, { isPaid: 1 }); // setembro pago
+    const nov = occ.find(t => t.recurrenceDate === "2026-11-10")!;
+    const keys = (st: SheetStore) =>
+      st.select("transactions", t => t.recurrenceGroup === rule.groupKey).map(t => t.recurrenceDate).sort();
+    return { ...base, today, rule, occ, nov, keys };
+  }
+
+  it("prévia mostra quantos vão em cada opção", async () => {
+    const { source, target, ana, bia, nov, occ } = await series();
+    const preview = previewTransfer(source, target, { ids: [nov.id], sourceOwnerId: ana.id, targetOwnerId: bia.id, seriesScope: "following" });
+    expect(preview.series).toEqual({ recurringSelected: 1, selected: 1, following: 13, all: occ.length });
+    expect(preview.count).toBe(13);
+  });
+
+  it("só a selecionada: a série continua na origem", async () => {
+    const { source, target, ana, bia, anaNoDestino, nov, keys, today } = await series();
+    transferTransactions(source, target, { ids: [nov.id], sourceOwnerId: ana.id, targetOwnerId: bia.id, actorTargetUserId: anaNoDestino.id });
+    expect(keys(target)).toEqual(["2026-11-10"]);
+    expect(target.select("recurrenceRules")).toHaveLength(0);
+    materializeRecurrences(source, ana.id, today);
+    expect(keys(source)).not.toContain("2026-11-10");
+    expect(keys(source)).toHaveLength(14);
+  });
+
+  it("mover desta em diante: a regra passa a gerar no destino e termina na origem", async () => {
+    const { source, target, ana, bia, anaNoDestino, nov, rule, keys } = await series();
+    const result = transferTransactions(source, target, {
+      ids: [nov.id], sourceOwnerId: ana.id, targetOwnerId: bia.id, actorTargetUserId: anaNoDestino.id, seriesScope: "following",
+    });
+    expect(result.created).toHaveLength(13);
+    expect(result.rulesTransferred).toBe(1);
+    expect(keys(source)).toEqual(["2026-09-10", "2026-10-10"]);
+    expect(source.find("recurrenceRules", r => r.id === rule.id)!.endDate).toEqual(new Date(2026, 10, 9));
+
+    const targetRule = target.find("recurrenceRules", r => r.groupKey === rule.groupKey)!;
+    expect(targetRule).toMatchObject({ userId: bia.id, startDate: new Date(2026, 10, 10), responsibleUserId: anaNoDestino.id });
+    // Um mês depois: o destino ganha dez/2027, a origem não gera nada.
+    materializeRecurrences(target, bia.id, new Date(2026, 11, 2));
+    materializeRecurrences(source, ana.id, new Date(2026, 11, 2));
+    expect(keys(target)).toHaveLength(14);
+    expect(keys(target).at(-1)).toBe("2027-12-10");
+    expect(keys(source)).toEqual(["2026-09-10", "2026-10-10"]);
+  });
+
+  it("mover a série toda leva o histórico (pago incluído) e a regra sai da origem", async () => {
+    const { source, target, ana, bia, anaNoDestino, nov, rule, keys, occ } = await series();
+    transferTransactions(source, target, {
+      ids: [nov.id], sourceOwnerId: ana.id, targetOwnerId: bia.id, actorTargetUserId: anaNoDestino.id, seriesScope: "all",
+    });
+    expect(keys(source)).toEqual([]);
+    expect(source.find("recurrenceRules", r => r.id === rule.id)).toBeNull();
+    expect(keys(target)).toHaveLength(occ.length);
+    expect(target.find("transactions", t => t.recurrenceDate === "2026-09-10")!.isPaid).toBe(1);
+    expect(target.find("recurrenceRules", r => r.groupKey === rule.groupKey)!.startDate).toEqual(new Date(2026, 8, 10));
+  });
+
+  it("copiar a série toda: as duas áreas continuam gerando", async () => {
+    const { source, target, ana, bia, anaNoDestino, nov, rule, keys, occ } = await series();
+    transferTransactions(source, target, {
+      ids: [nov.id], sourceOwnerId: ana.id, targetOwnerId: bia.id, actorTargetUserId: anaNoDestino.id, mode: "copy", seriesScope: "all",
+    });
+    expect(keys(source)).toHaveLength(occ.length);
+    expect(keys(target)).toHaveLength(occ.length);
+    expect(source.find("recurrenceRules", r => r.id === rule.id)!.endDate).toBeNull();
+    materializeRecurrences(target, bia.id, new Date(2026, 11, 2));
+    expect(keys(target).at(-1)).toBe("2027-12-10");
+  });
+
+  it("compra recorrente no cartão leva a regra com o cartão do destino", async () => {
+    const { source, target, ana, bia, anaNoDestino, nubank, nubankCasa } = await series();
+    const rule = createRule(
+      source, ana.id,
+      { type: "credit_card", category: "Assinaturas", description: "Música", amount: "21.90", frequency: "monthly", startDate: new Date(2026, 10, 2), creditCardId: nubank.id },
+      ana.id
+    );
+    materializeRecurrences(source, ana.id, new Date(2026, 10, 25));
+    const first = source.find("transactions", t => t.recurrenceGroup === rule.groupKey)!;
+    transferTransactions(source, target, {
+      ids: [first.id], sourceOwnerId: ana.id, targetOwnerId: bia.id, actorTargetUserId: anaNoDestino.id, seriesScope: "all",
+    });
+    expect(target.find("recurrenceRules", r => r.groupKey === rule.groupKey)!.creditCardId).toBe(nubankCasa.id);
+    expect(target.select("transactions", t => t.recurrenceGroup === rule.groupKey).every(t => t.creditCardId === nubankCasa.id)).toBe(true);
   });
 });

@@ -6,21 +6,45 @@
 export type ViewMode = "competency" | "monthly";
 
 const VIEW_MODE_KEY = "transactionsViewMode";
+/** Os relatórios guardam a própria escolha, separada da de Lançamentos. */
+export const REPORTS_VIEW_MODE_KEY = "reportsViewMode";
 
-export function readViewMode(): ViewMode {
+export function readViewMode(key = VIEW_MODE_KEY): ViewMode {
   try {
-    return localStorage.getItem(VIEW_MODE_KEY) === "monthly" ? "monthly" : "competency";
+    return localStorage.getItem(key) === "monthly" ? "monthly" : "competency";
   } catch {
     return "competency";
   }
 }
 
-export function saveViewMode(mode: ViewMode) {
+export function saveViewMode(mode: ViewMode, key = VIEW_MODE_KEY) {
   try {
-    localStorage.setItem(VIEW_MODE_KEY, mode);
+    localStorage.setItem(key, mode);
   } catch {
     // sem armazenamento: a escolha vale só nesta visita
   }
+}
+
+/** "30/11 a 29/12" — período da competência, quando não é o mês do calendário. */
+export function competencyRangeLabel(
+  competency: { periodStart?: Date | string | null; periodEnd?: Date | string | null } | null | undefined
+): string | null {
+  if (!competency?.periodStart || !competency.periodEnd) return null;
+  const start = new Date(competency.periodStart);
+  const end = new Date(competency.periodEnd);
+  const isCalendarMonth =
+    start.getDate() === 1 &&
+    end.getMonth() === start.getMonth() &&
+    new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1).getDate() === 1;
+  if (isCalendarMonth) return null;
+  const fmt = (d: Date) => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  return `${fmt(start)} a ${fmt(end)}`;
+}
+
+/** Mês anterior/seguinte. */
+export function shiftMonth(year: number, month: number, delta: number) {
+  const index = year * 12 + (month - 1) + delta;
+  return { year: Math.floor(index / 12), month: (index % 12) + 1 };
 }
 
 /** Primeiro e último dia do mês (1–12), no formato YYYY-MM-DD. */

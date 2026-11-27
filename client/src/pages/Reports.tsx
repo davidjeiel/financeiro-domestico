@@ -5,17 +5,25 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/formatting";
 import { FixedVsVariableSection } from "@/components/reports/FixedVsVariableSection";
+import { PeriodToolbar } from "@/components/PeriodToolbar";
+import { usePeriodNavigation } from "@/hooks/usePeriodNavigation";
+import { REPORTS_VIEW_MODE_KEY } from "@/lib/transactionView";
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 const COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"];
 
 export default function Reports() {
-  const { data: currentCompetency } = trpc.competency.current.useQuery();
+  // Competência ou mês do calendário, com navegação; a escolha fica salva.
+  const period = usePeriodNavigation(REPORTS_VIEW_MODE_KEY);
   const { data: transactions, isLoading } = trpc.transaction.list.useQuery(
-    { competencyId: currentCompetency?.id || 0 },
-    { enabled: !!currentCompetency }
+    {
+      competencyId: period.competency?.id || 0,
+      startDate: period.range?.start,
+      endDate: period.range?.end,
+    },
+    // Mantém a tela ao trocar de mês enquanto o novo período carrega.
+    { enabled: !!period.competency, placeholderData: prev => prev }
   );
-  const { data: allCompetencies } = trpc.competency.list.useQuery();
 
   // Calculate summary for current competency
   const summary = useMemo(() => {
@@ -63,7 +71,7 @@ export default function Reports() {
     ].filter(item => item.value > 0);
   }, [summary]);
 
-  if (isLoading) {
+  if (isLoading || !period.competency) {
     return (
       <DashboardLayoutCustom>
         <div className="space-y-4">
@@ -77,6 +85,16 @@ export default function Reports() {
   return (
     <DashboardLayoutCustom title="Relatórios Financeiros">
       <div className="space-y-6">
+        <PeriodToolbar
+          viewMode={period.viewMode}
+          onViewModeChange={period.setViewMode}
+          title={period.title}
+          subtitle={period.subtitle}
+          onPrev={period.goPrev}
+          onNext={period.goNext}
+          onCurrent={period.goCurrent}
+        />
+
         {/* Summary Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card className="p-6">
@@ -100,11 +118,12 @@ export default function Reports() {
         </div>
 
         {/* Despesas fixas × variáveis */}
-        {currentCompetency && (
+        {period.year !== null && period.month !== null && (
           <FixedVsVariableSection
-            year={currentCompetency.year}
-            month={currentCompetency.month}
-            name={currentCompetency.name}
+            year={period.year}
+            month={period.month}
+            name={period.title}
+            mode={period.viewMode}
           />
         )}
 
