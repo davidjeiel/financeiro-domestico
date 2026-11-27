@@ -101,6 +101,8 @@ import {
   allocationsOf,
   incomeOptions,
   setAllocations,
+  incomesWithExpenses,
+  transactionsPaidBy,
 } from "./allocations";
 import {
   createSharedWorkspaceFile,
@@ -1061,6 +1063,20 @@ export const appRouter = router({
       .query(({ input }) => {
         assertActiveWorkspace(input.workspaceId);
         return incomeOptions(getStore(), getDataUserId(), input.expenseId);
+      }),
+    /** Receitas que pagam despesas, para filtrar a lista por receita. */
+    incomesWithExpenses: protectedProcedure
+      .input(z.object({ workspaceId: z.string() }))
+      .query(({ input }) => {
+        assertActiveWorkspace(input.workspaceId);
+        return incomesWithExpenses(getStore(), getDataUserId());
+      }),
+    /** A receita e as despesas pagas com ela, de qualquer período. */
+    paidBy: protectedProcedure
+      .input(z.object({ incomeId: z.number().int(), workspaceId: z.string() }))
+      .query(({ input }) => {
+        assertActiveWorkspace(input.workspaceId);
+        return transactionsPaidBy(getStore(), getDataUserId(), input.incomeId);
       }),
     /** Substitui as receitas vinculadas a uma despesa. Lista vazia remove os vínculos. */
     set: protectedProcedure
