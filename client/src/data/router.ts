@@ -455,8 +455,8 @@ export const appRouter = router({
         });
       }),
     /**
-     * Move lançamentos da área ativa para outra área: grava no destino
-     * primeiro e só depois remove da origem.
+     * Move ou copia lançamentos da área ativa para outra área. Ao mover, grava
+     * no destino primeiro e só depois remove da origem.
      */
     transfer: protectedProcedure
       .input(
@@ -465,6 +465,7 @@ export const appRouter = router({
           sourceWorkspaceId: z.string(),
           targetWorkspaceId: z.string(),
           cardMap: z.record(z.string(), z.union([z.number().int(), z.literal("new")])).optional(),
+          mode: z.enum(["move", "copy"]).default("move"),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -477,26 +478,31 @@ export const appRouter = router({
           targetOwnerId: target.ownerId,
           actorTargetUserId: target.user.id,
           cardMap: input.cardMap,
+          mode: input.mode,
         });
         await target.store.commit();
-        try {
-          await source.commit();
-        } catch (error) {
-          throw new Error(
-            "Os lançamentos foram copiados para o destino, mas não foi possível removê-los desta área. " +
-              "Use Recarregar dados e exclua-os aqui manualmente."
-          );
+        // Cópia não altera a origem (não há o que gravar nela).
+        if (input.mode === "move") {
+          try {
+            await source.commit();
+          } catch (error) {
+            throw new Error(
+              "Os lançamentos foram copiados para o destino, mas não foi possível removê-los desta área. " +
+                "Use Recarregar dados e exclua-os aqui manualmente."
+            );
+          }
         }
         await logAuditAction({
           workspaceId: 0,
           userId: ctx.user.id,
-          action: "transfer_transactions",
+          action: input.mode === "copy" ? "copy_transactions" : "transfer_transactions",
           entityType: "transaction",
           entityId: null,
           changes: JSON.stringify({ to: input.targetWorkspaceId, count: result.created.length }),
         });
         return {
           count: result.created.length,
+          mode: input.mode,
           allocationsRemoved: result.allocationsRemoved,
           target: { id: target.workspace.id, name: target.workspace.name },
         };

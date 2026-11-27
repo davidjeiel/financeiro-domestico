@@ -149,4 +149,45 @@ describe("transferência entre áreas", () => {
       })
     ).toThrow(/Escolha um cartão/);
   });
+  it("copiar cria no destino e deixa a origem intacta (com vínculos)", async () => {
+    const { source, target, ana, bia, anaNoDestino, nubankCasa, racao, mercado } = await setup();
+    const before = source.select("transactions").map(t => t.id).sort();
+    const sourceInvoices = source.select("invoices").length;
+    const result = transferTransactions(source, target, {
+      ids: [racao.id, mercado.id],
+      sourceOwnerId: ana.id,
+      targetOwnerId: bia.id,
+      actorTargetUserId: anaNoDestino.id,
+      mode: "copy",
+    });
+    await target.commit();
+
+    expect(result).toMatchObject({ mode: "copy", allocationsRemoved: 0 });
+    expect(result.created).toHaveLength(2);
+    expect(target.select("transactions").map(t => t.category).sort()).toEqual(["Compras", "Pet"]);
+    expect(target.find("transactions", t => t.category === "Compras")!.creditCardId).toBe(nubankCasa.id);
+    // Origem: mesmos lançamentos, vínculo mantido, faturas intocadas.
+    expect(source.select("transactions").map(t => t.id).sort()).toEqual(before);
+    expect(source.select("incomeAllocations")).toHaveLength(1);
+    expect(source.select("invoices")).toHaveLength(sourceInvoices);
+    // Nenhum vínculo vai para o destino.
+    expect(target.select("incomeAllocations")).toHaveLength(0);
+  });
+
+  it("no destino, a competência segue a data pelo dia de início de lá", async () => {
+    const { source, target, ana, bia, anaNoDestino, racao, mercado } = await setup();
+    target.update("users", u => u.id === bia.id, { competencyStartDay: 15 });
+    const { created } = transferTransactions(source, target, {
+      ids: [racao.id, mercado.id],
+      sourceOwnerId: ana.id,
+      targetOwnerId: bia.id,
+      actorTargetUserId: anaNoDestino.id,
+      mode: "copy",
+    });
+    const compOf = (id: number) => target.find("competencies", c => c.id === id)!;
+    // 10/03 com início no dia 15 é da competência de fevereiro (15/02 a 14/03).
+    expect(compOf(created.find(t => t.category === "Pet")!.competencyId)).toMatchObject({ year: 2026, month: 2 });
+    // Compra no cartão continua na competência da fatura (março).
+    expect(compOf(created.find(t => t.category === "Compras")!.competencyId)).toMatchObject({ year: 2026, month: 3 });
+  });
 });
