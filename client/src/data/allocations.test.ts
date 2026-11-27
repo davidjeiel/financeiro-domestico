@@ -39,8 +39,10 @@ import {
   allocationsOf,
   cleanupAllocationsAfterUpdate,
   incomeOptions,
+  incomesWithExpenses,
   removeAllocationsOf,
   setAllocations,
+  transactionsPaidBy,
 } from "./allocations";
 
 async function setup() {
@@ -140,5 +142,31 @@ describe("vínculos despesa ↔ receita", () => {
     s.update("transactions", t => t.id === aluguel.id, { type: "income" });
     cleanupAllocationsAfterUpdate(s, aluguel.id);
     expect(s.select("incomeAllocations")).toHaveLength(0);
+  });
+  it("filtra as despesas pela receita que as paga", async () => {
+    const { s, salario, freela, aluguel, luz, mercado } = await setup();
+    setAllocations(s, aluguel.id, [{ incomeId: salario.id, amount: "2000" }], 1);
+    setAllocations(s, mercado.id, [
+      { incomeId: salario.id, amount: "600" },
+      { incomeId: freela.id, amount: "300" },
+    ], 1);
+
+    const options = incomesWithExpenses(s, 1);
+    expect(options.map(o => [o.description, o.committed, o.expenseCount])).toEqual([
+      ["Salário", "2600.00", 2],
+      ["Freela", "300.00", 1],
+    ]);
+
+    const bySalary = transactionsPaidBy(s, 1, salario.id)!;
+    expect(bySalary.income.id).toBe(salario.id);
+    expect(bySalary.expenses.map(t => t.description).sort()).toEqual(["Aluguel", "Mercado"]);
+    expect(bySalary.expenses.some(t => t.id === luz.id)).toBe(false);
+    expect(bySalary.amountByExpense).toEqual({ [aluguel.id]: "2000.00", [mercado.id]: "600.00" });
+    expect(bySalary).toMatchObject({ committed: "2600.00", remaining: "2400.00" });
+
+    // Despesa, receita de outro dono ou inexistente: nada.
+    expect(transactionsPaidBy(s, 1, aluguel.id)).toBeNull();
+    expect(transactionsPaidBy(s, 2, salario.id)).toBeNull();
+    expect(transactionsPaidBy(s, 1, 9999)).toBeNull();
   });
 });

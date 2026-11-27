@@ -203,3 +203,62 @@ export function allocationsOf(s: SheetStore, transactionId: number) {
     links,
   };
 }
+
+/** Receita usada para filtrar a lista: as despesas pagas com ela. */
+export type IncomeFilterOption = {
+  id: number;
+  description: string;
+  transactionDate: Date;
+  amount: string;
+  committed: string;
+  expenseCount: number;
+};
+
+/** Receitas da área que pagam ao menos uma despesa (mais recentes primeiro). */
+export function incomesWithExpenses(s: SheetStore, dataUserId: number): IncomeFilterOption[] {
+  const byIncome = new Map<number, { cents: number; expenses: Set<number> }>();
+  for (const a of s.select("incomeAllocations")) {
+    const entry = byIncome.get(a.incomeId) ?? { cents: 0, expenses: new Set<number>() };
+    entry.cents += toCents(a.amount);
+    entry.expenses.add(a.expenseId);
+    byIncome.set(a.incomeId, entry);
+  }
+  return s
+    .select("transactions", t => t.userId === dataUserId && t.type === "income" && byIncome.has(t.id))
+    .sort((a, b) => b.transactionDate.getTime() - a.transactionDate.getTime())
+    .map(t => {
+      const entry = byIncome.get(t.id)!;
+      return {
+        id: t.id,
+        description: t.description || t.category,
+        transactionDate: t.transactionDate,
+        amount: t.amount,
+        committed: fromCents(entry.cents),
+        expenseCount: entry.expenses.size,
+      };
+    });
+}
+
+/**
+ * A receita e as despesas pagas com ela, de qualquer período (a conta de
+ * dezembro pode sair do salário de novembro). `null` se a receita não existir.
+ */
+export function transactionsPaidBy(s: SheetStore, dataUserId: number, incomeId: number) {
+  const income = s.find("transactions", t => t.id === incomeId && t.userId === dataUserId && t.type === "income");
+  if (!income) return null;
+  const links = s.select("incomeAllocations", a => a.incomeId === incomeId);
+  const amountByExpense = new Map<number, number>();
+  for (const a of links) amountByExpense.set(a.expenseId, (amountByExpense.get(a.expenseId) ?? 0) + toCents(a.amount));
+  const expenses = s
+    .select("transactions", t => t.userId === dataUserId && amountByExpense.has(t.id))
+    .sort((a, b) => b.transactionDate.getTime() - a.transactionDate.getTime());
+  const committed = links.reduce((sum, a) => sum + toCents(a.amount), 0);
+  return {
+    income,
+    expenses,
+    /** Quanto de cada despesa sai desta receita. */
+    amountByExpense: Object.fromEntries(Array.from(amountByExpense, ([id, c]) => [id, fromCents(c)])),
+    committed: fromCents(committed),
+    remaining: fromCents(toCents(income.amount) - committed),
+  };
+}

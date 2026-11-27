@@ -105,6 +105,7 @@ Uma despesa (ou compra no cartão) pode ser vinculada a uma ou mais receitas —
 - O app não deixa vincular mais que o valor da despesa nem mais que o disponível da receita.
 - Na edição de uma receita aparecem as despesas pagas com ela, o **comprometido** e o que **sobra**.
 - Na lista de lançamentos, a coluna **Receita** mostra o que sobra de cada receita e se cada despesa está coberta (com filtro "com/sem vínculo"); o card de saldo mostra as **receitas livres**.
+- **Filtrar pela receita:** no filtro da coluna **Receita**, escolha *Paga com: &lt;receita&gt;* (ou clique no "Sobra R$…" de uma receita). A lista mostra a receita e todas as despesas pagas com ela, **de qualquer período**, com o comprometido e o que sobra. Os demais filtros continuam valendo.
 - Excluir um lançamento, ou trocar uma despesa para receita (e vice-versa), apaga os vínculos dele.
 
 Os vínculos ficam na aba `Vinculos` (`expenseId`, `incomeId`, `amount`).

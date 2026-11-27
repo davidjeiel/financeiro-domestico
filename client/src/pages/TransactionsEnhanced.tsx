@@ -120,6 +120,18 @@ const FREQUENCIES = {
   annual: "Anual",
 };
 
+/** Valor do filtro da coluna Receita para "paga com a receita <id>". */
+function parseIncomeFilter(value: string | undefined): number | null {
+  const m = value?.match(/^income:(\d+)$/);
+  return m ? Number(m[1]) : null;
+}
+
+/** "Salário (05/11/2026)" */
+function incomeLabel(t: { description?: string | null; category?: string; transactionDate: Date | string }) {
+  const date = new Date(t.transactionDate).toLocaleDateString("pt-BR");
+  return `${t.description || t.category || "Receita"} (${date})`;
+}
+
 /** "30/11 a 29/12" — período da competência, quando não é o mês do calendário. */
 function competencyRangeLabel(
   competency: { periodStart?: Date; periodEnd?: Date } | null | undefined
@@ -446,6 +458,16 @@ export default function TransactionsEnhanced() {
   const canLinkIncome = watchType !== "income" && watchTransactionType === "simple";
   // Totais vinculados por lançamento (coberto nas despesas, comprometido nas receitas).
   const { data: allocationTotals = {} } = trpc.allocation.totals.useQuery();
+  // Filtro "Paga com <receita>": a receita e as despesas pagas com ela, de qualquer período.
+  const incomeFilterId = parseIncomeFilter(columnFilters.allocation);
+  const { data: incomeFilterOptions = [] } = trpc.allocation.incomesWithExpenses.useQuery(
+    { workspaceId: activeWorkspaceId ?? "" },
+    { enabled: !!activeWorkspaceId }
+  );
+  const { data: paidBy, isFetching: paidByLoading } = trpc.allocation.paidBy.useQuery(
+    { incomeId: incomeFilterId ?? 0, workspaceId: activeWorkspaceId ?? "" },
+    { enabled: incomeFilterId !== null && !!activeWorkspaceId }
+  );
 
   useEffect(() => {
     if (pendingNewCategory && allTypologies?.some((t) => t.name === pendingNewCategory)) {
@@ -668,7 +690,12 @@ export default function TransactionsEnhanced() {
   }
 
   // ── Filtering & sorting (hoisted so totals can be rendered outside the Card) ──
-  let filteredTransactions = [...(transactions ?? [])];
+  let filteredTransactions =
+    incomeFilterId !== null
+      ? paidBy
+        ? [paidBy.income, ...paidBy.expenses]
+        : []
+      : [...(transactions ?? [])];
 
   if (columnFilters.transactionDate)
     filteredTransactions = filteredTransactions.filter(t =>
@@ -698,7 +725,7 @@ export default function TransactionsEnhanced() {
   }
   if (columnFilters.type)
     filteredTransactions = filteredTransactions.filter(t => t.type === columnFilters.type);
-  if (columnFilters.allocation)
+  if (columnFilters.allocation && incomeFilterId === null)
     filteredTransactions = filteredTransactions.filter(t =>
       (Number(allocationTotals[t.id] ?? 0) > 0) === (columnFilters.allocation === 'linked'));
   if (columnFilters.responsibleUserId)
@@ -1060,6 +1087,11 @@ export default function TransactionsEnhanced() {
                             type={transaction.type}
                             amount={transaction.amount}
                             linked={allocationTotals[transaction.id]}
+                            onShowExpenses={
+                              transaction.type === "income" && incomeFilterId !== transaction.id
+                                ? () => handleColumnFilter("allocation", `income:${transaction.id}`)
+                                : undefined
+                            }
                           />
                         </td>
                       )}
@@ -1235,9 +1267,16 @@ export default function TransactionsEnhanced() {
     });
   }
   if (columnFilters.allocation) {
+    const income =
+      incomeFilterId !== null
+        ? paidBy?.income ?? incomeFilterOptions.find(o => o.id === incomeFilterId)
+        : null;
     activeFilterChips.push({
       key: "allocation",
-      label: columnFilters.allocation === "linked" ? "Com vínculo" : "Sem vínculo",
+      label:
+        incomeFilterId !== null
+          ? `Pagas com: ${income ? incomeLabel(income) : "receita"}`
+          : columnFilters.allocation === "linked" ? "Com vínculo" : "Sem vínculo",
       keys: ["allocation"],
     });
   }
@@ -1847,6 +1886,29 @@ export default function TransactionsEnhanced() {
           </div>
         )}
 
+        {incomeFilterId !== null && (
+          <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+            {paidByLoading && !paidBy ? (
+              <span className="text-muted-foreground">Carregando as despesas pagas com a receita…</span>
+            ) : paidBy ? (
+              <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1">
+                <span>
+                  Despesas pagas com <strong>{incomeLabel(paidBy.income)}</strong>, de qualquer período
+                  ({paidBy.expenses.length} {paidBy.expenses.length === 1 ? "despesa" : "despesas"}).
+                </span>
+                <span className="tabular-nums">
+                  Receita {formatCurrency(paidBy.income.amount)} · Comprometido {formatCurrency(paidBy.committed)} ·{" "}
+                  <span className={Number(paidBy.remaining) < 0 ? "text-red-600" : "text-green-600"}>
+                    Sobra {formatCurrency(paidBy.remaining)}
+                  </span>
+                </span>
+              </div>
+            ) : (
+              <span className="text-muted-foreground">A receita escolhida não existe mais nesta área.</span>
+            )}
+          </div>
+        )}
+
         {/* Transactions List */}
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
@@ -2078,6 +2140,10 @@ export default function TransactionsEnhanced() {
                                 filterOptions={[
                                   { label: "Com vínculo", value: "linked" },
                                   { label: "Sem vínculo", value: "unlinked" },
+                                  ...incomeFilterOptions.map(o => ({
+                                    label: `Paga com: ${incomeLabel(o)}`,
+                                    value: `income:${o.id}`,
+                                  })),
                                 ]}
                                 currentFilterValue={columnFilters.allocation}
                               />
@@ -2231,20 +2297,35 @@ function AllocationCell({
   type,
   amount,
   linked,
+  onShowExpenses,
 }: {
   type: string;
   amount: string;
   linked: string | undefined;
+  /** Receita: filtra a lista pelas despesas pagas com ela. */
+  onShowExpenses?: () => void;
 }) {
   const total = parseFloat(amount) || 0;
   const used = Number(linked ?? 0);
   if (type === "income") {
     if (!used) return <span className="text-muted-foreground">Livre</span>;
     const left = total - used;
+    const label = (
+      <span className={left < 0 ? "text-red-600" : "text-green-600"}>Sobra {formatCurrency(left)}</span>
+    );
+    if (!onShowExpenses) return <span title={`Comprometido ${formatCurrency(used)}`}>{label}</span>;
     return (
-      <span className={left < 0 ? "text-red-600" : "text-green-600"} title={`Comprometido ${formatCurrency(used)}`}>
-        Sobra {formatCurrency(left)}
-      </span>
+      <button
+        type="button"
+        className="underline decoration-dotted underline-offset-2 hover:decoration-solid"
+        title={`Comprometido ${formatCurrency(used)} · ver as despesas pagas com esta receita`}
+        onClick={e => {
+          e.stopPropagation();
+          onShowExpenses();
+        }}
+      >
+        {label}
+      </button>
     );
   }
   if (!used) return <span className="text-muted-foreground">—</span>;
