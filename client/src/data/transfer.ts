@@ -16,16 +16,20 @@
  * - vínculos com receitas: não vão para o destino; ao mover, são removidos
  *   da origem (ao copiar, continuam lá);
  * - faturas dos cartões afetados são recalculadas no destino (e, ao mover,
- *   na origem).
+ *   na origem);
+ * - recorrências: com `seriesScope`, vão também as outras ocorrências da série
+ *   (as seguintes ou todas) e a regra, que passa a gerar no destino. Ao mover
+ *   a série toda, a regra sai da origem; ao mover "desta em diante", a regra
+ *   da origem termina no dia anterior.
  *
  * Funções puras sobre os stores, para testar sem sessão.
  */
 import type { SheetStore } from "./sheetStore";
-import type { CreditCard, Transaction, User } from "./schema";
+import type { CreditCard, RecurrenceRule, Transaction, User } from "./schema";
 import { competencyName, competencyStartDayOf, recalcInvoice } from "./db";
 import { competencyOfDate } from "./competencyLogic";
 import { removeAllocationsOf } from "./allocations";
-import { skipOccurrence } from "./recurrences";
+import { occurrenceKey, skipOccurrence } from "./recurrences";
 
 /** Para cada cartão de origem: id de um cartão do destino ou "new" (criar cópia). */
 export type CardMap = Record<string, number | "new">;
@@ -33,7 +37,55 @@ export type CardMap = Record<string, number | "new">;
 /** "move" tira os lançamentos da origem; "copy" mantém a origem como está. */
 export type TransferMode = "move" | "copy";
 
+/**
+ * Lançamentos recorrentes selecionados: "selected" leva só eles; "following",
+ * também as ocorrências seguintes da série; "all", a série inteira.
+ */
+export type SeriesScope = "selected" | "following" | "all";
+
 const norm = (v?: string | null) => (v ?? "").trim().toLowerCase();
+
+/**
+ * Acrescenta à seleção as outras ocorrências das séries. Devolve os ids e, por
+ * série, a partir de qual data ela vai (null = desde o início).
+ */
+export function expandSeriesSelection(
+  source: SheetStore,
+  sourceOwnerId: number,
+  ids: number[],
+  scope: SeriesScope
+) {
+  const selected = source.select("transactions", t => ids.includes(t.id) && t.userId === sourceOwnerId);
+  const from = new Map<string, string | null>();
+  for (const t of selected) {
+    if (!t.recurrenceGroup || scope === "selected") continue;
+    const key = scope === "all" ? null : occurrenceKey(t);
+    const prev = from.get(t.recurrenceGroup);
+    from.set(t.recurrenceGroup, prev === undefined ? key : prev === null || key === null ? null : prev < key ? prev : key);
+  }
+  const all = new Set(ids);
+  from.forEach((key, group) => {
+    source
+      .select("transactions", t => t.userId === sourceOwnerId && t.recurrenceGroup === group)
+      .filter(t => key === null || occurrenceKey(t) >= key)
+      .forEach(t => all.add(t.id));
+  });
+  return { ids: Array.from(all), seriesFrom: from };
+}
+
+/** Quantos lançamentos cada opção leva (para a pergunta ao usuário). */
+export function seriesTransferCounts(source: SheetStore, sourceOwnerId: number, ids: number[]) {
+  const recurring = source.select(
+    "transactions",
+    t => ids.includes(t.id) && t.userId === sourceOwnerId && !!t.recurrenceGroup
+  ).length;
+  return {
+    recurringSelected: recurring,
+    selected: ids.length,
+    following: expandSeriesSelection(source, sourceOwnerId, ids, "following").ids.length,
+    all: expandSeriesSelection(source, sourceOwnerId, ids, "all").ids.length,
+  };
+}
 
 function selectTransactions(source: SheetStore, sourceOwnerId: number, ids: number[]) {
   const wanted = new Set(ids);
@@ -74,14 +126,18 @@ export type TransferPreview = {
   allocationsRemoved: number;
   /** Lançamentos cujo responsável não existe no destino (ficarão sem). */
   responsiblesUnmatched: number;
+  /** Quantos lançamentos cada opção de série leva. */
+  series: ReturnType<typeof seriesTransferCounts>;
 };
 
 export function previewTransfer(
   source: SheetStore,
   target: SheetStore,
-  opts: { ids: number[]; sourceOwnerId: number; targetOwnerId: number }
+  opts: { ids: number[]; sourceOwnerId: number; targetOwnerId: number; seriesScope?: SeriesScope }
 ): TransferPreview {
-  const txs = selectTransactions(source, opts.sourceOwnerId, opts.ids);
+  const series = seriesTransferCounts(source, opts.sourceOwnerId, opts.ids);
+  const expanded = expandSeriesSelection(source, opts.sourceOwnerId, opts.ids, opts.seriesScope ?? "selected").ids;
+  const txs = selectTransactions(source, opts.sourceOwnerId, expanded);
   const ids = new Set(txs.map(t => t.id));
   const cardIds = Array.from(
     new Set(txs.filter(t => t.type === "credit_card" && t.creditCardId).map(t => t.creditCardId!))
@@ -107,6 +163,7 @@ export function previewTransfer(
         t.responsibleUserId != null &&
         matchPerson(target, usersById.get(t.responsibleUserId) ?? null) === null
     ).length,
+    series,
   };
 }
 
@@ -126,10 +183,18 @@ export function transferTransactions(
     cardMap?: CardMap;
     /** Padrão: mover. */
     mode?: TransferMode;
+    /** Padrão: só os selecionados. */
+    seriesScope?: SeriesScope;
   }
 ) {
   const mode: TransferMode = opts.mode ?? "move";
-  const txs = selectTransactions(source, opts.sourceOwnerId, opts.ids);
+  const { ids: expandedIds, seriesFrom } = expandSeriesSelection(
+    source,
+    opts.sourceOwnerId,
+    opts.ids,
+    opts.seriesScope ?? "selected"
+  );
+  const txs = selectTransactions(source, opts.sourceOwnerId, expandedIds);
   const usersById = new Map(source.select("users").map(u => [u.id, u]));
 
   const competencyIds = new Map<string, number>();
@@ -241,8 +306,29 @@ export function transferTransactions(
     recalcInvoice(target, opts.targetOwnerId, card, comp);
   });
 
+  // Regras das séries levadas: passam a gerar no destino.
+  const rulesToSource: { rule: RecurrenceRule; fromKey: string | null }[] = [];
+  seriesFrom.forEach((fromKey, groupKey) => {
+    const rule = source.find("recurrenceRules", r => r.groupKey === groupKey && r.userId === opts.sourceOwnerId);
+    if (!rule) return; // série antiga, sem regra: vão só os lançamentos
+    rulesToSource.push({ rule, fromKey });
+    if (target.find("recurrenceRules", r => r.groupKey === groupKey && r.userId === opts.targetOwnerId)) return;
+    const fromDate = fromKey ? keyToDate(fromKey) : null;
+    const startDate = fromDate && fromDate > rule.startDate ? fromDate : rule.startDate;
+    const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = rule;
+    target.insert("recurrenceRules", {
+      ...rest,
+      userId: opts.targetOwnerId,
+      startDate,
+      creditCardId: rule.type === "credit_card" && rule.creditCardId ? targetCard(rule.creditCardId) : null,
+      responsibleUserId: matchPerson(target, usersById.get(rule.responsibleUserId ?? -1) ?? null),
+      skippedDates: skippedFrom(rule.skippedDates, fromKey),
+      createdBy: opts.actorTargetUserId,
+    });
+  });
+
   // Cópia: a origem fica como está.
-  if (mode === "copy") return { created, allocationsRemoved: 0, mode };
+  if (mode === "copy") return { created, allocationsRemoved: 0, mode, rulesTransferred: rulesToSource.length };
 
   // Origem: remove os lançamentos e os vínculos deles.
   const ids = new Set(txs.map(t => t.id));
@@ -257,5 +343,35 @@ export function transferTransactions(
     recalcInvoice(source, opts.sourceOwnerId, card, comp);
   });
 
-  return { created, allocationsRemoved, mode };
+  // Origem: a série toda saiu → a regra sai; "desta em diante" → a regra
+  // termina no dia anterior (as ocorrências anteriores ficam aqui).
+  for (const { rule, fromKey } of rulesToSource) {
+    if (fromKey === null) {
+      source.delete("recurrenceRules", r => r.id === rule.id);
+      continue;
+    }
+    const from = keyToDate(fromKey);
+    const lastDay = new Date(from.getFullYear(), from.getMonth(), from.getDate() - 1);
+    const end = rule.endDate && rule.endDate < lastDay ? rule.endDate : lastDay;
+    source.update("recurrenceRules", r => r.id === rule.id, { endDate: end });
+  }
+
+  return { created, allocationsRemoved, mode, rulesTransferred: rulesToSource.length };
+}
+
+function keyToDate(key: string) {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/** Datas puladas a partir de `fromKey` (null = todas). */
+function skippedFrom(raw: string | null, fromKey: string | null) {
+  if (!raw) return null;
+  try {
+    const list: string[] = JSON.parse(raw);
+    const kept = fromKey ? list.filter(k => k >= fromKey) : list;
+    return kept.length ? JSON.stringify(kept) : null;
+  } catch {
+    return null;
+  }
 }

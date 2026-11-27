@@ -80,11 +80,13 @@ import {
   getStore,
   openOtherWorkspace,
   reload,
+  workspaceAccessMessage,
   signOut,
   switchWorkspace,
 } from "./session";
 import { previewTransfer, transferTransactions } from "./transfer";
 import { fixedVsVariableReport, suggestRecurringSeries } from "./fixedExpenses";
+import { consolidateWorkspace } from "./allWorkspaces";
 import {
   applyFromOccurrence,
   continueSeries,
@@ -177,6 +179,38 @@ const allocationLinkSchema = z.object({
 function randomToken(bytes = 32) {
   const buf = crypto.getRandomValues(new Uint8Array(bytes));
   return Array.from(buf, b => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Recorrentes: só os selecionados, desta em diante, ou a série toda. */
+const seriesScopeSchema = z.enum(["selected", "following", "all"]).default("selected");
+
+/** Área pessoal + áreas compartilhadas acessíveis, com a ativa marcada. */
+async function listWorkspacesWithActive() {
+  const active = getActiveWorkspace();
+  const personalId = getPersonalWorkspaceId();
+  const shared = await listSharedWorkspaces();
+  const personal: WorkspaceRef | null = personalId
+    ? {
+        id: personalId,
+        name: "Pessoal",
+        kind: "personal",
+        ownedByMe: true,
+        ownerName: null,
+        ownerEmail: null,
+        url: `https://docs.google.com/spreadsheets/d/${personalId}/edit`,
+      }
+    : null;
+  // A ativa pode ainda não aparecer na busca do Drive logo após ser liberada.
+  if (active?.kind === "shared" && !shared.some(w => w.id === active.id)) {
+    shared.unshift(active);
+  }
+  return {
+    activeId: active?.id ?? personalId,
+    workspaces: [...(personal ? [personal] : []), ...shared].map(w => ({
+      ...w,
+      isActive: w.id === (active?.id ?? personalId),
+    })),
+  };
 }
 
 const dateInput = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal(""));
@@ -446,6 +480,7 @@ export const appRouter = router({
           ids: z.array(z.number().int()).min(1),
           sourceWorkspaceId: z.string(),
           targetWorkspaceId: z.string(),
+          seriesScope: seriesScopeSchema,
         })
       )
       .query(async ({ input }) => {
@@ -455,6 +490,7 @@ export const appRouter = router({
           ids: input.ids,
           sourceOwnerId: getDataUserId(),
           targetOwnerId: target.ownerId,
+          seriesScope: input.seriesScope,
         });
       }),
     /**
@@ -469,6 +505,7 @@ export const appRouter = router({
           targetWorkspaceId: z.string(),
           cardMap: z.record(z.string(), z.union([z.number().int(), z.literal("new")])).optional(),
           mode: z.enum(["move", "copy"]).default("move"),
+          seriesScope: seriesScopeSchema,
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -482,6 +519,7 @@ export const appRouter = router({
           actorTargetUserId: target.user.id,
           cardMap: input.cardMap,
           mode: input.mode,
+          seriesScope: input.seriesScope,
         });
         await target.store.commit();
         // Cópia não altera a origem (não há o que gravar nela).
@@ -506,6 +544,7 @@ export const appRouter = router({
         return {
           count: result.created.length,
           mode: input.mode,
+          rulesTransferred: result.rulesTransferred,
           allocationsRemoved: result.allocationsRemoved,
           target: { id: target.workspace.id, name: target.workspace.name },
         };
@@ -901,33 +940,44 @@ export const appRouter = router({
   }),
   workspace: router({
     /** Área pessoal + áreas compartilhadas acessíveis, com a ativa marcada. */
-    list: protectedProcedure.query(async () => {
-      const active = getActiveWorkspace();
-      const personalId = getPersonalWorkspaceId();
-      const shared = await listSharedWorkspaces();
-      const personal: WorkspaceRef | null = personalId
-        ? {
-            id: personalId,
-            name: "Pessoal",
-            kind: "personal",
-            ownedByMe: true,
-            ownerName: null,
-            ownerEmail: null,
-            url: `https://docs.google.com/spreadsheets/d/${personalId}/edit`,
-          }
-        : null;
-      // A ativa pode ainda não aparecer na busca do Drive logo após ser liberada.
-      if (active?.kind === "shared" && !shared.some(w => w.id === active.id)) {
-        shared.unshift(active);
-      }
-      return {
-        activeId: active?.id ?? personalId,
-        workspaces: [...(personal ? [personal] : []), ...shared].map(w => ({
-          ...w,
-          isActive: w.id === (active?.id ?? personalId),
-        })),
-      };
-    }),
+    list: protectedProcedure.query(() => listWorkspacesWithActive()),
+    /**
+     * Lançamentos do período em todas as áreas (só leitura). Áreas que não
+     * abrirem vêm com o motivo em `error`.
+     */
+    allTransactions: protectedProcedure
+      .input(
+        z.object({
+          year: z.number().int(),
+          month: z.number().int().min(1).max(12),
+          mode: z.enum(["competency", "monthly"]),
+        })
+      )
+      .query(async ({ input }) => {
+        const { workspaces } = await listWorkspacesWithActive();
+        const results = await Promise.all(
+          workspaces.map(async w => {
+            const ref = { id: w.id, name: w.name, kind: w.kind, isActive: w.isActive };
+            try {
+              let store, ownerId;
+              if (w.isActive) {
+                store = getStore();
+                ownerId = getDataUserId();
+              } else {
+                const other = await openOtherWorkspace(w.id);
+                store = other.store;
+                ownerId = other.ownerId;
+                // Recorrências que a área ainda não gerou (só em memória; nada é gravado).
+                materializeRecurrences(store, ownerId);
+              }
+              return { ...ref, error: null, ...consolidateWorkspace(store, ownerId, w.id, input.year, input.month, input.mode) };
+            } catch (error) {
+              return { ...ref, error: workspaceAccessMessage(error), rows: [], totals: null };
+            }
+          })
+        );
+        return { workspaces: results };
+      }),
     active: protectedProcedure.query(({ ctx }) => {
       const active = getActiveWorkspace();
       return active
@@ -1035,10 +1085,11 @@ export const appRouter = router({
           year: z.number().int(),
           month: z.number().int().min(1).max(12),
           months: z.number().int().min(1).max(24).optional(),
+          mode: z.enum(["competency", "monthly"]).optional(),
         })
       )
       .query(({ input }) =>
-        fixedVsVariableReport(getStore(), getDataUserId(), input.year, input.month, input.months ?? 6)
+        fixedVsVariableReport(getStore(), getDataUserId(), input.year, input.month, input.months ?? 6, input.mode)
       ),
     /** Séries antigas que parecem recorrentes, para marcar como fixas. */
     recurringSuggestions: protectedProcedure.query(() =>

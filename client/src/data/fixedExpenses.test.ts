@@ -108,6 +108,21 @@ describe("despesas fixas × variáveis", () => {
     expect(marchReport.fixedItems.map(i => i.description)).toEqual(["Aluguel"]);
   });
 
+  it("visão mensal usa o mês do calendário; competência, a competência gravada", async () => {
+    const s = await setup();
+    // Competência que começa dia 25: a despesa de 28/03 pertence à competência de abril.
+    const april = s.insert("competencies", { userId: 1, year: 2026, month: 4, name: "Abril de 2026" });
+    s.insert("transactions", { userId: 1, competencyId: april.id, type: "expense", category: "Lazer", amount: "80.00", transactionDate: new Date(2026, 2, 28) });
+    const card = s.insert("creditCards", { userId: 1, name: "Nubank", cutoffDay: 18, dueDay: 25, isActive: 1 });
+    s.insert("transactions", { userId: 1, competencyId: april.id, type: "credit_card", creditCardId: card.id, category: "Compras", amount: "40.00", transactionDate: new Date(2026, 3, 2) });
+
+    const byMode = (mode: "competency" | "monthly") =>
+      fixedVsVariableReport(s, 1, 2026, 4, 2, mode).months.map(m => [m.label, m.variable]);
+    expect(byMode("competency")).toEqual([["mar/26", 0], ["abr/26", 120]]);
+    // Mensal: a despesa vai para março (data); a compra, para abril (fatura vence 25/04).
+    expect(byMode("monthly")).toEqual([["mar/26", 80], ["abr/26", 40]]);
+  });
+
   it("sugere séries antigas sem marca e permite marcá-las como fixas", async () => {
     const s = await setup();
     const comps = [1, 2, 3, 4].map(m => s.insert("competencies", { userId: 1, year: 2026, month: m, name: `m${m}` }));

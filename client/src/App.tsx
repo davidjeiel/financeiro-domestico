@@ -9,6 +9,7 @@ import Calendar from "@/pages/Calendar";
 import Settings from "@/pages/Settings";
 import Export from "@/pages/Export";
 import Filters from "@/pages/Filters";
+import AllWorkspaces from "@/pages/AllWorkspaces";
 import CompetencyConfig from "@/pages/CompetencyConfig";
 import RecurringAndInstallments from "@/pages/RecurringAndInstallments";
 import AccountsManagement from "@/pages/AccountsManagement";
@@ -30,6 +31,7 @@ function AppRouter() {
         <Route path={"/"} component={Home} />
         <Route path={"/dashboard"} component={Dashboard} />
         <Route path="/lancamentos" component={TransactionsEnhanced} />
+        <Route path="/todas-areas" component={AllWorkspaces} />
         <Route path={"/cards"} component={CreditCards} />
         {/* Faturas agora ficam em Cartões */}
         <Route path={"/invoices"}>

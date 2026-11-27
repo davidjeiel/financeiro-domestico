@@ -68,6 +68,7 @@ import {
   toColumnFilters,
 } from "@/lib/transactionFilters";
 import {
+  competencyRangeLabel,
   monthRange,
   readViewMode,
   saveViewMode,
@@ -130,22 +131,6 @@ function parseIncomeFilter(value: string | undefined): number | null {
 function incomeLabel(t: { description?: string | null; category?: string; transactionDate: Date | string }) {
   const date = new Date(t.transactionDate).toLocaleDateString("pt-BR");
   return `${t.description || t.category || "Receita"} (${date})`;
-}
-
-/** "30/11 a 29/12" — período da competência, quando não é o mês do calendário. */
-function competencyRangeLabel(
-  competency: { periodStart?: Date; periodEnd?: Date } | null | undefined
-): string | null {
-  if (!competency?.periodStart || !competency.periodEnd) return null;
-  const start = new Date(competency.periodStart);
-  const end = new Date(competency.periodEnd);
-  const isCalendarMonth =
-    start.getDate() === 1 &&
-    end.getMonth() === start.getMonth() &&
-    new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1).getDate() === 1;
-  if (isCalendarMonth) return null;
-  const fmt = (d: Date) => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-  return `${fmt(start)} a ${fmt(end)}`;
 }
 
 export default function TransactionsEnhanced() {

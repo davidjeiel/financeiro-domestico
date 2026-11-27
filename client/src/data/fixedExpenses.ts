@@ -3,12 +3,14 @@
  *
  * Fixa = lançamento recorrente (criado como "Recorrente", ou marcado depois
  * como fixo): tem `recurrence` preenchido. Variável = todo o resto. Despesas
- * são os tipos "expense" e "credit_card"; o período é a competência.
+ * são os tipos "expense" e "credit_card". O período é a competência ou, na
+ * visão mensal, o mês do calendário (pela data; no cartão, pelo vencimento da
+ * fatura).
  */
 import type { SheetStore } from "./sheetStore";
 import type { Transaction } from "./schema";
 import { shiftCompetency } from "./competencyLogic";
-import { monthOfTransaction } from "./db";
+import { invoiceDueDateOf, monthOfTransaction } from "./db";
 
 const isExpense = (t: Transaction) => t.type === "expense" || t.type === "credit_card";
 export const isFixed = (t: Pick<Transaction, "recurrence">) => !!t.recurrence;
@@ -22,11 +24,16 @@ export function fixedVsVariableReport(
   ownerId: number,
   year: number,
   month: number,
-  monthsBack = 6
+  monthsBack = 6,
+  mode: "competency" | "monthly" = "competency"
 ) {
   const compKey = (y: number, m: number) => `${y}-${m}`;
   // Mês de cada lançamento (compras no cartão: mês de vencimento da fatura).
   const txs = s.select("transactions", t => t.userId === ownerId).map(t => {
+    if (mode === "monthly") {
+      const d = (t.type === "credit_card" && invoiceDueDateOf(s, t)) || t.transactionDate;
+      return { t, key: compKey(d.getFullYear(), d.getMonth() + 1) };
+    }
     const m = monthOfTransaction(s, t);
     return { t, key: m ? compKey(m.year, m.month) : "" };
   });

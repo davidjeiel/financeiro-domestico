@@ -347,7 +347,7 @@ export type RecurringDeleteScope = "this" | "past_unpaid" | "future" | "all_unpa
 
 export const RECURRING_DELETE_SCOPES = ["this", "past_unpaid", "future", "all_unpaid"] as const;
 
-const occurrenceKey = (t: Pick<Transaction, "recurrenceDate" | "transactionDate">) =>
+export const occurrenceKey = (t: Pick<Transaction, "recurrenceDate" | "transactionDate">) =>
   t.recurrenceDate ?? dateKey(t.transactionDate);
 
 function seriesAround(s: SheetStore, transactionId: number) {

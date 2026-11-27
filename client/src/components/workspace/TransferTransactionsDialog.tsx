@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { skipToken } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRightLeft, Copy, Loader2, Users, User } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, Copy, Loader2, Repeat, Users, User } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -16,6 +16,7 @@ import { trpc } from "@/lib/trpc";
 import { useActiveWorkspaceId, useSwitchWorkspace } from "./useWorkspaces";
 
 type Mode = "move" | "copy";
+type SeriesScope = "selected" | "following" | "all";
 
 const MODES: { mode: Mode; label: string; hint: string; Icon: typeof Copy }[] = [
   { mode: "move", label: "Mover", hint: "Sai desta área e vai para a outra", Icon: ArrowRightLeft },
@@ -46,6 +47,7 @@ export function TransferTransactionsDialog({
   const [targetId, setTargetId] = useState("");
   const [mode, setMode] = useState<Mode>("move");
   const [cardMap, setCardMap] = useState<Record<string, number | "new">>({});
+  const [seriesScope, setSeriesScope] = useState<SeriesScope>("selected");
 
   useEffect(() => {
     if (open) {
@@ -53,15 +55,17 @@ export function TransferTransactionsDialog({
     } else {
       setCardMap({});
       setMode("move");
+      setSeriesScope("selected");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, list]);
 
   const preview = trpc.transaction.transferPreview.useQuery(
     open && targetId && sourceWorkspaceId && ids.length
-      ? { ids, sourceWorkspaceId, targetWorkspaceId: targetId }
+      ? { ids, sourceWorkspaceId, targetWorkspaceId: targetId, seriesScope }
       : skipToken,
-    { retry: false, staleTime: 0 }
+    // Mantém a prévia anterior na tela enquanto recalcula (ex.: trocar a opção da série).
+    { retry: false, staleTime: 0, placeholderData: prev => prev }
   );
 
   // Sugestões da prévia (cartão de mesmo nome, ou criar cópia).
@@ -84,6 +88,7 @@ export function TransferTransactionsDialog({
         targetWorkspaceId: targetId,
         cardMap,
         mode,
+        seriesScope,
       });
       await Promise.all([
         utils.transaction.invalidate(),
@@ -91,13 +96,18 @@ export function TransferTransactionsDialog({
         utils.allocation.invalidate(),
         utils.typology.invalidate(),
         utils.creditCard.invalidate(),
+        utils.recurrence.invalidate(),
       ]);
       const what =
         mode === "copy"
           ? result.count === 1 ? "lançamento copiado" : "lançamentos copiados"
           : result.count === 1 ? "lançamento movido" : "lançamentos movidos";
+      const rules =
+        result.rulesTransferred > 0
+          ? ` A recorrência continua sendo gerada lá${mode === "move" ? " (e para de ser gerada aqui)" : ""}.`
+          : "";
       toast.success(
-        `${result.count} ${what} para "${result.target.name}".`,
+        `${result.count} ${what} para "${result.target.name}".${rules}`,
         {
           action: {
             label: "Abrir área",
@@ -117,7 +127,37 @@ export function TransferTransactionsDialog({
   };
 
   const p = preview.data;
-  const noun = ids.length === 1 ? "lançamento" : "lançamentos";
+  const total = p?.count ?? ids.length;
+  const noun = total === 1 ? "lançamento" : "lançamentos";
+  const series = p?.series;
+  const seriesOptions: { value: SeriesScope; label: string; hint: string; count: number }[] = series
+    ? [
+        {
+          value: "selected",
+          label: ids.length === 1 ? "Só este lançamento" : "Só os selecionados",
+          hint: "As demais ocorrências continuam nesta área.",
+          count: series.selected,
+        },
+        {
+          value: "following",
+          label: "Este e os próximos da série",
+          hint:
+            mode === "move"
+              ? "A recorrência passa a ser gerada na outra área; aqui ficam só os anteriores."
+              : "A outra área ganha a recorrência a partir daqui; esta continua igual.",
+          count: series.following,
+        },
+        {
+          value: "all",
+          label: "A série inteira",
+          hint:
+            mode === "move"
+              ? "Todos os lançamentos da série, pagos inclusive, e a recorrência vão para a outra área."
+              : "A outra área ganha a série inteira e a recorrência; esta continua igual.",
+          count: series.all,
+        },
+      ]
+    : [];
 
   return (
     <Dialog open={open} onOpenChange={o => !o && onClose()}>
@@ -125,12 +165,16 @@ export function TransferTransactionsDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ArrowRightLeft className="w-5 h-5" />
-            Transferir {ids.length} {noun}
+            Transferir {total} {noun}
           </DialogTitle>
           <DialogDescription>
-            {mode === "copy"
-              ? `Os ${noun} continuam nesta área e uma cópia é criada na área escolhida.`
-              : `Os ${noun} saem desta área e passam para a área escolhida.`}
+            {total === 1
+              ? mode === "copy"
+                ? "O lançamento continua nesta área e uma cópia é criada na área escolhida."
+                : "O lançamento sai desta área e passa para a área escolhida."
+              : mode === "copy"
+                ? "Os lançamentos continuam nesta área e uma cópia é criada na área escolhida."
+                : "Os lançamentos saem desta área e passam para a área escolhida."}
           </DialogDescription>
         </DialogHeader>
 
@@ -192,6 +236,44 @@ export function TransferTransactionsDialog({
                 ))}
               </div>
             </div>
+
+            {series && series.recurringSelected > 0 && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5">
+                  <Repeat className="w-4 h-4 text-primary" />
+                  {series.recurringSelected === 1 && ids.length === 1
+                    ? "Este lançamento é recorrente"
+                    : `${series.recurringSelected} ${series.recurringSelected === 1 ? "lançamento selecionado é recorrente" : "lançamentos selecionados são recorrentes"}`}
+                </Label>
+                <div className="space-y-1.5" role="radiogroup" aria-label="O que levar da série">
+                  {seriesOptions.map(o => (
+                    <label
+                      key={o.value}
+                      className={`flex gap-2 rounded-md border p-2 cursor-pointer text-sm ${
+                        o.value === seriesScope ? "border-primary bg-primary/5" : "border-border hover:bg-muted"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="transfer-series"
+                        className="mt-0.5"
+                        checked={o.value === seriesScope}
+                        onChange={() => setSeriesScope(o.value)}
+                      />
+                      <span className="flex-1">
+                        <span className="flex justify-between gap-2">
+                          <span className="font-medium">{o.label}</span>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {o.count} {o.count === 1 ? "lançamento" : "lançamentos"}
+                          </span>
+                        </span>
+                        <span className="block text-xs text-muted-foreground">{o.hint}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {preview.isFetching && (
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
