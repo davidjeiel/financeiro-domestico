@@ -337,11 +337,15 @@ export function listRecurrences(s: SheetStore, ownerId: number, today = new Date
 // ─── Excluir lançamento recorrente ──────────────────────────────────────────
 
 /**
- * this        → só esta ocorrência (a data não volta a ser gerada);
- * future      → esta e as próximas não pagas; a recorrência é encerrada;
- * all_unpaid  → além disso, as anteriores não pagas. As pagas ficam no histórico.
+ * this         → só esta ocorrência (a data não volta a ser gerada);
+ * past_unpaid  → esta e as anteriores não pagas; a recorrência continua;
+ * future       → esta e as próximas não pagas; a recorrência é encerrada;
+ * all_unpaid   → esta e todas as não pagas (anteriores e próximas); encerra.
+ * As pagas sempre ficam no histórico.
  */
-export type RecurringDeleteScope = "this" | "future" | "all_unpaid";
+export type RecurringDeleteScope = "this" | "past_unpaid" | "future" | "all_unpaid";
+
+export const RECURRING_DELETE_SCOPES = ["this", "past_unpaid", "future", "all_unpaid"] as const;
 
 const occurrenceKey = (t: Pick<Transaction, "recurrenceDate" | "transactionDate">) =>
   t.recurrenceDate ?? dateKey(t.transactionDate);
@@ -396,6 +400,14 @@ export function deleteRecurring(s: SheetStore, transactionId: number, scope: Rec
     removeTransactions(s, [t]);
     skipOccurrence(s, t);
     return { removed: 1, keptPaid: 0, ended: false };
+  }
+
+  if (scope === "past_unpaid") {
+    // Limpa o que ficou para trás sem pagar; as próximas continuam e a regra segue.
+    const doomed = [t, ...past.filter(x => !x.isPaid)];
+    removeTransactions(s, doomed);
+    doomed.forEach(x => skipOccurrence(s, x));
+    return { removed: doomed.length, keptPaid: past.filter(x => !!x.isPaid).length, ended: false };
   }
 
   const doomed = [t, ...future.filter(x => !x.isPaid), ...(scope === "all_unpaid" ? past.filter(x => !x.isPaid) : [])];
